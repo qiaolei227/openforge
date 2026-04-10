@@ -1,0 +1,244 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+enum OrgStatus {
+  active
+  disabled
+}
+
+model SysUser {
+  id           String     @id @default(uuid()) @db.Uuid
+  username     String     @unique @db.VarChar(50)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  displayName  String     @map("display_name") @db.VarChar(100)
+  email        String?    @db.VarChar(255)
+  phone        String?    @db.VarChar(20)
+  avatar       String?    @db.VarChar(500)
+  status       UserStatus @default(active)
+  isAdmin      Boolean    @default(false) @map("is_admin")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  userOrgs SysUserOrg[]
+
+  @@map("sys_user")
+}
+
+model SysOrganization {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String    @db.VarChar(100)
+  code      String    @unique @db.VarChar(50)
+  parentId  String?   @map("parent_id") @db.Uuid
+  status    OrgStatus @default(active)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  parent   SysOrganization?  @relation("OrgHierarchy", fields: [parentId], references: [id])
+  children SysOrganization[] @relation("OrgHierarchy")
+  userOrgs SysUserOrg[]
+
+  @@map("sys_organization")
+}
+
+model SysUserOrg {
+  id        String  @id @default(uuid()) @db.Uuid
+  userId    String  @map("user_id") @db.Uuid
+  orgId     String  @map("org_id") @db.Uuid
+  isDefault Boolean @default(false) @map("is_default")
+
+  user SysUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  SysOrganization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@map("sys_user_org")
+}
+
+// ── 系统参数 ──
+model SysConfig {
+  id         String   @id @default(uuid()) @db.Uuid
+  code       String   @unique @db.VarChar(100)
+  name       String   @db.VarChar(200)
+  value      String?  @db.Text
+  defaultVal String?  @map("default_val") @db.Text
+  description String? @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("sys_config")
+}
+
+model SysApp {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(100)
+  code        String   @unique @db.VarChar(50)
+  icon        String?  @db.VarChar(50)
+  description String?  @db.Text
+  version     String?  @db.VarChar(20)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  models SysModel[]
+  dicts  SysDict[]
+
+  @@map("sys_app")
+}
+
+model SysDict {
+  id          String   @id @default(uuid()) @db.Uuid
+  appId       String   @map("app_id") @db.Uuid
+  code        String   @db.VarChar(100)
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  app   SysApp       @relation(fields: [appId], references: [id])
+  items SysDictItem[]
+
+  @@unique([appId, code])
+  @@map("sys_dict")
+}
+
+model SysDictItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  dictId    String   @map("dict_id") @db.Uuid
+  value     String   @db.VarChar(100)
+  label     String   @db.VarChar(100)
+  labelEn   String?  @map("label_en") @db.VarChar(100)
+  color     String?  @db.VarChar(20)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  dict SysDict @relation(fields: [dictId], references: [id], onDelete: Cascade)
+
+  @@unique([dictId, value])
+  @@map("sys_dict_item")
+}
+
+model SysModel {
+  id          String   @id @default(uuid()) @db.Uuid
+  appId       String   @map("app_id") @db.Uuid
+  name        String   @db.VarChar(100)
+  code        String   @db.VarChar(100)
+  tableName   String   @map("table_name") @db.VarChar(200)
+  description String?  @db.Text
+  dataScope   String   @default("private") @map("data_scope") @db.VarChar(20)
+  isTree      Boolean  @default(false) @map("is_tree")
+  semantic    String?  @db.Text
+  aiHint      String?  @map("ai_hint") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  app                  SysApp                  @relation(fields: [appId], references: [id])
+  fields               SysField[]
+  views                SysView[]
+  entities             SysEntity[]
+  distributionPolicies SysDistributionPolicy[]
+
+  @@unique([appId, code])
+  @@unique([tableName])
+  @@map("sys_model")
+}
+
+model SysEntity {
+  id         String   @id @default(uuid()) @db.Uuid
+  modelId    String   @map("model_id") @db.Uuid
+  name       String   @db.VarChar(100)
+  code       String   @db.VarChar(100)
+  tableName  String   @map("table_name") @db.VarChar(200)
+  entityType String   @map("entity_type") @db.VarChar(20)
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  model  SysModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  fields SysField[]
+
+  @@unique([modelId, code])
+  @@unique([tableName])
+  @@map("sys_entity")
+}
+
+model SysField {
+  id                String    @id @default(uuid()) @db.Uuid
+  modelId           String    @map("model_id") @db.Uuid
+  entityId          String?   @map("entity_id") @db.Uuid
+  name              String    @db.VarChar(100)
+  columnName        String    @map("column_name") @db.VarChar(100)
+  fieldType         String    @map("field_type") @db.VarChar(30)
+  isRequired        Boolean   @default(false) @map("is_required")
+  isUnique          Boolean   @default(false) @map("is_unique")
+  defaultValue      Json?     @map("default_value")
+  options           Json?
+  sortOrder         Int       @default(0) @map("sort_order")
+  isSystem          Boolean   @default(false) @map("is_system")
+  semantic          String?   @db.Text
+  aiHint            String?   @map("ai_hint") @db.Text
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz
+  deletedColumnName String?   @map("deleted_column_name") @db.VarChar(200)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  model              SysModel                @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  entity             SysEntity?              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  distributionPolicy SysDistributionPolicy[]
+
+  @@unique([modelId, entityId, columnName])
+  @@map("sys_field")
+}
+
+model SysDistributionPolicy {
+  id        String   @id @default(uuid()) @db.Uuid
+  modelId   String   @map("model_id") @db.Uuid
+  fieldId   String   @map("field_id") @db.Uuid
+  editable  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  model SysModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  field SysField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([modelId, fieldId])
+  @@map("sys_distribution_policy")
+}
+
+model SysView {
+  id        String   @id @default(uuid()) @db.Uuid
+  modelId   String   @map("model_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  type      String   @db.VarChar(20)
+  layout    Json     @db.JsonB
+  config    Json?    @db.JsonB
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  model SysModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+  @@map("sys_view")
+}
+
+model SysFile {
+  id            String   @id @default(uuid()) @db.Uuid
+  orgId         String   @map("org_id") @db.Uuid
+  originalName  String   @map("original_name") @db.VarChar(255)
+  mimeType      String   @map("mime_type") @db.VarChar(100)
+  size          BigInt
+  storageKey    String   @map("storage_key") @db.VarChar(500)
+  uploadedBy    String   @map("uploaded_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([orgId])
+  @@map("sys_file")
+}

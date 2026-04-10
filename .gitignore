@@ -1,0 +1,62 @@
+node_modules
+dist/
+.next/
+.turbo/
+
+# env
+*.env
+*.env.local
+*.env.*.local
+!.env.example
+
+# build artifacts
+*.tsbuildinfo
+out/
+
+# logs
+*.log
+pnpm-debug.log*
+npm-debug.log*
+
+# test
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# superpowers
+.superpowers/
+
+# prisma
+apps/server/prisma/*.db
+apps/server/prisma/*.db-journal
+
+# local file storage (LocalStorageProvider upload root)
+apps/server/data/
+
+# private docs & instructions (不发布到公开仓库)
+docs/
+CLAUDE.md
+
+# editor / temp
+*.tmp
+*.bak
+*.orig
+*~
+
+# pnpm
+.pnpm-store/
+.pnpm-debug.log*
+
+# certs / keys
+*.pem
+*.key
+*.crt
