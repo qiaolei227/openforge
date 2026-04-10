@@ -1,9 +1,17 @@
-# OpenForge
+<p align="center">
+  <img src="./assets/logo.svg" width="100" height="100" alt="OpenForge logo" />
+</p>
 
-> A low-code platform for domain experts — not for developers.
-> Built so the people who know the work can build the software that runs it.
+<h1 align="center">OpenForge</h1>
 
-[简体中文](./README.zh-CN.md) | English
+<p align="center">
+  <strong>A low-code platform for domain experts — not for developers.</strong><br/>
+  Built so the people who know the work can build the software that runs it.
+</p>
+
+<p align="center">
+  <a href="./README.zh-CN.md">简体中文</a> · English
+</p>
 
 ---
 

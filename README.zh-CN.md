@@ -1,9 +1,17 @@
-# OpenForge 开匠
+<p align="center">
+  <img src="./assets/logo.svg" width="100" height="100" alt="OpenForge 开匠" />
+</p>
 
-> 为领域专家而生的低代码平台 —— 不是为程序员。
-> 让真正懂业务的人，亲手打造自己需要的系统。
+<h1 align="center">OpenForge 开匠</h1>
 
-简体中文 | [English](./README.md)
+<p align="center">
+  <strong>为领域专家而生的低代码平台 —— 不是为程序员。</strong><br/>
+  让真正懂业务的人，亲手打造自己需要的系统。
+</p>
+
+<p align="center">
+  简体中文 · <a href="./README.md">English</a>
+</p>
 
 ---
 
