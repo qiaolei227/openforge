@@ -19,6 +19,7 @@ import { FileModule } from './file/file.module';
 import { SetupModule } from './setup/setup.module';
 import { PermissionModule } from './common/permission/permission.module';
 import { AuthGuard } from './common/guards/auth.guard';
+import { PermissionGuard } from './common/guards/permission.guard';
 import { OrgInterceptor } from './common/interceptors/org.interceptor';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -48,6 +49,7 @@ import configuration from './config/configuration';
   providers: [
     PrismaService,
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: PermissionGuard },
     { provide: APP_INTERCEPTOR, useClass: OrgInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
