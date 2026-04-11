@@ -120,18 +120,36 @@ export class FieldPermissionInterceptor implements NestInterceptor {
     }
     if (typeof response !== 'object') return response;
 
-    // Handle { items, total } list response
-    if ('items' in response && Array.isArray(response.items)) {
-      response.items = response.items.map((item: any) =>
-        this.stripFromResponse(item, hiddenColumns),
+    // Paginated list shapes used by DynamicDataController:
+    //   POST /data/query  → { data, total, page, pageSize }
+    //   (and the legacy { items, total } shape used by some other controllers)
+    // Recurse into the row array but don't rebuild the wrapper.
+    if (Array.isArray((response as any).data)) {
+      (response as any).data = (response as any).data.map((row: any) =>
+        this.stripFromResponse(row, hiddenColumns),
+      );
+      return response;
+    }
+    if (Array.isArray((response as any).items)) {
+      (response as any).items = (response as any).items.map((row: any) =>
+        this.stripFromResponse(row, hiddenColumns),
       );
       return response;
     }
 
-    // Single record
+    // Single record: rebuild without hidden keys.
+    // Also strip __children rows recursively (subtable convention).
     const result: Record<string, any> = {};
     for (const [key, value] of Object.entries(response)) {
       if (hiddenColumns.has(key)) continue;
+      if (key === '__children' && Array.isArray(value)) {
+        result[key] = value.map((child) =>
+          child && typeof child === 'object'
+            ? this.stripFromResponse(child, hiddenColumns)
+            : child,
+        );
+        continue;
+      }
       result[key] = value;
     }
     return result;

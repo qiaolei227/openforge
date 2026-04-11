@@ -58,7 +58,25 @@ describe('FieldPermissionInterceptor', () => {
     expect(prisma.sysModel.findFirst).not.toHaveBeenCalled();
   });
 
-  it('strips hidden fields from list response', async () => {
+  it('strips hidden fields from { data, total } list response', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm1',
+      fields: [field('f1', 'cost_price', ['hidden']), field('f2', 'name')],
+    });
+    const ctx = mockContext({
+      url: '/api/apps/purchase/models/order/data',
+      user: { userId: 'u1', isAdmin: false },
+    });
+    const handler: CallHandler = {
+      handle: () => of({ data: [{ id: '1', name: 'A', cost_price: 100 }], total: 1, page: 1, pageSize: 20 }),
+    };
+    const result: any = await firstValueFrom(interceptor.intercept(ctx, handler));
+    expect(result.data[0]).toEqual({ id: '1', name: 'A' });
+    expect(result.data[0].cost_price).toBeUndefined();
+    expect(result.total).toBe(1);
+  });
+
+  it('strips hidden fields from legacy { items, total } list response', async () => {
     prisma.sysModel.findFirst.mockResolvedValue({
       id: 'm1',
       fields: [field('f1', 'cost_price', ['hidden']), field('f2', 'name')],
@@ -122,19 +140,19 @@ describe('FieldPermissionInterceptor', () => {
       user: { userId: 'u1', isAdmin: false },
     });
     const handler: CallHandler = {
-      handle: () => of({ items: [{ id: '1', cost_price: 100 }], total: 1 }),
+      handle: () => of({ data: [{ id: '1', cost_price: 100 }], total: 1, page: 1, pageSize: 20 }),
     };
     const result: any = await firstValueFrom(interceptor.intercept(ctx, handler));
-    expect(result.items[0]).toEqual({ id: '1' });
+    expect(result.data[0]).toEqual({ id: '1' });
   });
 
   it('widest-wins across roles: editable beats readonly beats hidden', async () => {
     prisma.sysModel.findFirst.mockResolvedValue({
       id: 'm1',
       fields: [
-        field('f1', 'a', ['hidden', 'readonly', 'editable']), // editable wins → kept, not readonly
-        field('f2', 'b', ['hidden', 'readonly']), // readonly wins → kept on read
-        field('f3', 'c', ['hidden', 'hidden']), // hidden → stripped
+        field('f1', 'a', ['hidden', 'readonly', 'editable']),
+        field('f2', 'b', ['hidden', 'readonly']),
+        field('f3', 'c', ['hidden', 'hidden']),
       ],
     });
     const ctx = mockContext({
@@ -142,9 +160,9 @@ describe('FieldPermissionInterceptor', () => {
       user: { userId: 'u1', isAdmin: false },
     });
     const handler: CallHandler = {
-      handle: () => of({ items: [{ id: '1', a: 1, b: 2, c: 3 }], total: 1 }),
+      handle: () => of({ data: [{ id: '1', a: 1, b: 2, c: 3 }], total: 1, page: 1, pageSize: 20 }),
     };
     const result: any = await firstValueFrom(interceptor.intercept(ctx, handler));
-    expect(result.items[0]).toEqual({ id: '1', a: 1, b: 2 }); // c stripped
+    expect(result.data[0]).toEqual({ id: '1', a: 1, b: 2 });
   });
 });

@@ -556,8 +556,21 @@ export class DynamicDataService {
    * Runtime schema endpoint: returns model metadata + app reference + non-system
    * fields (with dict choices resolved) so workspace pages can render without
    * designer-level access. Gated by menu:model:* view at the controller.
+   *
+   * Field permission filtering:
+   * - hidden fields are dropped from the returned `fields` array, so the frontend
+   *   never renders a column header / form input for them. The data interceptor
+   *   already strips hidden values from responses, so this just keeps the schema
+   *   in sync with what the user can actually see.
+   * - readonly fields are kept in the schema with `access: 'readonly'` annotation
+   *   so the form renderer can disable input.
+   * - admin (`isAdmin=true`) bypasses all filtering and gets the full schema.
    */
-  async getSchema(appCode: string, modelCode: string) {
+  async getSchema(
+    appCode: string,
+    modelCode: string,
+    user: { userId: string; isAdmin: boolean },
+  ) {
     const model = await this.prisma.sysModel.findFirst({
       where: { code: modelCode, app: { code: appCode } },
       include: { app: { select: { id: true, code: true, name: true } } },
@@ -570,7 +583,34 @@ export class DynamicDataService {
       );
     }
     const allFields = await this.fieldService.findByModelId(model.id);
-    return { ...model, fields: allFields.filter((f) => !f.isSystem) };
+    const nonSystem = allFields.filter((f) => !f.isSystem);
+    if (user.isAdmin) return { ...model, fields: nonSystem };
+
+    const perms = await this.prisma.sysFieldPermission.findMany({
+      where: {
+        modelId: model.id,
+        role: { userRoles: { some: { userId: user.userId } } },
+      },
+      select: { fieldId: true, access: true },
+    });
+    // Widest-wins merge per field
+    const accessByField = new Map<string, 'hidden' | 'readonly' | 'editable'>();
+    for (const p of perms) {
+      const a = p.access as 'hidden' | 'readonly' | 'editable';
+      const cur = accessByField.get(p.fieldId);
+      if (cur === 'editable') continue;
+      if (a === 'editable') accessByField.set(p.fieldId, 'editable');
+      else if (a === 'readonly') accessByField.set(p.fieldId, 'readonly');
+      else if (!cur) accessByField.set(p.fieldId, a);
+    }
+
+    const filtered = nonSystem
+      .filter((f) => accessByField.get(f.id) !== 'hidden')
+      .map((f) => {
+        const access = accessByField.get(f.id);
+        return access === 'readonly' ? { ...f, access } : f;
+      });
+    return { ...model, fields: filtered };
   }
 
   /**

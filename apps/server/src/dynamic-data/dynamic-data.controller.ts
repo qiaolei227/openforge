@@ -45,8 +45,9 @@ export class DynamicDataController {
   getSchema(
     @Param('appCode') appCode: string,
     @Param('modelCode') modelCode: string,
+    @CurrentUser() user: RequestUser,
   ) {
-    return this.dynamicDataService.getSchema(appCode, modelCode);
+    return this.dynamicDataService.getSchema(appCode, modelCode, user);
   }
 
   @Get(':id')
