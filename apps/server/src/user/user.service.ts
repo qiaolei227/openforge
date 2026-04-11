@@ -5,6 +5,7 @@ import { EventBusService } from '../event-bus/event-bus.service';
 import { UserCreatedEvent } from '../event-bus/events';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import type { SetUserRolesDto } from './dto/set-user-roles.dto';
 
 export interface UserQueryParams {
   keyword?: string;
@@ -61,6 +62,9 @@ export class UserService {
           updatedAt: true,
           userOrgs: {
             include: { org: { select: { id: true, name: true, code: true } } },
+          },
+          userRoles: {
+            include: { role: { select: { id: true, code: true, name: true } } },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -166,5 +170,31 @@ export class UserService {
       throw new ConflictException('系统管理员账号不可删除');
     }
     return this.prisma.sysUser.delete({ where: { id } });
+  }
+
+  async setRoles(userId: string, dto: SetUserRolesDto) {
+    const user = await this.prisma.sysUser.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Full replace: delete existing bindings, then create new ones (in one transaction)
+    await this.prisma.$transaction([
+      this.prisma.sysUserRole.deleteMany({ where: { userId } }),
+      ...dto.roleIds.map((roleId) =>
+        this.prisma.sysUserRole.create({
+          data: { userId, roleId },
+        }),
+      ),
+    ]);
+
+    return this.getUserRoles(userId);
+  }
+
+  async getUserRoles(userId: string) {
+    return this.prisma.sysUserRole.findMany({
+      where: { userId },
+      include: { role: { select: { id: true, code: true, name: true } } },
+    });
   }
 }

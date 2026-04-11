@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseUUIDPipe }
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { SetUserRolesDto } from './dto/set-user-roles.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('users')
@@ -43,5 +44,15 @@ export class UserController {
   @Delete(':id')
   delete(@Param('id', ParseUUIDPipe) id: string) {
     return this.userService.delete(id);
+  }
+
+  @Put(':id/roles')
+  async setRoles(@Param('id') id: string, @Body() dto: SetUserRolesDto) {
+    return this.userService.setRoles(id, dto);
+  }
+
+  @Get(':id/roles')
+  async getRoles(@Param('id') id: string) {
+    return this.userService.getUserRoles(id);
   }
 }
