@@ -187,7 +187,12 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
     <div className="rounded-lg border bg-card">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-2">
-        <h4 className="text-sm font-medium">{meta.entityName}</h4>
+        <h4 className="text-sm font-medium">
+          {meta.entityName}
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            {t('subTable.rowCount', { count: rows.length })}
+          </span>
+        </h4>
         <div className="flex items-center gap-2">
           {isEditable && (
             <button
@@ -221,12 +226,12 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="max-h-[480px] overflow-auto">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/50">
+          <thead className="sticky top-0 z-10">
+            <tr>
               {isEditable && (
-                <th className="w-10 px-2 py-2 text-center">
+                <th className="w-10 border-b bg-muted px-2 py-2 text-center">
                   <input
                     type="checkbox"
                     checked={rows.length > 0 && selectedRows.size === rows.length}
@@ -235,11 +240,11 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
                   />
                 </th>
               )}
-              <th className="w-10 px-2 py-2 text-center text-muted-foreground">#</th>
+              <th className="w-10 border-b bg-muted px-2 py-2 text-center text-muted-foreground">#</th>
               {visibleFields.map((field) => (
                 <th
                   key={field.id}
-                  className="px-3 py-2 text-left font-medium text-muted-foreground"
+                  className="border-b bg-muted px-3 py-2 text-left font-medium text-muted-foreground"
                 >
                   {field.name}
                   {field.isRequired && <span className="ml-0.5 text-destructive">*</span>}

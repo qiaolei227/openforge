@@ -544,7 +544,8 @@
     "create": "Create",
     "remove": "Remove",
     "empty": "No data",
-    "confirmDelete": "Delete selected rows?"
+    "confirmDelete": "Delete selected rows?",
+    "rowCount": "{count} rows"
   },
   "tree": {
     "tableView": "Table View",

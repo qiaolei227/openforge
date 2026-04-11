@@ -544,7 +544,8 @@
     "create": "新建",
     "remove": "移除",
     "empty": "暂无数据",
-    "confirmDelete": "确认删除选中的行吗？"
+    "confirmDelete": "确认删除选中的行吗？",
+    "rowCount": "共 {count} 行"
   },
   "tree": {
     "tableView": "表格视图",
