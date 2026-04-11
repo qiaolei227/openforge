@@ -11,6 +11,6 @@ import { FileModule } from '../file/file.module';
   imports: [ModelModule, FileModule],
   controllers: [DynamicDataController],
   providers: [DynamicDataService, QueryBuilderService, DeleteGuardService, ChildrenService],
-  exports: [ChildrenService],
+  exports: [ChildrenService, DynamicDataService],
 })
 export class DynamicDataModule {}
