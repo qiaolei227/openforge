@@ -139,7 +139,11 @@
     "fetchFailed": "Failed to fetch users",
     "confirmDelete": "Are you sure you want to delete user \"{name}\" ({username})? This action cannot be undone.",
     "confirmDisable": "Are you sure you want to disable user \"{name}\"? The user will not be able to log in.",
-    "confirmEnable": "Are you sure you want to enable user \"{name}\"?"
+    "confirmEnable": "Are you sure you want to enable user \"{name}\"?",
+    "roles": "Roles",
+    "rolesPlaceholder": "Select roles",
+    "noRolesAvailable": "No roles available",
+    "roleBindFailed": "Failed to bind roles"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -241,7 +245,8 @@
     "createTitle": "New Model",
     "editTitle": "Edit Model",
     "tabs": {
-      "subtables": "Sub Tables"
+      "subtables": "Sub Tables",
+      "fieldPermissions": "Field Permissions"
     },
     "editApp": "Edit Application",
     "confirmDelete": "Are you sure you want to delete model \"{name}\"?",

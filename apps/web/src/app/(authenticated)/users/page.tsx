@@ -13,6 +13,12 @@ interface UserOrg {
   org: { id: string; name: string; code: string };
 }
 
+interface UserRole {
+  roleId: string;
+  createdAt: string;
+  role: { id: string; code: string; name: string };
+}
+
 interface User {
   id: string;
   username: string;
@@ -23,6 +29,18 @@ interface User {
   createdAt: string;
   updatedAt: string;
   userOrgs: UserOrg[];
+  userRoles: UserRole[];
+}
+
+interface Role {
+  id: string;
+  code: string;
+  name: string;
+}
+
+interface RoleListResponse {
+  items: Role[];
+  total: number;
 }
 
 interface StatusCounts {
@@ -83,6 +101,9 @@ export default function UsersPage() {
   // --- org list for selectors ---
   const [allOrgs, setAllOrgs] = useState<Org[]>([]);
 
+  // --- role list for selectors ---
+  const [allRoles, setAllRoles] = useState<Role[]>([]);
+
   // --- dialog state ---
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -92,6 +113,7 @@ export default function UsersPage() {
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formOrgId, setFormOrgId] = useState('');
+  const [formRoleIds, setFormRoleIds] = useState<string[]>([]);
   const [formError, setFormError] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
 
@@ -117,6 +139,16 @@ export default function UsersPage() {
       setAllOrgs(data.data);
     } catch {
       // silently fail, orgs are supplementary
+    }
+  }, []);
+
+  // --- fetch roles ---
+  const fetchRoles = useCallback(async () => {
+    try {
+      const { data } = await apiClient.get<RoleListResponse>('/roles?pageSize=200');
+      setAllRoles(data.items ?? []);
+    } catch {
+      // silently fail, roles are supplementary
     }
   }, []);
 
@@ -151,7 +183,8 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchOrgs();
-  }, [fetchOrgs]);
+    fetchRoles();
+  }, [fetchOrgs, fetchRoles]);
 
   useEffect(() => {
     fetchUsers();
@@ -169,6 +202,7 @@ export default function UsersPage() {
     setFormEmail('');
     setFormPhone('');
     setFormOrgId(allOrgs.length > 0 ? allOrgs[0].id : '');
+    setFormRoleIds([]);
     setFormError('');
   };
 
@@ -181,12 +215,14 @@ export default function UsersPage() {
     setFormEmail(user.email || '');
     setFormPhone(user.phone || '');
     setFormOrgId('');
+    setFormRoleIds((user.userRoles ?? []).map((ur) => ur.roleId));
     setFormError('');
   };
 
   const closeDialog = () => {
     setDialogMode(null);
     setEditingUser(null);
+    setFormRoleIds([]);
     setFormError('');
   };
 
@@ -195,8 +231,9 @@ export default function UsersPage() {
     setFormError('');
     setFormSubmitting(true);
     try {
+      let userId: string;
       if (dialogMode === 'create') {
-        await apiClient.post('/users', {
+        const { data } = await apiClient.post<{ id: string }>('/users', {
           username: formUsername,
           password: formPassword,
           displayName: formDisplayName,
@@ -204,6 +241,7 @@ export default function UsersPage() {
           phone: formPhone || undefined,
           orgId: formOrgId,
         });
+        userId = data.id;
         showToast(tUser('createSuccess'), 'success');
       } else if (dialogMode === 'edit' && editingUser) {
         await apiClient.put(`/users/${editingUser.id}`, {
@@ -211,7 +249,16 @@ export default function UsersPage() {
           email: formEmail || undefined,
           phone: formPhone || undefined,
         });
+        userId = editingUser.id;
         showToast(tUser('updateSuccess'), 'success');
+      } else {
+        return;
+      }
+      // Bind roles (full replace)
+      try {
+        await apiClient.put(`/users/${userId}/roles`, { roleIds: formRoleIds });
+      } catch {
+        showToast(tUser('roleBindFailed'), 'error');
       }
       closeDialog();
       fetchUsers();
@@ -318,6 +365,7 @@ export default function UsersPage() {
               <th className="p-3 text-left font-medium">{tUser('displayName')}</th>
               <th className="p-3 text-left font-medium">{tUser('email')}</th>
               <th className="p-3 text-left font-medium">{tUser('org')}</th>
+              <th className="p-3 text-left font-medium">{tUser('roles')}</th>
               <th className="p-3 text-left font-medium">{tCommon('status')}</th>
               <th className="p-3 text-left font-medium">{tCommon('createdAt')}</th>
               <th className="p-3 text-left font-medium">{tCommon('actions')}</th>
@@ -326,13 +374,13 @@ export default function UsersPage() {
           <tbody>
             {loading && users.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
                   {tCommon('loading')}
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
                   {tCommon('noData')}
                 </td>
               </tr>
@@ -351,6 +399,22 @@ export default function UsersPage() {
                             className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs"
                           >
                             {uo.org.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="p-3">
+                    {(user.userRoles ?? []).length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {(user.userRoles ?? []).map((ur) => (
+                          <span
+                            key={ur.roleId}
+                            className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium"
+                          >
+                            {ur.role.name}
                           </span>
                         ))}
                       </div>
@@ -515,6 +579,37 @@ export default function UsersPage() {
                   </select>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{tUser('roles')}</label>
+                {allRoles.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{tUser('noRolesAvailable')}</p>
+                ) : (
+                  <div className="border border-input rounded-md max-h-36 overflow-y-auto p-2 space-y-1.5 bg-background">
+                    {allRoles.map((role) => {
+                      const checked = formRoleIds.includes(role.id);
+                      return (
+                        <label key={role.id} className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormRoleIds((ids) => [...ids, role.id]);
+                              } else {
+                                setFormRoleIds((ids) => ids.filter((id) => id !== role.id));
+                              }
+                            }}
+                            className="h-4 w-4 accent-primary rounded"
+                          />
+                          <span className="text-sm">{role.name}</span>
+                          <span className="text-xs text-muted-foreground font-mono">({role.code})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               {formError && (
                 <p className="text-sm text-destructive">{formError}</p>

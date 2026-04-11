@@ -139,7 +139,11 @@
     "fetchFailed": "获取用户列表失败",
     "confirmDelete": "确定要删除用户「{name}」({username}) 吗？此操作不可撤销。",
     "confirmDisable": "确定要禁用用户「{name}」吗？禁用后该用户将无法登录。",
-    "confirmEnable": "确定要启用用户「{name}」吗？"
+    "confirmEnable": "确定要启用用户「{name}」吗？",
+    "roles": "角色",
+    "rolesPlaceholder": "选择角色",
+    "noRolesAvailable": "暂无可用角色",
+    "roleBindFailed": "角色绑定失败"
   },
   "dashboard": {
     "title": "仪表盘",
@@ -241,7 +245,8 @@
     "createTitle": "新建模型",
     "editTitle": "编辑模型",
     "tabs": {
-      "subtables": "子表"
+      "subtables": "子表",
+      "fieldPermissions": "字段权限"
     },
     "editApp": "编辑应用",
     "confirmDelete": "确定要删除模型「{name}」吗？",
