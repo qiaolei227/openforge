@@ -7,7 +7,7 @@ import { CreateMenuDto } from './dto/create-menu.dto';
 import { UpdateMenuDto } from './dto/update-menu.dto';
 import { ReorderMenuDto } from './dto/reorder-menu.dto';
 
-@Controller('api/menus')
+@Controller('menus')
 export class MenuController {
   // Explicit @Inject required for esbuild/Vitest metadata workaround.
   constructor(@Inject(MenuService) private menuService: MenuService) {}

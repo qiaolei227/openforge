@@ -5,7 +5,7 @@ import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { SetMenuPermissionsDto } from './dto/set-menu-permissions.dto';
 
-@Controller('api/roles')
+@Controller('roles')
 export class RoleController {
   // Explicit @Inject required for esbuild/Vitest metadata workaround.
   constructor(@Inject(RoleService) private roleService: RoleService) {}

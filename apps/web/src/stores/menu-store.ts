@@ -33,7 +33,7 @@ export const useMenuStore = create<MenuStore>((set, get) => ({
     if (get().loading) return;
     set({ loading: true, error: null });
     try {
-      const { data } = await apiClient.get<MenuNode[]>('/api/menus/tree');
+      const { data } = await apiClient.get<MenuNode[]>('/menus/tree');
       set({ tree: data, loading: false, loaded: true });
     } catch (err: any) {
       set({ error: err?.message ?? 'Failed to load menu', loading: false });

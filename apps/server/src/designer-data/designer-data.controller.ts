@@ -17,7 +17,7 @@ import { RequestUser } from '../common/interfaces/request-context';
  * POST /query 的 HTTP 语义与 DynamicDataController 保持一致（body 承载复杂
  * filter DTO 是项目既有约定，避免 GET + body 的反模式）。
  */
-@Controller('api/designer/apps/:appCode/models/:modelCode/data')
+@Controller('designer/apps/:appCode/models/:modelCode/data')
 export class DesignerDataController {
   // Explicit @Inject required for esbuild/Vitest metadata workaround.
   constructor(

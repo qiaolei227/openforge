@@ -6,7 +6,7 @@ import {
   DeleteFieldPermissionDto,
 } from './dto/upsert-field-permission.dto';
 
-@Controller('api/field-permissions')
+@Controller('field-permissions')
 export class FieldPermissionController {
   // Explicit @Inject required for esbuild/Vitest metadata workaround.
   constructor(@Inject(FieldPermissionService) private fpService: FieldPermissionService) {}

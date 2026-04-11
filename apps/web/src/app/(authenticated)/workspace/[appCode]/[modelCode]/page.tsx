@@ -46,7 +46,7 @@ export default function WorkspaceModelPage() {
     (async () => {
       try {
         const { data } = await apiClient.get<ModelSchema>(
-          `/api/apps/${appCode}/models/${modelCode}/data/schema`,
+          `/apps/${appCode}/models/${modelCode}/data/schema`,
         );
         if (!cancelled) setSchema(data);
       } catch (err: unknown) {
