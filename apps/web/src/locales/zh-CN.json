@@ -681,6 +681,52 @@
     "DICT_NOT_FOUND": "字典不存在",
     "DICT_IN_USE": "字典正在被字段引用，无法删除",
     "DICT_ITEM_VALUE_DUPLICATE": "选项值已存在",
-    "DICT_ITEM_NOT_FOUND": "选项不存在"
+    "DICT_ITEM_NOT_FOUND": "选项不存在",
+    "FORBIDDEN": "权限不足，无法执行此操作",
+    "FIELD_FORBIDDEN": "无权访问此字段",
+    "MISSING_PERMISSION_DECORATOR": "接口缺少权限声明（开发时错误）",
+    "ROLE_HAS_USERS": "角色仍被用户绑定，请先解绑后再删除",
+    "ROLE_CODE_DUPLICATE": "角色编码已存在",
+    "ROLE_NOT_FOUND": "角色不存在",
+    "MENU_NOT_DELETABLE": "系统菜单不能删除",
+    "MENU_CODE_INVALID": "菜单编码不合法",
+    "MENU_NOT_FOUND": "菜单不存在",
+    "MENU_TARGET_MISMATCH": "菜单类型与目标字段不匹配"
+  },
+  "workspace": {
+    "title": "工作台",
+    "loading": "加载中…",
+    "emptyTitle": "暂无可访问的应用",
+    "emptyDesc": "请联系管理员分配角色和菜单权限"
+  },
+  "roles": {
+    "title": "角色管理",
+    "new": "新建角色",
+    "edit": "编辑角色",
+    "code": "角色编码",
+    "name": "角色名称",
+    "description": "描述",
+    "userCount": "用户数",
+    "createSuccess": "角色已创建",
+    "updateSuccess": "已保存",
+    "deleteSuccess": "已删除"
+  },
+  "menus": {
+    "title": "菜单管理",
+    "new": "新建菜单",
+    "newGroup": "新建分组",
+    "newModel": "新建业务菜单",
+    "newLink": "新建外链",
+    "newDivider": "新建分割线",
+    "saveSuccess": "已保存",
+    "unsavedChanges": "有未保存的调整"
+  },
+  "fieldPermissions": {
+    "title": "字段权限",
+    "editable": "可编辑",
+    "readonly": "只读",
+    "hidden": "隐藏",
+    "selectRole": "选择角色",
+    "selectModel": "选择模型"
   }
 }

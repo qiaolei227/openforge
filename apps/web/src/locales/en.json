@@ -681,6 +681,52 @@
     "DICT_NOT_FOUND": "Dictionary not found",
     "DICT_IN_USE": "Dictionary is referenced by fields and cannot be deleted",
     "DICT_ITEM_VALUE_DUPLICATE": "Item value already exists",
-    "DICT_ITEM_NOT_FOUND": "Item not found"
+    "DICT_ITEM_NOT_FOUND": "Item not found",
+    "FORBIDDEN": "You do not have permission to perform this action",
+    "FIELD_FORBIDDEN": "Field access forbidden",
+    "MISSING_PERMISSION_DECORATOR": "Endpoint is missing a permission declaration (dev bug)",
+    "ROLE_HAS_USERS": "Role is still bound to users; unbind them before deleting",
+    "ROLE_CODE_DUPLICATE": "Role code already exists",
+    "ROLE_NOT_FOUND": "Role not found",
+    "MENU_NOT_DELETABLE": "System menus cannot be deleted",
+    "MENU_CODE_INVALID": "Invalid menu code",
+    "MENU_NOT_FOUND": "Menu not found",
+    "MENU_TARGET_MISMATCH": "Menu type and target fields mismatch"
+  },
+  "workspace": {
+    "title": "Workspace",
+    "loading": "Loading…",
+    "emptyTitle": "No accessible apps",
+    "emptyDesc": "Contact your administrator to assign roles and menu permissions"
+  },
+  "roles": {
+    "title": "Roles",
+    "new": "New Role",
+    "edit": "Edit Role",
+    "code": "Code",
+    "name": "Name",
+    "description": "Description",
+    "userCount": "Users",
+    "createSuccess": "Role created",
+    "updateSuccess": "Saved",
+    "deleteSuccess": "Deleted"
+  },
+  "menus": {
+    "title": "Menus",
+    "new": "New Menu",
+    "newGroup": "New Group",
+    "newModel": "New Business Menu",
+    "newLink": "New External Link",
+    "newDivider": "New Divider",
+    "saveSuccess": "Saved",
+    "unsavedChanges": "You have unsaved changes"
+  },
+  "fieldPermissions": {
+    "title": "Field Permissions",
+    "editable": "Editable",
+    "readonly": "Read-only",
+    "hidden": "Hidden",
+    "selectRole": "Select Role",
+    "selectModel": "Select Model"
   }
 }
