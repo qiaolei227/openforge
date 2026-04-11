@@ -28,15 +28,41 @@ async function main() {
     for (let i = 0; i < lines.length; i++) {
       if (!HTTP_METHOD_RE.test(lines[i])) continue;
 
-      // Scan upward for adjacent @RequirePermission / @Public
+      // The decorator stack spans from the FIRST consecutive decorator line
+      // above the method signature down to the method signature itself.
+      // Order between @Get/@Post and @RequirePermission/@Public within that
+      // stack is free — we check the whole stack.
+
+      // Scan UP to find the top of the decorator stack
+      let top = i;
+      while (top > 0) {
+        const prev = lines[top - 1].trim();
+        if (prev.startsWith('@') || prev === '') {
+          top -= 1;
+          continue;
+        }
+        break;
+      }
+
+      // Scan DOWN from the HTTP decorator line until we hit the method
+      // signature (first non-decorator, non-empty line)
+      let bottom = i;
+      while (bottom < lines.length - 1) {
+        const next = lines[bottom + 1].trim();
+        if (next.startsWith('@')) {
+          bottom += 1;
+          continue;
+        }
+        break;
+      }
+
+      // Check the full [top, bottom] range for @RequirePermission / @Public
       let hasPermission = false;
-      for (let j = i; j >= 0; j--) {
+      for (let j = top; j <= bottom; j++) {
         if (PERMISSION_RE.test(lines[j])) {
           hasPermission = true;
           break;
         }
-        // Break when we encounter a non-decorator, non-empty line (out of decorator block)
-        if (j < i && !lines[j].trim().startsWith('@') && lines[j].trim() !== '') break;
       }
       if (hasPermission) continue;
 
