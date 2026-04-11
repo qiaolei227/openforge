@@ -29,7 +29,8 @@ model SysUser {
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
 
-  userOrgs SysUserOrg[]
+  userOrgs  SysUserOrg[]
+  userRoles SysUserRole[]
 
   @@map("sys_user")
 }
@@ -145,6 +146,7 @@ model SysModel {
   views                SysView[]
   entities             SysEntity[]
   distributionPolicies SysDistributionPolicy[]
+  fieldPermissions     SysFieldPermission[]
 
   @@unique([appId, code])
   @@unique([tableName])
@@ -193,6 +195,7 @@ model SysField {
   model              SysModel                @relation(fields: [modelId], references: [id], onDelete: Cascade)
   entity             SysEntity?              @relation(fields: [entityId], references: [id], onDelete: Cascade)
   distributionPolicy SysDistributionPolicy[]
+  fieldPermissions   SysFieldPermission[]
 
   @@unique([modelId, entityId, columnName])
   @@map("sys_field")
@@ -241,4 +244,103 @@ model SysFile {
 
   @@index([orgId])
   @@map("sys_file")
+}
+
+// ── P2.1 RBAC ──
+
+model SysRole {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  userRoles        SysUserRole[]
+  roleMenus        SysRoleMenu[]
+  fieldPermissions SysFieldPermission[]
+
+  @@map("sys_role")
+}
+
+model SysUserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user SysUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role SysRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("sys_user_role")
+}
+
+model SysMenu {
+  id                  String   @id @default(uuid()) @db.Uuid
+  parentId            String?  @map("parent_id") @db.Uuid
+  code                String   @unique @db.VarChar(100)
+  source              String   @db.VarChar(10)
+  type                String   @db.VarChar(20)
+  name                String   @db.VarChar(100)
+  nameEn              String?  @map("name_en") @db.VarChar(100)
+  icon                String?  @db.VarChar(50)
+  sortOrder           Int      @default(0) @map("sort_order")
+  visible             Boolean  @default(true)
+  targetRoute         String?  @map("target_route") @db.VarChar(200)
+  targetAppCode       String?  @map("target_app_code") @db.VarChar(50)
+  targetModelCode     String?  @map("target_model_code") @db.VarChar(100)
+  targetViewId        String?  @map("target_view_id") @db.Uuid
+  targetFilterPreset  Json?    @map("target_filter_preset")
+  targetUrl           String?  @map("target_url") @db.VarChar(500)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  parent    SysMenu?      @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children  SysMenu[]     @relation("MenuHierarchy")
+  roleMenus SysRoleMenu[]
+
+  @@index([parentId])
+  @@index([source])
+  @@index([type])
+  @@map("sys_menu")
+}
+
+model SysRoleMenu {
+  id          String   @id @default(uuid()) @db.Uuid
+  roleId      String   @map("role_id") @db.Uuid
+  menuId      String   @map("menu_id") @db.Uuid
+  menuCode    String   @map("menu_code") @db.VarChar(100)
+  permissions String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  role SysRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  menu SysMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, menuId])
+  @@index([roleId])
+  @@index([menuCode])
+  @@map("sys_role_menu")
+}
+
+model SysFieldPermission {
+  id        String   @id @default(uuid()) @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  modelId   String   @map("model_id") @db.Uuid
+  fieldId   String   @map("field_id") @db.Uuid
+  access    String   @db.VarChar(10)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  role  SysRole  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  model SysModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  field SysField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, fieldId])
+  @@index([roleId])
+  @@index([modelId])
+  @@index([fieldId])
+  @@map("sys_field_permission")
 }
