@@ -8,7 +8,8 @@
     "postinstall": "prisma generate",
     "start": "node dist/main",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint:permission": "tsx scripts/check-permission-decorators.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -43,8 +44,10 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.20.0",
     "@types/sharp": "^0.32.0",
+    "glob": "^11.1.0",
     "prisma": "^7.6.0",
     "ts-node": "^10.9.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   }
