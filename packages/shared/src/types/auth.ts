@@ -26,6 +26,7 @@ export interface UserProfile {
   email: string | null;
   phone: string | null;
   avatar: string | null;
+  isAdmin: boolean;
 }
 
 export interface UpdateProfileRequest {

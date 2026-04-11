@@ -129,6 +129,7 @@ export class AuthService {
         email: true,
         phone: true,
         avatar: true,
+        isAdmin: true,
       },
     });
     if (!user) {
@@ -148,6 +149,7 @@ export class AuthService {
         email: true,
         phone: true,
         avatar: true,
+        isAdmin: true,
       },
     });
   }

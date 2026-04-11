@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Layers } from 'lucide-react';
-import { Sidebar } from './sidebar';
+import { DynamicSidebarNav } from './layout/dynamic-sidebar-nav';
 import { UserMenu } from './user-menu';
 import { LocaleSwitcher } from './locale-switcher';
 import { ThemeSwitcher } from './theme-switcher';
@@ -40,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <div className="flex h-screen">
-        <Sidebar collapsed={collapsed} onToggle={handleToggle} />
+        <DynamicSidebarNav collapsed={collapsed} onToggle={handleToggle} />
         <div className="flex-1 flex flex-col">
           <header className="h-14 border-b flex items-center justify-end px-6 gap-3">
             <button
