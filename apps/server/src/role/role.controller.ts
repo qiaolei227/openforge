@@ -3,6 +3,7 @@ import { RoleService } from './role.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { SetMenuPermissionsDto } from './dto/set-menu-permissions.dto';
 
 @Controller('api/roles')
 export class RoleController {
@@ -46,5 +47,20 @@ export class RoleController {
   async remove(@Param('id') id: string) {
     await this.roleService.delete(id);
     return { ok: true };
+  }
+
+  @Get(':id/menu-permissions')
+  @RequirePermission('sys:roles', 'view')
+  async getMenuPermissions(@Param('id') id: string) {
+    return this.roleService.getMenuPermissions(id);
+  }
+
+  @Put(':id/menu-permissions')
+  @RequirePermission('sys:roles', 'edit')
+  async setMenuPermissions(
+    @Param('id') id: string,
+    @Body() dto: SetMenuPermissionsDto,
+  ) {
+    return this.roleService.setMenuPermissions(id, dto);
   }
 }

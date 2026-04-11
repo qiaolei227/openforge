@@ -4,6 +4,8 @@ import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
 import type { CreateRoleDto } from './dto/create-role.dto';
 import type { UpdateRoleDto } from './dto/update-role.dto';
+import type { SetMenuPermissionsDto } from './dto/set-menu-permissions.dto';
+import { ENABLED_MENU_ACTIONS } from '@openforge/shared';
 
 interface ListParams {
   keyword?: string;
@@ -103,5 +105,59 @@ export class RoleService {
       );
     }
     await this.prisma.sysRole.delete({ where: { id } });
+  }
+
+  async getMenuPermissions(roleId: string) {
+    // Validates that the role exists (throws ROLE_NOT_FOUND if not)
+    await this.findById(roleId);
+    return this.prisma.sysRoleMenu.findMany({
+      where: { roleId },
+      include: {
+        menu: {
+          select: { id: true, code: true, type: true, name: true },
+        },
+      },
+    });
+  }
+
+  async setMenuPermissions(roleId: string, dto: SetMenuPermissionsDto) {
+    await this.findById(roleId);
+
+    // Validate every action against ENABLED_MENU_ACTIONS
+    for (const item of dto.items) {
+      for (const action of item.permissions) {
+        if (!(ENABLED_MENU_ACTIONS as readonly string[]).includes(action)) {
+          throw new BusinessException(
+            400, ErrorCodes.DATA_VALIDATION_FAILED,
+            `Unknown action: ${action}`,
+          );
+        }
+      }
+    }
+
+    // Need menu codes for denormalization in sys_role_menu.menu_code
+    const menuIds = dto.items.map((i) => i.menuId);
+    const menus = await this.prisma.sysMenu.findMany({
+      where: { id: { in: menuIds } },
+      select: { id: true, code: true },
+    });
+    const codeMap = new Map(menus.map((m) => [m.id, m.code]));
+
+    // Full replace: delete all existing rows, then insert non-empty ones
+    await this.prisma.$transaction([
+      this.prisma.sysRoleMenu.deleteMany({ where: { roleId } }),
+      this.prisma.sysRoleMenu.createMany({
+        data: dto.items
+          .filter((item) => item.permissions.length > 0)
+          .map((item) => ({
+            roleId,
+            menuId: item.menuId,
+            menuCode: codeMap.get(item.menuId) ?? '',
+            permissions: item.permissions,
+          })),
+      }),
+    ]);
+
+    return this.getMenuPermissions(roleId);
   }
 }
