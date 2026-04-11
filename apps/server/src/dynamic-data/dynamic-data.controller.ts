@@ -37,6 +37,18 @@ export class DynamicDataController {
     );
   }
 
+  @Get('schema')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'view',
+  )
+  getSchema(
+    @Param('appCode') appCode: string,
+    @Param('modelCode') modelCode: string,
+  ) {
+    return this.dynamicDataService.getSchema(appCode, modelCode);
+  }
+
   @Get(':id')
   @RequirePermission(
     (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,

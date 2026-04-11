@@ -553,6 +553,45 @@ export class DynamicDataService {
   }
 
   /**
+   * Runtime schema endpoint: returns the model metadata + app + non-system fields +
+   * entities (with their fields) + views so workspace pages can render without
+   * designer-level access.
+   * Called via GET /apps/:appCode/models/:modelCode/data/schema
+   * (gated by menu:model:* view permission).
+   */
+  async getSchema(appCode: string, modelCode: string) {
+    const model = await this.prisma.sysModel.findFirst({
+      where: { code: modelCode, app: { code: appCode } },
+      include: {
+        app: { select: { id: true, code: true, name: true } },
+        entities: {
+          include: {
+            fields: {
+              where: { deletedAt: null },
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+            },
+          },
+        },
+        views: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+
+    if (!model) {
+      throw new BusinessException(
+        404,
+        ErrorCodes.MODEL_NOT_FOUND,
+        `Model '${appCode}/${modelCode}' not found`,
+      );
+    }
+
+    // Use fieldService for dict-choices resolution (same as getModelByAppAndCode)
+    const allFields = await this.fieldService.findByModelId(model.id);
+    const nonSystemFields = allFields.filter((f: any) => !f.isSystem);
+
+    return { ...model, fields: nonSystemFields };
+  }
+
+  /**
    * Fetch model by (appCode, modelCode) and include active non-system fields.
    */
   private async getModelByAppAndCode(appCode: string, modelCode: string) {
