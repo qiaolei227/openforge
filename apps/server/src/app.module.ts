@@ -17,6 +17,7 @@ import { DictModule } from './dict/dict.module';
 import { ViewModule } from './view/view.module';
 import { FileModule } from './file/file.module';
 import { SetupModule } from './setup/setup.module';
+import { PermissionModule } from './common/permission/permission.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { OrgInterceptor } from './common/interceptors/org.interceptor';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
@@ -42,6 +43,7 @@ import configuration from './config/configuration';
     ViewModule,
     FileModule,
     SetupModule,
+    PermissionModule,
   ],
   providers: [
     PrismaService,
