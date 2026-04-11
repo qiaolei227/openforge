@@ -16,52 +16,62 @@ export class MenuSyncService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     this.logger.log(`Syncing ${this.menuDefs.length} coded MenuDef entries...`);
 
-    // 1. Upsert all MenuDef entries
-    for (const def of this.menuDefs) {
-      await this.prisma.sysMenu.upsert({
-        where: { code: def.code },
-        update: {
-          // Code-authoritative fields (always overwritten)
-          source: 'coded',
-          type: def.type,
-          targetRoute: def.targetRoute ?? null,
-          visible: true,
-          // NOT overwritten on update: name, nameEn, icon, sortOrder
-          // (admins may have customized these via the menu admin UI)
-        },
-        create: {
-          code: def.code,
-          source: 'coded',
-          type: def.type,
-          name: def.name,
-          nameEn: def.nameEn ?? null,
-          icon: def.icon ?? null,
-          sortOrder: def.sortOrder ?? 0,
-          targetRoute: def.targetRoute ?? null,
-        },
-      });
-    }
+    // Upsert all defs. `name / nameEn / icon / sortOrder` are intentionally not in
+    // the update payload — admins can customize them via the menu admin UI and we
+    // don't want to overwrite their changes on every boot.
+    await this.prisma.$transaction(
+      this.menuDefs.map((def) =>
+        this.prisma.sysMenu.upsert({
+          where: { code: def.code },
+          update: {
+            source: 'coded',
+            type: def.type,
+            targetRoute: def.targetRoute ?? null,
+            visible: true,
+          },
+          create: {
+            code: def.code,
+            source: 'coded',
+            type: def.type,
+            name: def.name,
+            nameEn: def.nameEn ?? null,
+            icon: def.icon ?? null,
+            sortOrder: def.sortOrder ?? 0,
+            targetRoute: def.targetRoute ?? null,
+          },
+        }),
+      ),
+    );
 
-    // 2. Mark coded menus that no longer have a MenuDef as visible=false
-    //    (preserves role_menu bindings; admin may re-enable when MenuDef returns)
+    // Hide coded menus whose MenuDef has been deleted from code.
+    // visible=false (not DELETE) preserves any sys_role_menu bindings so they come
+    // back automatically if the MenuDef is re-added later.
     const activeCodes = this.menuDefs.map((d) => d.code);
     await this.prisma.sysMenu.updateMany({
       where: { source: 'coded', code: { notIn: activeCodes } },
       data: { visible: false },
     });
 
-    // 3. Rebuild parent_id links from parentCode references
-    for (const def of this.menuDefs) {
-      if (!def.parentCode) continue;
-      const parent = await this.prisma.sysMenu.findUnique({
-        where: { code: def.parentCode },
+    // Rebuild parent_id links from parentCode in a single batch: fetch all menu
+    // ids in one query, then apply updates in one transaction. This replaces the
+    // previous N findUnique + N update pattern (~12 serial round trips).
+    const defsWithParent = this.menuDefs.filter((d) => d.parentCode);
+    if (defsWithParent.length > 0) {
+      const rows = await this.prisma.sysMenu.findMany({
+        where: { code: { in: this.menuDefs.map((d) => d.code) } },
+        select: { id: true, code: true },
       });
-      if (parent) {
-        await this.prisma.sysMenu.update({
-          where: { code: def.code },
-          data: { parentId: parent.id },
-        });
-      }
+      const codeToId = new Map(rows.map((r) => [r.code, r.id]));
+      await this.prisma.$transaction(
+        defsWithParent
+          .filter((d) => codeToId.has(d.parentCode!))
+          .map((d) =>
+            this.prisma.sysMenu.update({
+              where: { code: d.code },
+              data: { parentId: codeToId.get(d.parentCode!)! },
+            }),
+          ),
+      );
     }
 
     this.logger.log('Menu sync complete.');

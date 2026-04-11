@@ -7,19 +7,21 @@ import { getAccessToken } from '@/lib/auth';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useMenuStore } from '@/stores/menu-store';
+import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
 
 /**
  * 根路径重定向规则（P2.1）：
  *   未登录              → /setup（首次部署）或 /login
- *   is_admin            → /apps（设计器）
- *   有 sys:designer 权限 → /apps
+ *   is_admin 或有 sys:designer → /apps
  *   其他业务用户        → /workspace
  */
 export default function Home() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
-  const { tree, loaded, fetchTree } = useMenuStore();
+  const loaded = useMenuStore((s) => s.loaded);
+  const fetchTree = useMenuStore((s) => s.fetchTree);
+  const canDesign = useCanAccessDesigner();
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -34,7 +36,6 @@ export default function Home() {
       return;
     }
 
-    // Ensure we have both the profile (isAdmin) and the menu tree before deciding
     if (!user) {
       fetchProfile();
       return;
@@ -43,14 +44,9 @@ export default function Home() {
       fetchTree();
       return;
     }
-
-    const hasDesigner =
-      user.isAdmin ||
-      tree.some(
-        (m) => m.code === 'sys:designer' && (m.permissions ?? []).includes('view'),
-      );
-    router.replace(hasDesigner ? '/apps' : '/workspace');
-  }, [router, user, loaded, tree, fetchProfile, fetchTree]);
+    // canDesign can only be non-null at this point (user and menu both loaded)
+    router.replace(canDesign ? '/apps' : '/workspace');
+  }, [router, user, loaded, canDesign, fetchProfile, fetchTree]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">

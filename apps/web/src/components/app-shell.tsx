@@ -10,8 +10,7 @@ import { LocaleSwitcher } from './locale-switcher';
 import { ThemeSwitcher } from './theme-switcher';
 import { AiSidebar } from './ai-sidebar';
 import { useAiStore } from '@/stores/ai-store';
-import { useAuthStore } from '@/stores/auth-store';
-import { useMenuStore } from '@/stores/menu-store';
+import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
 
 const STORAGE_KEY = 'openforge_sidebar_collapsed';
 const AI_OPEN_KEY = 'openforge_ai_open';
@@ -20,8 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const aiStore = useAiStore();
   const pathname = usePathname();
-  const user = useAuthStore((s) => s.user);
-  const menuTree = useMenuStore((s) => s.tree);
+  const canAccessDesigner = useCanAccessDesigner() ?? false;
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -44,14 +42,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // Zone switcher: designer vs workspace
   const inWorkspace = pathname === '/workspace' || pathname?.startsWith('/workspace/');
   const inDesigner = pathname === '/apps' || pathname?.startsWith('/apps/');
-  const canAccessDesigner =
-    user?.isAdmin ||
-    menuTree.some(
-      (m) => m.code === 'sys:designer' && (m.permissions ?? []).includes('view'),
-    );
 
   return (
     <>

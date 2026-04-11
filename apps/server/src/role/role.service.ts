@@ -35,30 +35,29 @@ export class RoleService {
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        include: { _count: { select: { userRoles: true } } },
       }),
       this.prisma.sysRole.count({ where }),
     ]);
 
-    // Aggregate user counts per role
-    const withCounts = await Promise.all(
-      items.map(async (role) => {
-        const userCount = await this.prisma.sysUserRole.count({
-          where: { roleId: role.id },
-        });
-        return { ...role, userCount };
-      }),
-    );
+    const withCounts = items.map(({ _count, ...role }) => ({
+      ...role,
+      userCount: _count.userRoles,
+    }));
 
     return { items: withCounts, total };
   }
 
   async findById(id: string) {
-    const role = await this.prisma.sysRole.findUnique({ where: { id } });
+    const role = await this.prisma.sysRole.findUnique({
+      where: { id },
+      include: { _count: { select: { userRoles: true } } },
+    });
     if (!role) {
       throw new BusinessException(404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
     }
-    const userCount = await this.prisma.sysUserRole.count({ where: { roleId: id } });
-    return { ...role, userCount };
+    const { _count, ...rest } = role;
+    return { ...rest, userCount: _count.userRoles };
   }
 
   async create(dto: CreateRoleDto) {

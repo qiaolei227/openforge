@@ -23,12 +23,13 @@ export class MenuService {
    * is_admin users get all visible menus with full permissions.
    */
   async buildTreeForUser(user: UserCtx): Promise<MenuNode[]> {
-    const allMenus = await this.prisma.sysMenu.findMany({
-      where: { visible: true },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-    });
-
-    const permissionMap = await this.getPermissionMap(user);
+    const [allMenus, permissionMap] = await Promise.all([
+      this.prisma.sysMenu.findMany({
+        where: { visible: true },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.getPermissionMap(user),
+    ]);
     const adminActions: MenuAction[] = Object.values(MENU_ACTIONS);
 
     // Build MenuNode objects with filled permissions
@@ -123,7 +124,7 @@ export class MenuService {
         if (node.children.length > 0) result.push(node);
         continue;
       }
-      if (node.permissions.includes('view' as MenuAction)) result.push(node);
+      if (node.permissions.includes(MENU_ACTIONS.VIEW)) result.push(node);
     }
     return result;
   }

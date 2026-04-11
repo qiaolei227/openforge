@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { apiClient } from '@/lib/api-client';
 import { getAccessToken, setTokens, clearTokens } from '@/lib/auth';
+import { useMenuStore } from './menu-store';
 import type { LoginRequest, TokenResponse, UserProfile } from '@openforge/shared';
 
 interface AuthState {
@@ -32,6 +33,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       await apiClient.post('/auth/logout', { platform: 'web' });
     } finally {
       clearTokens();
+      // Drop the cached menu tree so the next login fetches fresh data for
+      // whatever user/role binding the new session has.
+      useMenuStore.getState().invalidate();
       set({ isAuthenticated: false, user: null });
     }
   },

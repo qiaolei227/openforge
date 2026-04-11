@@ -242,7 +242,6 @@ export default function UsersPage() {
           orgId: formOrgId,
         });
         userId = data.id;
-        showToast(tUser('createSuccess'), 'success');
       } else if (dialogMode === 'edit' && editingUser) {
         await apiClient.put(`/users/${editingUser.id}`, {
           displayName: formDisplayName,
@@ -250,16 +249,18 @@ export default function UsersPage() {
           phone: formPhone || undefined,
         });
         userId = editingUser.id;
-        showToast(tUser('updateSuccess'), 'success');
       } else {
         return;
       }
-      // Bind roles (full replace)
-      try {
-        await apiClient.put(`/users/${userId}/roles`, { roleIds: formRoleIds });
-      } catch {
-        showToast(tUser('roleBindFailed'), 'error');
-      }
+      // Role binding is part of the same logical operation: if it fails, the
+      // user record is created/updated but left with wrong roles. Treat a
+      // failure here as the whole save failing so the dialog stays open and
+      // the operator can see the inline error.
+      await apiClient.put(`/users/${userId}/roles`, { roleIds: formRoleIds });
+      showToast(
+        dialogMode === 'create' ? tUser('createSuccess') : tUser('updateSuccess'),
+        'success',
+      );
       closeDialog();
       fetchUsers();
     } catch (err: unknown) {

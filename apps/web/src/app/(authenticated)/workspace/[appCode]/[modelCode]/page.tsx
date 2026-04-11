@@ -2,7 +2,9 @@
 
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { apiClient } from '@/lib/api-client';
+import { getApiErrorMessage } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import type { Field } from '@openforge/shared';
 import RecordBrowser from '@/app/(authenticated)/apps/[appId]/models/[modelId]/record-browser';
@@ -35,6 +37,7 @@ export default function WorkspaceModelPage() {
     appCode: string;
     modelCode: string;
   }>();
+  const tErrors = useTranslations('errorCodes');
   const [schema, setSchema] = useState<ModelSchema | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,15 +49,14 @@ export default function WorkspaceModelPage() {
           `/api/apps/${appCode}/models/${modelCode}/data/schema`,
         );
         if (!cancelled) setSchema(data);
-      } catch (err: any) {
-        if (!cancelled)
-          setError(err?.response?.data?.message ?? '加载失败');
+      } catch (err: unknown) {
+        if (!cancelled) setError(getApiErrorMessage(err, tErrors, '加载失败'));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [appCode, modelCode]);
+  }, [appCode, modelCode, tErrors]);
 
   if (error) {
     return <div className="p-8 text-muted-foreground">{error}</div>;

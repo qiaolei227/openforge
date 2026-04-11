@@ -10,15 +10,9 @@ import { SYS_ROLES } from '../role/role.menus';
 import { SYS_CONFIG } from '../config-param/config.menu';
 import { SYS_DESIGNER } from '../app-mgmt/designer.menu';
 
-/**
- * All coded MenuDef entries registered centrally in this module.
- *
- * Why central registration instead of per-module multi-provider:
- * NestJS multi-provider aggregation across modules has limits — using a single
- * explicit array here is the most reliable approach. The trade-off is a
- * one-way dependency from MenuModule → other modules' menu files, which is
- * acceptable and cycle-free.
- */
+// NestJS multi-provider aggregation across modules is unreliable, so every
+// coded MenuDef is imported explicitly here. This creates a one-way dependency
+// from MenuModule → other modules' menu files — acceptable and cycle-free.
 const ALL_MENU_DEFS = [
   SYS_MANAGEMENT_GROUP,
   SYS_MENUS,

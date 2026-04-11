@@ -31,9 +31,10 @@ describe('MenuSyncService', () => {
       sysMenu: {
         upsert: vi.fn().mockResolvedValue({ id: 'uuid-fake' }),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-        findUnique: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([]),
         update: vi.fn().mockResolvedValue({}),
       },
+      $transaction: vi.fn((operations: any) => Promise.all(operations)),
     };
     const module = await Test.createTestingModule({
       providers: [
@@ -45,19 +46,19 @@ describe('MenuSyncService', () => {
     service = module.get(MenuSyncService);
   });
 
-  it('upserts all MenuDef entries', async () => {
-    prisma.sysMenu.findUnique.mockResolvedValue({ id: 'mgmt-uuid' });
+  it('upserts all MenuDef entries (batched in one $transaction)', async () => {
     await service.onModuleInit();
+    expect(prisma.$transaction).toHaveBeenCalled();
     expect(prisma.sysMenu.upsert).toHaveBeenCalledTimes(2);
     expect(prisma.sysMenu.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { code: 'sys:foo' },
-      }),
+      expect.objectContaining({ where: { code: 'sys:foo' } }),
+    );
+    expect(prisma.sysMenu.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { code: 'sys:management' } }),
     );
   });
 
   it('marks missing coded menus as visible=false', async () => {
-    prisma.sysMenu.findUnique.mockResolvedValue(null);
     await service.onModuleInit();
     expect(prisma.sysMenu.updateMany).toHaveBeenCalledWith({
       where: { source: 'coded', code: { notIn: ['sys:foo', 'sys:management'] } },
@@ -65,22 +66,32 @@ describe('MenuSyncService', () => {
     });
   });
 
-  it('rebuilds parent_id links after upserts', async () => {
-    prisma.sysMenu.findUnique.mockImplementation(({ where }: any) =>
-      where.code === 'sys:management' ? { id: 'mgmt-uuid' } : null,
-    );
+  it('rebuilds parent_id links via a single findMany + batched updates', async () => {
+    prisma.sysMenu.findMany.mockResolvedValue([
+      { id: 'foo-uuid', code: 'sys:foo' },
+      { id: 'mgmt-uuid', code: 'sys:management' },
+    ]);
     await service.onModuleInit();
+    expect(prisma.sysMenu.findMany).toHaveBeenCalledWith({
+      where: { code: { in: ['sys:foo', 'sys:management'] } },
+      select: { id: true, code: true },
+    });
     expect(prisma.sysMenu.update).toHaveBeenCalledWith({
       where: { code: 'sys:foo' },
       data: { parentId: 'mgmt-uuid' },
     });
   });
 
-  it('is idempotent (second run produces same mutation set)', async () => {
-    prisma.sysMenu.findUnique.mockResolvedValue({ id: 'mgmt-uuid' });
+  it('is idempotent: second run fires the same mutations', async () => {
+    prisma.sysMenu.findMany.mockResolvedValue([
+      { id: 'foo-uuid', code: 'sys:foo' },
+      { id: 'mgmt-uuid', code: 'sys:management' },
+    ]);
     await service.onModuleInit();
-    const first = prisma.sysMenu.upsert.mock.calls.length;
+    const firstUpserts = prisma.sysMenu.upsert.mock.calls.length;
+    const firstUpdates = prisma.sysMenu.update.mock.calls.length;
     await service.onModuleInit();
-    expect(prisma.sysMenu.upsert.mock.calls.length).toBe(first * 2);
+    expect(prisma.sysMenu.upsert.mock.calls.length).toBe(firstUpserts * 2);
+    expect(prisma.sysMenu.update.mock.calls.length).toBe(firstUpdates * 2);
   });
 });
