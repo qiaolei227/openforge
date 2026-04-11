@@ -42,6 +42,9 @@ apps/server/prisma/*.db-journal
 # local file storage (LocalStorageProvider upload root)
 apps/server/data/
 
+# database backups
+backup/
+
 # private docs & instructions (不发布到公开仓库)
 docs/
 CLAUDE.md
