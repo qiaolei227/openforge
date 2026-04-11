@@ -14,6 +14,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { FileService } from './file.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequestUser } from '../common/interfaces/request-context';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import type { Response } from 'express';
 
 @Controller('files')
@@ -28,6 +29,7 @@ export class FileController {
    * Max file size: 50 MB.
    */
   @Post('upload')
+  @RequirePermission('sys:self', 'create')
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 50 * 1024 * 1024 },
@@ -49,6 +51,7 @@ export class FileController {
    * Returns file metadata (id, originalName, mimeType, size, url, createdAt).
    */
   @Get(':id')
+  @RequirePermission('sys:self', 'view')
   findById(@Param('id', ParseUUIDPipe) id: string) {
     return this.fileService.findById(id);
   }
@@ -59,6 +62,7 @@ export class FileController {
    * Streams the file binary back to the client with appropriate headers.
    */
   @Get(':id/download')
+  @RequirePermission('sys:self', 'view')
   async download(
     @Param('id', ParseUUIDPipe) id: string,
     @Res() res: Response,
@@ -78,6 +82,7 @@ export class FileController {
    * Deletes the file from storage and removes the DB record.
    */
   @Delete(':id')
+  @RequirePermission('sys:self', 'delete')
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.fileService.delete(id);
   }

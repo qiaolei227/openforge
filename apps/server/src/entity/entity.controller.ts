@@ -12,17 +12,20 @@ import {
 import { EntityService } from './entity.service';
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { UpdateEntityDto } from './dto/update-entity.dto';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 
 @Controller()
 export class EntityController {
   constructor(private entityService: EntityService) {}
 
   @Get('models/:modelId/entities')
+  @RequirePermission('sys:designer', 'view')
   findByModelId(@Param('modelId', ParseUUIDPipe) modelId: string) {
     return this.entityService.findByModelId(modelId);
   }
 
   @Post('models/:modelId/entities')
+  @RequirePermission('sys:designer', 'create')
   create(
     @Param('modelId', ParseUUIDPipe) modelId: string,
     @Body() dto: CreateEntityDto,
@@ -31,6 +34,7 @@ export class EntityController {
   }
 
   @Put('entities/:id')
+  @RequirePermission('sys:designer', 'edit')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateEntityDto,
@@ -39,6 +43,7 @@ export class EntityController {
   }
 
   @Put('models/:modelId/entities/sort')
+  @RequirePermission('sys:designer', 'edit')
   updateSort(
     @Param('modelId', ParseUUIDPipe) modelId: string,
     @Body() items: Array<{ id: string; sortOrder: number }>,
@@ -47,6 +52,7 @@ export class EntityController {
   }
 
   @Get('entities/:id/records')
+  @RequirePermission('sys:designer', 'view')
   queryRecords(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('parentId', ParseUUIDPipe) parentId: string,
@@ -55,6 +61,7 @@ export class EntityController {
   }
 
   @Delete('entities/:id')
+  @RequirePermission('sys:designer', 'delete')
   delete(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('force') force?: string,

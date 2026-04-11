@@ -12,12 +12,17 @@ import { QueryDto } from './dto/query.dto';
 import { BatchDto } from './dto/batch.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequestUser } from '../common/interfaces/request-context';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 
 @Controller('apps/:appCode/models/:modelCode/data')
 export class DynamicDataController {
   constructor(private dynamicDataService: DynamicDataService) {}
 
   @Post('query')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'view',
+  )
   query(
     @Param('appCode') appCode: string,
     @Param('modelCode') modelCode: string,
@@ -33,6 +38,10 @@ export class DynamicDataController {
   }
 
   @Get(':id')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'view',
+  )
   findById(
     @Param('appCode') appCode: string,
     @Param('modelCode') modelCode: string,
@@ -48,6 +57,10 @@ export class DynamicDataController {
   }
 
   @Post()
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'create',
+  )
   create(
     @Param('appCode') appCode: string,
     @Param('modelCode') modelCode: string,
@@ -64,6 +77,10 @@ export class DynamicDataController {
   }
 
   @Put(':id')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'edit',
+  )
   update(
     @Param('appCode') appCode: string,
     @Param('modelCode') modelCode: string,
@@ -82,6 +99,10 @@ export class DynamicDataController {
   }
 
   @Put(':id/archive')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'archive',
+  )
   async archive(
     @Param('appCode') appCode: string,
     @Param('modelCode') modelCode: string,
@@ -100,6 +121,10 @@ export class DynamicDataController {
   }
 
   @Delete(':id')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'delete',
+  )
   remove(
     @Param('appCode') appCode: string,
     @Param('modelCode') modelCode: string,
@@ -115,6 +140,10 @@ export class DynamicDataController {
   }
 
   @Post('batch')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'edit',
+  )
   batch(
     @Param('appCode') appCode: string,
     @Param('modelCode') modelCode: string,
