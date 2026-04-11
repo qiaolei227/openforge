@@ -12,6 +12,10 @@ export class PermissionService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
   async check(userId: string, menuCode: string, action: MenuAction): Promise<boolean> {
+    // sys:self — virtual permission any authenticated user has
+    // (used for menu tree API, personal settings, etc.)
+    if (menuCode === 'sys:self') return true;
+
     if (menuCode.startsWith('menu:model:')) {
       return this.checkModelMenu(userId, menuCode, action);
     }

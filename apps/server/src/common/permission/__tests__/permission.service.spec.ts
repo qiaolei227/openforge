@@ -89,6 +89,15 @@ describe('PermissionService', () => {
     });
   });
 
+  describe('sys:self virtual permission', () => {
+    it('always returns true for sys:self regardless of user or action', async () => {
+      expect(await service.check('any-user', 'sys:self', 'view')).toBe(true);
+      expect(await service.check('any-user', 'sys:self', 'edit')).toBe(true);
+      // should not have queried the DB
+      expect(prisma.sysRoleMenu.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getFieldPermissions', () => {
     it('returns empty map when no rows', async () => {
       prisma.sysFieldPermission.findMany.mockResolvedValue([]);

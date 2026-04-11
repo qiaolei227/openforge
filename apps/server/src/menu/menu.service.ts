@@ -1,6 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MENU_ACTIONS, type MenuNode, type MenuAction } from '@openforge/shared';
+import { BusinessException } from '../common/exceptions/business.exception';
+import { ErrorCodes } from '../common/exceptions/error-codes';
+import { nanoid } from 'nanoid';
+import type { CreateMenuDto } from './dto/create-menu.dto';
+import type { UpdateMenuDto } from './dto/update-menu.dto';
+import type { ReorderMenuDto } from './dto/reorder-menu.dto';
 
 interface UserCtx {
   id: string;
@@ -120,5 +126,100 @@ export class MenuService {
       if (node.permissions.includes('view' as MenuAction)) result.push(node);
     }
     return result;
+  }
+
+  async create(dto: CreateMenuDto) {
+    this.validateCreateTarget(dto);
+    return this.prisma.sysMenu.create({
+      data: {
+        code: `menu:${nanoid(8)}`,
+        source: 'designer',
+        parentId: dto.parentId ?? null,
+        type: dto.type,
+        name: dto.name,
+        nameEn: dto.nameEn ?? null,
+        icon: dto.icon ?? null,
+        sortOrder: 0,
+        visible: true,
+        targetAppCode: dto.targetAppCode ?? null,
+        targetModelCode: dto.targetModelCode ?? null,
+        targetViewId: dto.targetViewId ?? null,
+        targetFilterPreset: (dto.targetFilterPreset ?? null) as any,
+        targetUrl: dto.targetUrl ?? null,
+      },
+    });
+  }
+
+  private validateCreateTarget(dto: CreateMenuDto): void {
+    const { type } = dto;
+    if (type === 'model' && (!dto.targetAppCode || !dto.targetModelCode)) {
+      throw new BusinessException(
+        400, ErrorCodes.MENU_TARGET_MISMATCH,
+        'type=model requires targetAppCode + targetModelCode',
+      );
+    }
+    if (type === 'link' && !dto.targetUrl) {
+      throw new BusinessException(
+        400, ErrorCodes.MENU_TARGET_MISMATCH,
+        'type=link requires targetUrl',
+      );
+    }
+    if ((type === 'group' || type === 'divider') &&
+        (dto.targetAppCode || dto.targetModelCode || dto.targetUrl)) {
+      throw new BusinessException(
+        400, ErrorCodes.MENU_TARGET_MISMATCH,
+        `type=${type} must not have target_* fields`,
+      );
+    }
+  }
+
+  async update(id: string, dto: UpdateMenuDto) {
+    const menu = await this.prisma.sysMenu.findUnique({ where: { id } });
+    if (!menu) {
+      throw new BusinessException(404, ErrorCodes.MENU_NOT_FOUND, 'Menu not found');
+    }
+
+    if (menu.source === 'coded') {
+      // coded menus only allow changing name/nameEn/icon/sortOrder/visible
+      return this.prisma.sysMenu.update({
+        where: { id },
+        data: {
+          name: dto.name ?? menu.name,
+          nameEn: dto.nameEn ?? menu.nameEn,
+          icon: dto.icon ?? menu.icon,
+          sortOrder: dto.sortOrder ?? menu.sortOrder,
+          visible: dto.visible ?? menu.visible,
+        },
+      });
+    }
+    return this.prisma.sysMenu.update({ where: { id }, data: dto as any });
+  }
+
+  async delete(id: string): Promise<void> {
+    const menu = await this.prisma.sysMenu.findUnique({ where: { id } });
+    if (!menu) {
+      throw new BusinessException(404, ErrorCodes.MENU_NOT_FOUND, 'Menu not found');
+    }
+    if (menu.source === 'coded') {
+      throw new BusinessException(
+        400, ErrorCodes.MENU_NOT_DELETABLE,
+        'coded menus cannot be deleted',
+      );
+    }
+    await this.prisma.sysMenu.delete({ where: { id } });
+  }
+
+  async reorder(dto: ReorderMenuDto) {
+    return this.prisma.$transaction(
+      dto.items.map((item) =>
+        this.prisma.sysMenu.update({
+          where: { id: item.id },
+          data: {
+            parentId: item.parentId ?? null,
+            sortOrder: item.sortOrder,
+          },
+        }),
+      ),
+    );
   }
 }
