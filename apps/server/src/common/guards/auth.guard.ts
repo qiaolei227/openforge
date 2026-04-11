@@ -32,6 +32,7 @@ export class AuthGuard implements CanActivate {
         userId: payload.userId,
         orgId: payload.orgId,
         roles: payload.roles,
+        isAdmin: !!payload.isAdmin,
       } satisfies RequestUser;
     } catch {
       throw new UnauthorizedException('Invalid or expired token');

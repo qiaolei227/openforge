@@ -13,6 +13,7 @@ export interface JwtPayload {
   userId: string;
   orgId: string;
   roles: string[];
+  isAdmin: boolean;
 }
 
 export interface RefreshRequest {

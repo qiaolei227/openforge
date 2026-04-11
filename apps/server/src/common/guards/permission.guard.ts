@@ -21,14 +21,12 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // 1. @Public routes pass unconditionally
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
     if (isPublic) return true;
 
-    // 2. Require @RequirePermission on every non-public route
     const req = this.reflector.getAllAndOverride<PermissionRequirement>(
       REQUIRE_PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
@@ -41,13 +39,11 @@ export class PermissionGuard implements CanActivate {
       );
     }
 
-    // 3. is_admin bypass
     const request = context.switchToHttp().getRequest();
     const user = request.user;
     if (user?.isAdmin) return true;
 
-    // 4. No user → 401
-    if (!user?.id) {
+    if (!user?.userId) {
       throw new BusinessException(
         401,
         ErrorCodes.AUTH_INVALID_CREDENTIALS,
@@ -55,14 +51,12 @@ export class PermissionGuard implements CanActivate {
       );
     }
 
-    // 5. Resolve menu code (static string or function)
     const menuCode =
       typeof req.menuCode === 'function'
         ? req.menuCode(request as Request)
         : req.menuCode;
 
-    // 6. Call PermissionService.check; FORBIDDEN if not allowed
-    const allowed = await this.permissionService.check(user.id, menuCode, req.action);
+    const allowed = await this.permissionService.check(user.userId, menuCode, req.action);
     if (!allowed) {
       throw new BusinessException(403, ErrorCodes.FORBIDDEN, 'Forbidden');
     }

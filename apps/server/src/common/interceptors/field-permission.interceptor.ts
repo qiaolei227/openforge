@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { Observable, from } from 'rxjs';
 import { mergeMap, map } from 'rxjs/operators';
-import { PermissionService } from '../permission/permission.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 // Matches both business data path and designer data path:
@@ -20,10 +19,7 @@ const BUSINESS_DATA_REGEX =
 export class FieldPermissionInterceptor implements NestInterceptor {
   // Explicit @Inject is required because esbuild does not emit full
   // `design:paramtypes` metadata in the Vitest runtime.
-  constructor(
-    @Inject(PermissionService) private permissionService: PermissionService,
-    @Inject(PrismaService) private prisma: PrismaService,
-  ) {}
+  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const req = context.switchToHttp().getRequest();
@@ -38,7 +34,7 @@ export class FieldPermissionInterceptor implements NestInterceptor {
     const modelCode = decodeURIComponent(match[2]);
     const isWrite = ['POST', 'PUT', 'PATCH'].includes(req.method);
 
-    return from(this.resolvePermissions(user.id, appCode, modelCode)).pipe(
+    return from(this.resolvePermissions(user.userId, appCode, modelCode)).pipe(
       mergeMap(({ hiddenColumns, readonlyColumns }) => {
         if (isWrite && req.body && typeof req.body === 'object') {
           this.stripFromBody(req.body, hiddenColumns);
@@ -56,13 +52,24 @@ export class FieldPermissionInterceptor implements NestInterceptor {
     appCode: string,
     modelCode: string,
   ) {
+    // Single query: model + its fields, with each field's permission rows
+    // restricted to the current user's roles. Collapses two sequential joins
+    // (sysModel.findFirst, then sysFieldPermission.findMany via PermissionService)
+    // into one round-trip that fires on every business data request.
     const model = await this.prisma.sysModel.findFirst({
       where: { code: modelCode, app: { code: appCode } },
       select: {
         id: true,
         fields: {
           where: { deletedAt: null, entityId: null },
-          select: { id: true, columnName: true },
+          select: {
+            id: true,
+            columnName: true,
+            fieldPermissions: {
+              where: { role: { userRoles: { some: { userId } } } },
+              select: { access: true },
+            },
+          },
         },
       },
     });
@@ -73,13 +80,21 @@ export class FieldPermissionInterceptor implements NestInterceptor {
       };
     }
 
-    const perms = await this.permissionService.getFieldPermissions(userId, model.id);
     const hiddenColumns = new Set<string>();
     const readonlyColumns = new Set<string>();
     for (const f of model.fields) {
-      const access = perms.get(f.id);
-      if (access === 'hidden') hiddenColumns.add(f.columnName);
-      else if (access === 'readonly') readonlyColumns.add(f.columnName);
+      // Widest-wins merge across roles: editable > readonly > hidden.
+      // editable short-circuits (break); after the loop `widest` is readonly,
+      // hidden, or null (no rows = default editable, nothing to strip).
+      let widest: 'hidden' | 'readonly' | 'editable' | null = null;
+      for (const p of f.fieldPermissions) {
+        const a = p.access as 'hidden' | 'readonly' | 'editable';
+        if (a === 'editable') { widest = 'editable'; break; }
+        if (a === 'readonly') widest = 'readonly';
+        else if (widest !== 'readonly') widest = a;
+      }
+      if (widest === 'hidden') hiddenColumns.add(f.columnName);
+      else if (widest === 'readonly') readonlyColumns.add(f.columnName);
     }
     return { hiddenColumns, readonlyColumns };
   }

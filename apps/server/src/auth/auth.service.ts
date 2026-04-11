@@ -51,6 +51,7 @@ export class AuthService {
       userId: user.id,
       orgId: defaultOrg.orgId,
       roles: [] as string[],
+      isAdmin: user.isAdmin,
     };
 
     const tokens = await this.generateTokens(payload);
@@ -71,7 +72,12 @@ export class AuthService {
     );
     await this.redis.set(
       `refresh:${tokens.refreshToken}`,
-      JSON.stringify({ userId: user.id, orgId: defaultOrg.orgId, platform }),
+      JSON.stringify({
+        userId: user.id,
+        orgId: defaultOrg.orgId,
+        platform,
+        isAdmin: user.isAdmin,
+      }),
       'EX',
       7 * 24 * 3600,
     );
@@ -85,11 +91,22 @@ export class AuthService {
       throw new BusinessException(401, ErrorCodes.AUTH_INVALID_REFRESH_TOKEN, 'Invalid refresh token');
     }
 
-    const { userId, orgId, platform } = JSON.parse(sessionData);
+    const { userId, orgId, platform, isAdmin: storedIsAdmin } = JSON.parse(sessionData);
 
     await this.redis.del(`refresh:${refreshToken}`);
 
-    const payload = { userId, orgId, roles: [] as string[] };
+    // isAdmin is cached in the session blob; fall back to a DB lookup for sessions
+    // created before the field was added (zero-downtime rollout).
+    let isAdmin = storedIsAdmin;
+    if (typeof isAdmin !== 'boolean') {
+      const u = await this.prisma.sysUser.findUnique({
+        where: { id: userId },
+        select: { isAdmin: true },
+      });
+      isAdmin = !!u?.isAdmin;
+    }
+
+    const payload = { userId, orgId, roles: [] as string[], isAdmin };
     const tokens = await this.generateTokens(payload);
 
     const sessionKey = `session:${userId}:${platform}`;
@@ -101,7 +118,7 @@ export class AuthService {
     );
     await this.redis.set(
       `refresh:${tokens.refreshToken}`,
-      JSON.stringify({ userId, orgId, platform }),
+      JSON.stringify({ userId, orgId, platform, isAdmin }),
       'EX',
       7 * 24 * 3600,
     );

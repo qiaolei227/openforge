@@ -6,7 +6,7 @@ import { PermissionService } from '../../permission/permission.service';
 import { BusinessException } from '../../exceptions/business.exception';
 
 function mockContext(params: {
-  user?: { id: string; isAdmin: boolean };
+  user?: { userId: string; isAdmin: boolean };
   request?: any;
 }): ExecutionContext {
   return {
@@ -40,7 +40,7 @@ describe('PermissionGuard', () => {
   it('throws MISSING_PERMISSION_DECORATOR when no @Public and no @RequirePermission', async () => {
     vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
     await expect(
-      guard.canActivate(mockContext({ user: { id: 'u1', isAdmin: false } })),
+      guard.canActivate(mockContext({ user: { userId: 'u1', isAdmin: false } })),
     ).rejects.toThrow(BusinessException);
   });
 
@@ -50,7 +50,7 @@ describe('PermissionGuard', () => {
       return undefined;
     });
     expect(
-      await guard.canActivate(mockContext({ user: { id: 'u1', isAdmin: true } })),
+      await guard.canActivate(mockContext({ user: { userId: 'u1', isAdmin: true } })),
     ).toBe(true);
     expect(permService.check).not.toHaveBeenCalled();
   });
@@ -62,7 +62,7 @@ describe('PermissionGuard', () => {
     });
     permService.check.mockResolvedValue(true);
     expect(
-      await guard.canActivate(mockContext({ user: { id: 'u1', isAdmin: false } })),
+      await guard.canActivate(mockContext({ user: { userId: 'u1', isAdmin: false } })),
     ).toBe(true);
     expect(permService.check).toHaveBeenCalledWith('u1', 'sys:users', 'view');
   });
@@ -79,7 +79,7 @@ describe('PermissionGuard', () => {
     });
     permService.check.mockResolvedValue(true);
     await guard.canActivate(mockContext({
-      user: { id: 'u1', isAdmin: false },
+      user: { userId: 'u1', isAdmin: false },
       request: { params: { appCode: 'purchase', modelCode: 'order' } },
     }));
     expect(permService.check).toHaveBeenCalledWith('u1', 'menu:model:purchase:order', 'view');
@@ -92,7 +92,7 @@ describe('PermissionGuard', () => {
     });
     permService.check.mockResolvedValue(false);
     await expect(
-      guard.canActivate(mockContext({ user: { id: 'u1', isAdmin: false } })),
+      guard.canActivate(mockContext({ user: { userId: 'u1', isAdmin: false } })),
     ).rejects.toThrow(BusinessException);
   });
 
