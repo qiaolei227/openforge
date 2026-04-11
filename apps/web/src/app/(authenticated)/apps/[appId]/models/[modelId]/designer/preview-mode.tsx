@@ -113,7 +113,7 @@ export function PreviewMode({ layout, viewType, fields, entities = [] }: Preview
         ) : (
           <ListRenderer layout={layout}>
             {({ layoutColumns, fields: ctxFields }) => (
-              <div className="mx-auto max-w-6xl p-8">
+              <div className="p-8">
                 <ListPreviewTable columns={layoutColumns} fields={ctxFields} />
               </div>
             )}

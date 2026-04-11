@@ -4,6 +4,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Tailwind v4 auto-detection may miss novel arbitrary values in workspace
+   packages during HMR. Declare sources explicitly so that new classes added
+   in packages/ui and packages/render-engine are reliably picked up. */
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../../../../packages/render-engine/src/**/*.{ts,tsx}";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

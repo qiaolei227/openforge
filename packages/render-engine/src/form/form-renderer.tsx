@@ -36,7 +36,7 @@ export function FormRenderer({ layout, className }: FormRendererProps) {
   const groups = useMemo(() => groupNodes(layout.children), [layout.children]);
 
   return (
-    <div className={className ?? 'mx-auto max-w-4xl space-y-6 p-8'}>
+    <div className={className ?? 'space-y-6 p-8'}>
       {groups.map((group, gi) => {
         if (group.type === 'grid') {
           return <GridSection key={group.nodes[0].id ?? gi} node={group.nodes[0]} />;
