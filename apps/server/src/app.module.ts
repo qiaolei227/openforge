@@ -18,6 +18,7 @@ import { ViewModule } from './view/view.module';
 import { FileModule } from './file/file.module';
 import { SetupModule } from './setup/setup.module';
 import { PermissionModule } from './common/permission/permission.module';
+import { MenuModule } from './menu/menu.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { OrgInterceptor } from './common/interceptors/org.interceptor';
@@ -46,6 +47,7 @@ import configuration from './config/configuration';
     FileModule,
     SetupModule,
     PermissionModule,
+    MenuModule,
   ],
   providers: [
     PrismaService,
