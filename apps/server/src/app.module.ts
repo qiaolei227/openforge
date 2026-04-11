@@ -20,6 +20,7 @@ import { SetupModule } from './setup/setup.module';
 import { PermissionModule } from './common/permission/permission.module';
 import { MenuModule } from './menu/menu.module';
 import { RoleModule } from './role/role.module';
+import { FieldPermissionModule } from './field-permission/field-permission.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { OrgInterceptor } from './common/interceptors/org.interceptor';
@@ -50,6 +51,7 @@ import configuration from './config/configuration';
     PermissionModule,
     MenuModule,
     RoleModule,
+    FieldPermissionModule,
   ],
   providers: [
     PrismaService,
