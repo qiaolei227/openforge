@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { MenuSyncService } from './menu-sync.service';
+import { MenuService } from './menu.service';
 import { MENU_DEF_TOKEN } from '@openforge/shared';
 import { SYS_MANAGEMENT_GROUP, SYS_MENUS } from './menu.menus';
 import { SYS_USERS } from '../user/user.menu';
@@ -31,8 +32,9 @@ const ALL_MENU_DEFS = [
 @Module({
   providers: [
     MenuSyncService,
+    MenuService,
     { provide: MENU_DEF_TOKEN, useValue: ALL_MENU_DEFS },
   ],
-  exports: [MenuSyncService],
+  exports: [MenuSyncService, MenuService],
 })
 export class MenuModule {}
