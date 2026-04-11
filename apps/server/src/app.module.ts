@@ -21,6 +21,7 @@ import { PermissionModule } from './common/permission/permission.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { OrgInterceptor } from './common/interceptors/org.interceptor';
+import { FieldPermissionInterceptor } from './common/interceptors/field-permission.interceptor';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import configuration from './config/configuration';
@@ -51,6 +52,7 @@ import configuration from './config/configuration';
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
     { provide: APP_INTERCEPTOR, useClass: OrgInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: FieldPermissionInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],
