@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ChevronDown, Loader2, LayoutGrid } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { AppIcon } from '@/lib/app-icon';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -15,13 +15,6 @@ import {
 import { useAccessibleApps } from '@/hooks/use-accessible-apps';
 import { useCurrentApp } from '@/hooks/use-current-app';
 import { cn } from '@/lib/utils';
-
-function AppIcon({ iconName }: { iconName: string | null }) {
-  if (!iconName) return <LayoutGrid className="w-4 h-4" />;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const Icon = (LucideIcons as any)[iconName] as React.ComponentType<{ className?: string }> | undefined;
-  return Icon ? <Icon className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />;
-}
 
 export function SystemSwitcher() {
   const router = useRouter();

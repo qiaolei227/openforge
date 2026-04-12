@@ -1,16 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-
-interface UserCtx {
-  userId: string;
-  isAdmin: boolean;
-}
+import type { RequestUser } from '../common/interfaces/request-context';
 
 @Injectable()
 export class AccessibleAppsService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
-  async listForUser(user: UserCtx) {
+  async listForUser(user: Pick<RequestUser, 'userId' | 'isAdmin'>) {
     const apps = user.isAdmin
       ? await this.prisma.sysApp.findMany({
           orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],

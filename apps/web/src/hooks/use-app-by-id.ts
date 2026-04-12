@@ -18,12 +18,14 @@ export function useAppById(appId: string | null) {
       setApp(null);
       return;
     }
+    const ac = new AbortController();
     setLoading(true);
     apiClient
-      .get<AppInfo>(`/apps/${appId}`)
-      .then(({ data }) => setApp(data))
-      .catch(() => setApp(null))
-      .finally(() => setLoading(false));
+      .get<AppInfo>(`/apps/${appId}`, { signal: ac.signal })
+      .then(({ data }) => { if (!ac.signal.aborted) setApp(data); })
+      .catch(() => { if (!ac.signal.aborted) setApp(null); })
+      .finally(() => { if (!ac.signal.aborted) setLoading(false); });
+    return () => ac.abort();
   }, [appId]);
 
   return { app, loading };

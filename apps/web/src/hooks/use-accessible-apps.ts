@@ -18,22 +18,24 @@ export function useAccessibleApps() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const { data } = await apiClient.get<AccessibleApp[]>('/apps/accessible');
+      const { data } = await apiClient.get<AccessibleApp[]>('/apps/accessible', { signal });
       setApps(data ?? []);
       setError(null);
     } catch (e) {
-      setError(e);
+      if (!signal?.aborted) setError(e);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
   }, [load]);
 
-  return { apps, loading, error, refresh: load };
+  return { apps, loading, error, refresh: () => load() };
 }

@@ -29,12 +29,12 @@ JOIN sys_model sm ON sm.app_id = sa.id
 WHERE m.source = 'designer' AND m.type = 'model'
   AND sa.code = m.target_app_code AND sm.code = m.target_model_code;
 
--- 1.5 Recursive backfill group/link/divider app_id from parent
+-- 1.5 Recursive backfill group/link/divider app_id from parent (depth-limited to prevent infinite loops on circular parent refs)
 WITH RECURSIVE menu_app AS (
-  SELECT id, app_id FROM sys_menu WHERE source = 'designer' AND app_id IS NOT NULL
+  SELECT id, app_id, 0 AS depth FROM sys_menu WHERE source = 'designer' AND app_id IS NOT NULL
   UNION
-  SELECT m.id, ma.app_id FROM sys_menu m JOIN menu_app ma ON m.parent_id = ma.id
-  WHERE m.source = 'designer' AND m.app_id IS NULL
+  SELECT m.id, ma.app_id, ma.depth + 1 FROM sys_menu m JOIN menu_app ma ON m.parent_id = ma.id
+  WHERE m.source = 'designer' AND m.app_id IS NULL AND ma.depth < 50
 )
 UPDATE sys_menu m SET app_id = ma.app_id FROM menu_app ma WHERE m.id = ma.id AND m.app_id IS NULL;
 

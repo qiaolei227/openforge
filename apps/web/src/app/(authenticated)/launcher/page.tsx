@@ -1,23 +1,12 @@
 'use client';
 
-import * as LucideIcons from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { Loader2, AlertCircle, LayoutGrid, Plus, ArrowRight } from 'lucide-react';
 import { useAccessibleApps, type AccessibleApp } from '@/hooks/use-accessible-apps';
 import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
+import { getLucideIcon } from '@/lib/app-icon';
 import { cn } from '@/lib/utils';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getIcon(name: string | null): LucideIcons.LucideIcon {
-  if (name) {
-    const candidate = (LucideIcons as Record<string, unknown>)[name];
-    if (typeof candidate === 'function') return candidate as LucideIcons.LucideIcon;
-  }
-  return LucideIcons.LayoutGrid;
-}
 
 /** Append 10% alpha to a 6-char hex colour, e.g. '#3b82f6' → '#3b82f61a' */
 function withAlpha10(hex: string): string {
@@ -31,7 +20,7 @@ function withAlpha10(hex: string): string {
 function LoadingState() {
   return (
     <div className="flex flex-1 items-center justify-center min-h-[60vh]">
-      <LucideIcons.Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
     </div>
   );
 }
@@ -48,7 +37,7 @@ function ErrorState({ error }: { error: unknown }) {
   return (
     <div className="flex flex-1 items-center justify-center min-h-[60vh]">
       <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-6 py-4 max-w-md">
-        <LucideIcons.AlertCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+        <AlertCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
         <div>
           <p className="text-sm font-medium text-destructive">{t('loadError')}</p>
           <p className="text-sm text-muted-foreground mt-1">{message}</p>
@@ -63,7 +52,7 @@ function EmptyState({ isDesigner }: { isDesigner: boolean }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center min-h-[60vh] gap-4">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-        <LucideIcons.LayoutGrid className="h-8 w-8 text-muted-foreground" />
+        <LayoutGrid className="h-8 w-8 text-muted-foreground" />
       </div>
       <div className="text-center">
         <p className="text-base font-semibold">{t('empty')}</p>
@@ -76,7 +65,7 @@ function EmptyState({ isDesigner }: { isDesigner: boolean }) {
           href="/apps?create=1"
           className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          <LucideIcons.Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4" />
           {t('emptyDesignerCta')}
         </Link>
       )}
@@ -86,7 +75,7 @@ function EmptyState({ isDesigner }: { isDesigner: boolean }) {
 
 function AppCard({ app }: { app: AccessibleApp }) {
   const accent = app.themeColor ?? '#3b82f6';
-  const Icon = getIcon(app.icon);
+  const Icon = getLucideIcon(app.icon);
 
   return (
     <Link
@@ -132,7 +121,7 @@ function AppCard({ app }: { app: AccessibleApp }) {
 
       {/* Subtle hover arrow indicator */}
       <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-        <LucideIcons.ArrowRight className="h-4 w-4 text-muted-foreground" />
+        <ArrowRight className="h-4 w-4 text-muted-foreground" />
       </div>
     </Link>
   );
@@ -153,7 +142,7 @@ function NewAppTile() {
       )}
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted transition-colors group-hover:bg-primary/10">
-        <LucideIcons.Plus className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
+        <Plus className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
       </div>
       <span className="text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
         {t('newSystem')}

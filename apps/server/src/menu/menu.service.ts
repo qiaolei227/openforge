@@ -7,13 +7,7 @@ import { nanoid } from 'nanoid';
 import type { CreateMenuDto } from './dto/create-menu.dto';
 import type { UpdateMenuDto } from './dto/update-menu.dto';
 import type { ReorderMenuDto } from './dto/reorder-menu.dto';
-
-interface UserCtx {
-  userId: string;
-  orgId: string;
-  roles: string[];
-  isAdmin: boolean;
-}
+import type { RequestUser } from '../common/interfaces/request-context';
 
 @Injectable()
 export class MenuService {
@@ -28,7 +22,7 @@ export class MenuService {
    * Admin users get all visible menus with full permissions.
    * Non-admin users get menus filtered by their role-based permissions.
    */
-  async buildTreeForUser(user: UserCtx, appCode?: string): Promise<MenuNode[]> {
+  async buildTreeForUser(user: RequestUser, appCode?: string): Promise<MenuNode[]> {
     // 1. Optionally look up app by code
     let appId: string | undefined;
     if (appCode) {
@@ -377,7 +371,7 @@ export class MenuService {
    * Builds a Map<menuId, MenuAction[]> from sys_role_menu for the given user.
    * Uses menuId (not menuCode) as the map key.
    */
-  private async getPermissionMap(user: UserCtx): Promise<Map<string, MenuAction[]>> {
+  private async getPermissionMap(user: RequestUser): Promise<Map<string, MenuAction[]>> {
     if (user.isAdmin) return new Map();
 
     const rows = await this.prisma.sysRoleMenu.findMany({
