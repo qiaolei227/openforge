@@ -8,7 +8,7 @@
     "orgs": "Org Structure",
     "users": "Users",
     "apps": "Applications",
-    "config": "System Config"
+    "config": "Platform Config"
   },
   "auth": {
     "login": "Login",
@@ -358,7 +358,7 @@
     "backfillConfirm": "Fill & set required"
   },
   "config": {
-    "title": "System Configuration",
+    "title": "Platform Configuration",
     "subtitle": "Configure global platform parameters that affect default behavior of all applications",
     "groupField": "Field Settings",
     "groupDecimal": "Numeric Settings",

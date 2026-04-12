@@ -8,7 +8,7 @@
     "orgs": "组织架构",
     "users": "用户管理",
     "apps": "应用管理",
-    "config": "系统参数"
+    "config": "平台参数"
   },
   "auth": {
     "login": "登录",
@@ -358,7 +358,7 @@
     "backfillConfirm": "填充并设为必填"
   },
   "config": {
-    "title": "系统参数",
+    "title": "平台参数",
     "subtitle": "配置平台全局参数，影响所有应用的默认行为",
     "groupField": "字段设置",
     "groupDecimal": "数值设置",
