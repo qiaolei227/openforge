@@ -9,53 +9,116 @@ import type { UpdateMenuDto } from './dto/update-menu.dto';
 import type { ReorderMenuDto } from './dto/reorder-menu.dto';
 
 interface UserCtx {
-  id: string;
+  userId: string;
+  orgId: string;
+  roles: string[];
   isAdmin: boolean;
 }
 
 @Injectable()
 export class MenuService {
-  // Explicit @Inject required for esbuild/Vitest metadata workaround.
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
+  // ─── buildTreeForUser ───────────────────────────────────────────────
+
   /**
-   * Build the menu tree as the given user sees it, with role-based filtering.
-   * is_admin users get all visible menus with full permissions.
+   * Build the menu tree as the given user sees it.
+   * When appCode is provided, filters menus by that app's ID.
+   * When omitted, returns all visible menus (backward compat / workspace home).
+   * Admin users get all visible menus with full permissions.
+   * Non-admin users get menus filtered by their role-based permissions.
    */
-  async buildTreeForUser(user: UserCtx): Promise<MenuNode[]> {
+  async buildTreeForUser(user: UserCtx, appCode?: string): Promise<MenuNode[]> {
+    // 1. Optionally look up app by code
+    let appId: string | undefined;
+    if (appCode) {
+      const app = await this.prisma.sysApp.findUnique({ where: { code: appCode } });
+      if (!app) {
+        throw new BusinessException(404, ErrorCodes.APP_NOT_FOUND, `App not found: ${appCode}`);
+      }
+      appId = app.id;
+    }
+
+    // 2. Fetch all visible menus (filtered by appId if provided) + permission map in parallel
+    const menuWhere: any = { visible: true };
+    if (appId) menuWhere.appId = appId;
+
     const [allMenus, permissionMap] = await Promise.all([
       this.prisma.sysMenu.findMany({
-        where: { visible: true },
+        where: menuWhere,
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       }),
       this.getPermissionMap(user),
     ]);
-    const adminActions: MenuAction[] = Object.values(MENU_ACTIONS);
 
-    // Build MenuNode objects with filled permissions
+    // 3. Batch-fetch views (with model→app) for menus that have targetViewId
+    const viewIds = allMenus
+      .map((m: any) => m.targetViewId)
+      .filter((id: string | null): id is string => !!id);
+
+    const viewMap = new Map<string, any>();
+    if (viewIds.length > 0) {
+      const views = await this.prisma.sysView.findMany({
+        where: { id: { in: viewIds } },
+        include: { model: { include: { app: true } } },
+      });
+      for (const v of views) viewMap.set(v.id, v);
+    }
+
+    // 4. For menus with targetModelId but no targetViewId, batch-fetch models with app
+    const modelOnlyIds = allMenus
+      .filter((m: any) => m.targetModelId && !m.targetViewId)
+      .map((m: any) => m.targetModelId as string);
+
+    const modelMap = new Map<string, any>();
+    if (modelOnlyIds.length > 0) {
+      const models = await this.prisma.sysModel.findMany({
+        where: { id: { in: modelOnlyIds } },
+        include: { app: true },
+      });
+      for (const m of models) modelMap.set(m.id, m);
+    }
+
+    // 5. Build MenuNode objects
+    const adminActions: MenuAction[] = Object.values(MENU_ACTIONS);
     const nodeMap = new Map<string, MenuNode>();
+
     for (const m of allMenus) {
+      // Compute targetAppCode / targetModelCode from fetched view/model data
+      let targetAppCode: string | null = null;
+      let targetModelCode: string | null = null;
+
+      if (m.targetViewId && viewMap.has(m.targetViewId)) {
+        const view = viewMap.get(m.targetViewId)!;
+        targetAppCode = view.model?.app?.code ?? null;
+        targetModelCode = view.model?.code ?? null;
+      } else if (m.targetModelId && modelMap.has(m.targetModelId)) {
+        const model = modelMap.get(m.targetModelId)!;
+        targetAppCode = model.app?.code ?? null;
+        targetModelCode = model.code ?? null;
+      }
+
       nodeMap.set(m.id, {
         id: m.id,
+        appId: m.appId ?? '',
         code: m.code,
         type: m.type as MenuNode['type'],
         name: m.name,
         icon: m.icon,
         sortOrder: m.sortOrder,
-        targetRoute: m.targetRoute,
-        targetAppCode: m.targetAppCode,
-        targetModelCode: m.targetModelCode,
-        targetViewId: m.targetViewId,
-        targetFilterPreset: m.targetFilterPreset as Record<string, unknown> | null,
-        targetUrl: m.targetUrl,
+        targetAppCode,
+        targetModelCode,
+        targetViewType: m.targetViewType ?? null,
+        targetViewId: m.targetViewId ?? null,
+        targetUrl: m.targetUrl ?? null,
         children: [],
         permissions: user.isAdmin
           ? adminActions
-          : (permissionMap.get(m.code) ?? []),
+          : (permissionMap.get(m.id) ?? []),
       });
     }
 
-    // Assemble parent-child relationships
+    // 6. Assemble parent-child relationships
     const roots: MenuNode[] = [];
     for (const m of allMenus) {
       const node = nodeMap.get(m.id)!;
@@ -69,6 +132,8 @@ export class MenuService {
     if (user.isAdmin) return roots;
     return this.pruneWithoutView(roots);
   }
+
+  // ─── getAdminTree ──────────────────────────────────────────────────
 
   /**
    * Admin editing view: returns all menus (visible=false included, no role filter).
@@ -92,24 +157,259 @@ export class MenuService {
     return roots;
   }
 
+  // ─── create ────────────────────────────────────────────────────────
+
+  async create(dto: CreateMenuDto) {
+    await this.validateTarget(dto);
+
+    return this.prisma.sysMenu.create({
+      data: {
+        code: `menu:${nanoid(8)}`,
+        source: 'designer',
+        appId: dto.appId,
+        parentId: dto.parentId ?? null,
+        type: dto.type,
+        name: dto.name,
+        icon: dto.icon ?? null,
+        sortOrder: 0,
+        visible: true,
+        targetModelId: dto.targetModelId ?? null,
+        targetViewType: dto.targetViewType ?? null,
+        targetViewId: dto.targetViewId ?? null,
+        targetUrl: dto.targetUrl ?? null,
+      },
+    });
+  }
+
+  // ─── update ────────────────────────────────────────────────────────
+
+  async update(id: string, dto: UpdateMenuDto) {
+    const menu = await this.prisma.sysMenu.findUnique({ where: { id } });
+    if (!menu) {
+      throw new BusinessException(404, ErrorCodes.MENU_NOT_FOUND, 'Menu not found');
+    }
+
+    // Coded menus: only allow cosmetic changes
+    if (menu.source === 'coded') {
+      return this.prisma.sysMenu.update({
+        where: { id },
+        data: {
+          name: dto.name ?? menu.name,
+          icon: dto.icon ?? menu.icon,
+          sortOrder: dto.sortOrder ?? menu.sortOrder,
+          visible: dto.visible ?? menu.visible,
+        },
+      });
+    }
+
+    // Designer menus: merge dto with existing, re-validate if target fields change
+    const hasTargetChange =
+      dto.targetModelId !== undefined ||
+      dto.targetViewType !== undefined ||
+      dto.targetViewId !== undefined ||
+      dto.targetUrl !== undefined ||
+      dto.parentId !== undefined;
+
+    if (hasTargetChange) {
+      // Build a merged dto for validation
+      const merged: CreateMenuDto = {
+        appId: menu.appId!,
+        type: menu.type as CreateMenuDto['type'],
+        name: dto.name ?? menu.name,
+        parentId: dto.parentId !== undefined ? (dto.parentId ?? undefined) : (menu.parentId ?? undefined),
+        targetModelId: dto.targetModelId !== undefined ? (dto.targetModelId ?? undefined) : (menu.targetModelId ?? undefined),
+        targetViewType: dto.targetViewType !== undefined ? (dto.targetViewType ?? undefined) : (menu.targetViewType ?? undefined),
+        targetViewId: dto.targetViewId !== undefined ? (dto.targetViewId ?? undefined) : (menu.targetViewId ?? undefined),
+        targetUrl: dto.targetUrl !== undefined ? (dto.targetUrl ?? undefined) : (menu.targetUrl ?? undefined),
+      };
+      await this.validateTarget(merged);
+    }
+
+    return this.prisma.sysMenu.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.icon !== undefined && { icon: dto.icon }),
+        ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
+        ...(dto.visible !== undefined && { visible: dto.visible }),
+        ...(dto.parentId !== undefined && { parentId: dto.parentId ?? null }),
+        ...(dto.targetModelId !== undefined && { targetModelId: dto.targetModelId ?? null }),
+        ...(dto.targetViewType !== undefined && { targetViewType: dto.targetViewType ?? null }),
+        ...(dto.targetViewId !== undefined && { targetViewId: dto.targetViewId ?? null }),
+        ...(dto.targetUrl !== undefined && { targetUrl: dto.targetUrl ?? null }),
+      },
+    });
+  }
+
+  // ─── delete ────────────────────────────────────────────────────────
+
+  async delete(id: string): Promise<void> {
+    const menu = await this.prisma.sysMenu.findUnique({ where: { id } });
+    if (!menu) {
+      throw new BusinessException(404, ErrorCodes.MENU_NOT_FOUND, 'Menu not found');
+    }
+    if (menu.source === 'coded') {
+      throw new BusinessException(
+        400, ErrorCodes.MENU_NOT_DELETABLE,
+        'coded menus cannot be deleted',
+      );
+    }
+    await this.prisma.sysMenu.delete({ where: { id } });
+  }
+
+  // ─── reorder ───────────────────────────────────────────────────────
+
+  async reorder(dto: ReorderMenuDto) {
+    return this.prisma.$transaction(
+      dto.items.map((item) =>
+        this.prisma.sysMenu.update({
+          where: { id: item.id },
+          data: {
+            parentId: item.parentId ?? null,
+            sortOrder: item.sortOrder,
+          },
+        }),
+      ),
+    );
+  }
+
+  // ─── private: validateTarget ───────────────────────────────────────
+
+  /**
+   * Validates all target-related rules for a menu create/update.
+   * Rules:
+   * 1. appId must exist
+   * 2. type=model → targetModelId required, model.appId === dto.appId, targetViewType required,
+   *    targetViewId if set must match (modelId, viewType)
+   * 3. type=group/divider → all target_* must be empty
+   * 4. type=link → targetUrl required, others empty
+   * 5. parentId if set → parent.appId === dto.appId
+   */
+  private async validateTarget(dto: CreateMenuDto): Promise<void> {
+    // Rule 1: appId must exist
+    const app = await this.prisma.sysApp.findUnique({ where: { id: dto.appId } });
+    if (!app) {
+      throw new BusinessException(404, ErrorCodes.APP_NOT_FOUND, `App not found: ${dto.appId}`);
+    }
+
+    const { type } = dto;
+
+    // Rule 3: group/divider → no target fields
+    if (type === 'group' || type === 'divider') {
+      if (dto.targetModelId || dto.targetViewType || dto.targetViewId || dto.targetUrl) {
+        throw new BusinessException(
+          400, ErrorCodes.MENU_TARGET_MISMATCH,
+          `type=${type} must not have target_* fields`,
+        );
+      }
+    }
+
+    // Rule 4: link → targetUrl required, no model fields
+    if (type === 'link') {
+      if (!dto.targetUrl) {
+        throw new BusinessException(
+          400, ErrorCodes.MENU_TARGET_MISMATCH,
+          'type=link requires targetUrl',
+        );
+      }
+      if (dto.targetModelId || dto.targetViewType || dto.targetViewId) {
+        throw new BusinessException(
+          400, ErrorCodes.MENU_TARGET_MISMATCH,
+          'type=link must not have model target fields',
+        );
+      }
+    }
+
+    // Rule 2: model → targetModelId + targetViewType required, cross-app check, view consistency
+    if (type === 'model') {
+      if (!dto.targetModelId || !dto.targetViewType) {
+        throw new BusinessException(
+          400, ErrorCodes.MENU_TARGET_MISMATCH,
+          'type=model requires targetModelId + targetViewType',
+        );
+      }
+
+      const model = await this.prisma.sysModel.findUnique({
+        where: { id: dto.targetModelId },
+      });
+      if (!model) {
+        throw new BusinessException(
+          404, ErrorCodes.MODEL_NOT_FOUND,
+          `Target model not found: ${dto.targetModelId}`,
+        );
+      }
+
+      // Cross-app isolation
+      if (model.appId !== dto.appId) {
+        throw new BusinessException(
+          400, ErrorCodes.MENU_CROSS_APP,
+          'targetModelId belongs to a different app',
+        );
+      }
+
+      // View consistency check
+      if (dto.targetViewId) {
+        const view = await this.prisma.sysView.findUnique({
+          where: { id: dto.targetViewId },
+        });
+        if (!view) {
+          throw new BusinessException(
+            404, ErrorCodes.VIEW_NOT_FOUND,
+            `Target view not found: ${dto.targetViewId}`,
+          );
+        }
+        if (view.modelId !== dto.targetModelId || view.type !== dto.targetViewType) {
+          throw new BusinessException(
+            400, ErrorCodes.MENU_TARGET_INCONSISTENT,
+            'targetViewId does not match (targetModelId, targetViewType)',
+          );
+        }
+      }
+    }
+
+    // Rule 5: parentId → same app
+    if (dto.parentId) {
+      const parent = await this.prisma.sysMenu.findUnique({
+        where: { id: dto.parentId },
+      });
+      if (parent && parent.appId !== dto.appId) {
+        throw new BusinessException(
+          400, ErrorCodes.MENU_CROSS_APP,
+          'parentId belongs to a different app',
+        );
+      }
+    }
+  }
+
+  // ─── private: getPermissionMap ─────────────────────────────────────
+
+  /**
+   * Builds a Map<menuId, MenuAction[]> from sys_role_menu for the given user.
+   * Uses menuId (not menuCode) as the map key.
+   */
   private async getPermissionMap(user: UserCtx): Promise<Map<string, MenuAction[]>> {
     if (user.isAdmin) return new Map();
+
     const rows = await this.prisma.sysRoleMenu.findMany({
       where: {
-        role: { userRoles: { some: { userId: user.id } } },
+        role: { userRoles: { some: { userId: user.userId } } },
       },
-      select: { menuCode: true, permissions: true },
+      select: { menuId: true, permissions: true },
     });
+
     const setMap = new Map<string, Set<MenuAction>>();
     for (const row of rows) {
-      const set = setMap.get(row.menuCode) ?? new Set<MenuAction>();
+      const set = setMap.get(row.menuId) ?? new Set<MenuAction>();
       for (const p of row.permissions as MenuAction[]) set.add(p);
-      setMap.set(row.menuCode, set);
+      setMap.set(row.menuId, set);
     }
+
     const result = new Map<string, MenuAction[]>();
     for (const [k, v] of setMap.entries()) result.set(k, Array.from(v));
     return result;
   }
+
+  // ─── private: pruneWithoutView ─────────────────────────────────────
 
   /**
    * Recursive prune: drop pages/links/models without view permission;
@@ -126,98 +426,5 @@ export class MenuService {
       if (node.permissions.includes(MENU_ACTIONS.VIEW)) result.push(node);
     }
     return result;
-  }
-
-  async create(dto: CreateMenuDto) {
-    this.validateCreateTarget(dto);
-    return this.prisma.sysMenu.create({
-      data: {
-        code: `menu:${nanoid(8)}`,
-        source: 'designer',
-        parentId: dto.parentId ?? null,
-        type: dto.type,
-        name: dto.name,
-        icon: dto.icon ?? null,
-        sortOrder: 0,
-        visible: true,
-        targetAppCode: dto.targetAppCode ?? null,
-        targetModelCode: dto.targetModelCode ?? null,
-        targetViewId: dto.targetViewId ?? null,
-        targetFilterPreset: (dto.targetFilterPreset ?? null) as any,
-        targetUrl: dto.targetUrl ?? null,
-      },
-    });
-  }
-
-  private validateCreateTarget(dto: CreateMenuDto): void {
-    const { type } = dto;
-    if (type === 'model' && (!dto.targetAppCode || !dto.targetModelCode)) {
-      throw new BusinessException(
-        400, ErrorCodes.MENU_TARGET_MISMATCH,
-        'type=model requires targetAppCode + targetModelCode',
-      );
-    }
-    if (type === 'link' && !dto.targetUrl) {
-      throw new BusinessException(
-        400, ErrorCodes.MENU_TARGET_MISMATCH,
-        'type=link requires targetUrl',
-      );
-    }
-    if ((type === 'group' || type === 'divider') &&
-        (dto.targetAppCode || dto.targetModelCode || dto.targetUrl)) {
-      throw new BusinessException(
-        400, ErrorCodes.MENU_TARGET_MISMATCH,
-        `type=${type} must not have target_* fields`,
-      );
-    }
-  }
-
-  async update(id: string, dto: UpdateMenuDto) {
-    const menu = await this.prisma.sysMenu.findUnique({ where: { id } });
-    if (!menu) {
-      throw new BusinessException(404, ErrorCodes.MENU_NOT_FOUND, 'Menu not found');
-    }
-
-    if (menu.source === 'coded') {
-      // coded menus only allow changing name/icon/sortOrder/visible
-      return this.prisma.sysMenu.update({
-        where: { id },
-        data: {
-          name: dto.name ?? menu.name,
-          icon: dto.icon ?? menu.icon,
-          sortOrder: dto.sortOrder ?? menu.sortOrder,
-          visible: dto.visible ?? menu.visible,
-        },
-      });
-    }
-    return this.prisma.sysMenu.update({ where: { id }, data: dto as any });
-  }
-
-  async delete(id: string): Promise<void> {
-    const menu = await this.prisma.sysMenu.findUnique({ where: { id } });
-    if (!menu) {
-      throw new BusinessException(404, ErrorCodes.MENU_NOT_FOUND, 'Menu not found');
-    }
-    if (menu.source === 'coded') {
-      throw new BusinessException(
-        400, ErrorCodes.MENU_NOT_DELETABLE,
-        'coded menus cannot be deleted',
-      );
-    }
-    await this.prisma.sysMenu.delete({ where: { id } });
-  }
-
-  async reorder(dto: ReorderMenuDto) {
-    return this.prisma.$transaction(
-      dto.items.map((item) =>
-        this.prisma.sysMenu.update({
-          where: { id: item.id },
-          data: {
-            parentId: item.parentId ?? null,
-            sortOrder: item.sortOrder,
-          },
-        }),
-      ),
-    );
   }
 }

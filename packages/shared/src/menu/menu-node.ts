@@ -6,20 +6,18 @@ import type { MenuAction } from './menu-actions';
  */
 export interface MenuNode {
   id: string;
+  appId: string;
   code: string;
   type: 'group' | 'model' | 'page' | 'link' | 'divider';
   name: string;
   icon?: string | null;
   sortOrder: number;
 
-  // type=page
-  targetRoute?: string | null;
-
-  // type=model
+  // type=model — computed from view→model→app, not stored
   targetAppCode?: string | null;
   targetModelCode?: string | null;
+  targetViewType?: string | null;
   targetViewId?: string | null;
-  targetFilterPreset?: Record<string, unknown> | null;
 
   // type=link
   targetUrl?: string | null;

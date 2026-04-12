@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/interfaces/request-context';
 import { MenuService } from './menu.service';
@@ -14,13 +14,20 @@ export class MenuController {
 
   /**
    * Menu tree visible to the current user.
+   * Optional appCode query param filters by app; omit for all apps.
    * sys:self is a virtual permission that grants view access to any authenticated user —
    * see PermissionService.check() for the bypass rule.
    */
   @Get('tree')
   @RequirePermission('sys:self', 'view')
-  async getTree(@CurrentUser() user: RequestUser) {
-    return this.menuService.buildTreeForUser({ id: user.userId, isAdmin: user.isAdmin });
+  async getTree(
+    @CurrentUser() user: RequestUser,
+    @Query('appCode') appCode?: string,
+  ) {
+    return this.menuService.buildTreeForUser(
+      { userId: user.userId, orgId: user.orgId, roles: user.roles, isAdmin: user.isAdmin },
+      appCode,
+    );
   }
 
   @Get('admin/tree')

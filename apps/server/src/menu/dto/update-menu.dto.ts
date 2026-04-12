@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class UpdateMenuDto {
   @IsOptional() @IsString() @MaxLength(100) name?: string;
@@ -6,9 +6,12 @@ export class UpdateMenuDto {
   @IsOptional() @IsInt() sortOrder?: number;
   @IsOptional() @IsBoolean() visible?: boolean;
   @IsOptional() @IsUUID() parentId?: string | null;
-  @IsOptional() @IsString() targetAppCode?: string;
-  @IsOptional() @IsString() targetModelCode?: string;
+
+  // type=model (only for designer menus)
+  @IsOptional() @IsUUID() targetModelId?: string;
+  @IsOptional() @IsString() @MaxLength(20) targetViewType?: string;
   @IsOptional() @IsUUID() targetViewId?: string;
-  @IsOptional() @IsObject() targetFilterPreset?: Record<string, unknown>;
-  @IsOptional() @IsString() targetUrl?: string;
+
+  // type=link (only for designer menus)
+  @IsOptional() @IsString() @MaxLength(500) targetUrl?: string;
 }

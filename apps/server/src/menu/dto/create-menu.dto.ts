@@ -1,6 +1,8 @@
-import { IsIn, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateMenuDto {
+  @IsUUID() appId!: string;
+
   @IsOptional() @IsUUID() parentId?: string;
 
   @IsIn(['group', 'model', 'link', 'divider'])
@@ -11,10 +13,9 @@ export class CreateMenuDto {
   @IsOptional() @IsString() @MaxLength(50) icon?: string;
 
   // type=model
-  @IsOptional() @IsString() @MaxLength(50)  targetAppCode?: string;
-  @IsOptional() @IsString() @MaxLength(100) targetModelCode?: string;
+  @IsOptional() @IsUUID() targetModelId?: string;
+  @IsOptional() @IsString() @MaxLength(20) targetViewType?: string;
   @IsOptional() @IsUUID() targetViewId?: string;
-  @IsOptional() @IsObject() targetFilterPreset?: Record<string, unknown>;
 
   // type=link
   @IsOptional() @IsString() @MaxLength(500) targetUrl?: string;

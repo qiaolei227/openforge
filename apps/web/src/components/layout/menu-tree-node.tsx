@@ -18,8 +18,10 @@ function buildModelRoute(node: MenuNode): string {
   const base = `/workspace/${node.targetAppCode}/${node.targetModelCode}`;
   const qs = new URLSearchParams();
   if (node.targetViewId) qs.set('view', node.targetViewId);
-  if (node.targetFilterPreset) {
-    qs.set('filter', btoa(encodeURIComponent(JSON.stringify(node.targetFilterPreset))));
+  // TODO Task 16: fix after sidebar refactor — targetFilterPreset removed from MenuNode
+  const filterPreset = (node as any).targetFilterPreset;
+  if (filterPreset) {
+    qs.set('filter', btoa(encodeURIComponent(JSON.stringify(filterPreset))));
   }
   const qsStr = qs.toString();
   return qsStr ? `${base}?${qsStr}` : base;
@@ -86,7 +88,8 @@ export function MenuTreeNode({ node, depth = 0, collapsed }: Props) {
 
   // page or model
   const href =
-    node.type === 'page' ? (node.targetRoute ?? '#') : buildModelRoute(node);
+    // TODO Task 16: fix after sidebar refactor — targetRoute removed from MenuNode
+    node.type === 'page' ? ((node as any).targetRoute ?? '#') : buildModelRoute(node);
   const isActive = pathname === href || pathname?.startsWith(href + '/');
 
   return (

@@ -72,10 +72,12 @@ export default function WorkspaceAppHomePage() {
           const base = `/workspace/${appCode}/${m.targetModelCode}`;
           const qs = new URLSearchParams();
           if (m.targetViewId) qs.set('view', m.targetViewId);
-          if (m.targetFilterPreset) {
+          // TODO Task 16: fix after sidebar refactor — targetFilterPreset removed from MenuNode
+          const filterPreset = (m as any).targetFilterPreset;
+          if (filterPreset) {
             qs.set(
               'filter',
-              btoa(encodeURIComponent(JSON.stringify(m.targetFilterPreset))),
+              btoa(encodeURIComponent(JSON.stringify(filterPreset))),
             );
           }
           const qsStr = qs.toString();
