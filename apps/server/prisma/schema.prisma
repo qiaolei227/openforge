@@ -286,36 +286,31 @@ model SysUserRole {
 
 model SysMenu {
   id                  String   @id @default(uuid()) @db.Uuid
-  appId               String?  @map("app_id") @db.Uuid
+  appId               String   @map("app_id") @db.Uuid
   parentId            String?  @map("parent_id") @db.Uuid
-  code                String   @unique @db.VarChar(100)
-  source              String   @db.VarChar(10)
+  code                String   @db.VarChar(100)
   type                String   @db.VarChar(20)
   name                String   @db.VarChar(100)
   icon                String?  @db.VarChar(50)
   sortOrder           Int      @default(0) @map("sort_order")
   visible             Boolean  @default(true)
-  targetRoute         String?  @map("target_route") @db.VarChar(200)
-  targetAppCode       String?  @map("target_app_code") @db.VarChar(50)
-  targetModelCode     String?  @map("target_model_code") @db.VarChar(100)
   targetModelId       String?  @map("target_model_id") @db.Uuid
   targetViewType      String?  @map("target_view_type") @db.VarChar(20)
   targetViewId        String?  @map("target_view_id") @db.Uuid
-  targetFilterPreset  Json?    @map("target_filter_preset")
   targetUrl           String?  @map("target_url") @db.VarChar(500)
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  app          SysApp?     @relation("AppMenus", fields: [appId], references: [id])
-  parent       SysMenu?    @relation("MenuHierarchy", fields: [parentId], references: [id])
-  children     SysMenu[]   @relation("MenuHierarchy")
-  targetModel  SysModel?   @relation("MenuTargetModel", fields: [targetModelId], references: [id])
-  targetView   SysView?    @relation("MenuTargetView", fields: [targetViewId], references: [id])
+  app          SysApp    @relation("AppMenus", fields: [appId], references: [id], onDelete: Cascade)
+  parent       SysMenu?  @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children     SysMenu[] @relation("MenuHierarchy")
+  targetModel  SysModel? @relation("MenuTargetModel", fields: [targetModelId], references: [id], onDelete: Restrict)
+  targetView   SysView?  @relation("MenuTargetView", fields: [targetViewId], references: [id], onDelete: Restrict)
   roleMenus    SysRoleMenu[]
 
+  @@unique([appId, code])
   @@index([appId])
   @@index([parentId])
-  @@index([source])
   @@index([type])
   @@map("sys_menu")
 }
@@ -324,7 +319,6 @@ model SysRoleMenu {
   id          String   @id @default(uuid()) @db.Uuid
   roleId      String   @map("role_id") @db.Uuid
   menuId      String   @map("menu_id") @db.Uuid
-  menuCode    String   @map("menu_code") @db.VarChar(100)
   permissions String[] @default([])
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -333,7 +327,6 @@ model SysRoleMenu {
 
   @@unique([roleId, menuId])
   @@index([roleId])
-  @@index([menuCode])
   @@map("sys_role_menu")
 }
 

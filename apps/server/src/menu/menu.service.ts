@@ -100,7 +100,7 @@ export class MenuService {
 
       nodeMap.set(m.id, {
         id: m.id,
-        appId: m.appId ?? '',
+        appId: m.appId,
         code: m.code,
         type: m.type as MenuNode['type'],
         name: m.name,
@@ -175,7 +175,6 @@ export class MenuService {
     return this.prisma.sysMenu.create({
       data: {
         code: `menu:${nanoid(8)}`,
-        source: 'designer',
         appId: dto.appId,
         parentId: dto.parentId ?? null,
         type: dto.type,
@@ -199,20 +198,7 @@ export class MenuService {
       throw new BusinessException(404, ErrorCodes.MENU_NOT_FOUND, 'Menu not found');
     }
 
-    // Coded menus: only allow cosmetic changes
-    if (menu.source === 'coded') {
-      return this.prisma.sysMenu.update({
-        where: { id },
-        data: {
-          name: dto.name ?? menu.name,
-          icon: dto.icon ?? menu.icon,
-          sortOrder: dto.sortOrder ?? menu.sortOrder,
-          visible: dto.visible ?? menu.visible,
-        },
-      });
-    }
-
-    // Designer menus: merge dto with existing, re-validate if target fields change
+    // Merge dto with existing, re-validate if target fields change
     const hasTargetChange =
       dto.targetModelId !== undefined ||
       dto.targetViewType !== undefined ||
@@ -223,7 +209,7 @@ export class MenuService {
     if (hasTargetChange) {
       // Build a merged dto for validation
       const merged: CreateMenuDto = {
-        appId: menu.appId!,
+        appId: menu.appId,
         type: menu.type as CreateMenuDto['type'],
         name: dto.name ?? menu.name,
         parentId: dto.parentId !== undefined ? (dto.parentId ?? undefined) : (menu.parentId ?? undefined),
@@ -257,12 +243,6 @@ export class MenuService {
     const menu = await this.prisma.sysMenu.findUnique({ where: { id } });
     if (!menu) {
       throw new BusinessException(404, ErrorCodes.MENU_NOT_FOUND, 'Menu not found');
-    }
-    if (menu.source === 'coded') {
-      throw new BusinessException(
-        400, ErrorCodes.MENU_NOT_DELETABLE,
-        'coded menus cannot be deleted',
-      );
     }
     await this.prisma.sysMenu.delete({ where: { id } });
   }

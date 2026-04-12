@@ -134,14 +134,6 @@ export class RoleService {
       }
     }
 
-    // Need menu codes for denormalization in sys_role_menu.menu_code
-    const menuIds = dto.items.map((i) => i.menuId);
-    const menus = await this.prisma.sysMenu.findMany({
-      where: { id: { in: menuIds } },
-      select: { id: true, code: true },
-    });
-    const codeMap = new Map(menus.map((m) => [m.id, m.code]));
-
     // Full replace: delete all existing rows, then insert non-empty ones
     await this.prisma.$transaction([
       this.prisma.sysRoleMenu.deleteMany({ where: { roleId } }),
@@ -151,7 +143,6 @@ export class RoleService {
           .map((item) => ({
             roleId,
             menuId: item.menuId,
-            menuCode: codeMap.get(item.menuId) ?? '',
             permissions: item.permissions,
           })),
       }),

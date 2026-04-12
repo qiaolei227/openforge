@@ -21,21 +21,17 @@ import { CreateMenuDialog } from './components/create-menu-dialog';
 
 export interface AdminMenuNode {
   id: string;
+  appId: string;
   parentId: string | null;
   code: string;
-  source: 'coded' | 'designer';
   type: 'group' | 'model' | 'page' | 'link' | 'divider';
   name: string;
   icon?: string | null;
   sortOrder: number;
   visible: boolean;
-  targetRoute?: string | null;
-  targetAppCode?: string | null;
-  targetModelCode?: string | null;
   targetModelId?: string | null;
   targetViewType?: string | null;
   targetViewId?: string | null;
-  targetFilterPreset?: Record<string, unknown> | null;
   targetUrl?: string | null;
   children: AdminMenuNode[];
 }

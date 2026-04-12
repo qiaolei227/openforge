@@ -17,7 +17,6 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   GripVertical,
-  Lock,
   ChevronRight,
   ChevronDown,
   Save,
@@ -125,7 +124,6 @@ function TreeNodeRow({
   onToggleExpand: () => void;
   onSelect: () => void;
 }) {
-  const isCoded = node.source === 'coded';
   const hasChildren = (node.children?.length ?? 0) > 0;
   const isDivider = node.type === 'divider';
 
@@ -138,7 +136,6 @@ function TreeNodeRow({
     isDragging,
   } = useSortable({
     id: node.id,
-    disabled: isCoded,
   });
 
   const style = {
@@ -160,19 +157,16 @@ function TreeNodeRow({
         )}
         onClick={onSelect}
       >
-        {!isCoded && (
-          <span
-            className="text-muted-foreground cursor-grab shrink-0"
-            {...attributes}
-            {...listeners}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="w-3.5 h-3.5" />
-          </span>
-        )}
+        <span
+          className="text-muted-foreground cursor-grab shrink-0"
+          {...attributes}
+          {...listeners}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </span>
         <Minus className="w-3.5 h-3.5 text-muted-foreground" />
         <span className="text-xs text-muted-foreground flex-1">分割线</span>
-        {isCoded && <Lock className="w-3 h-3 text-muted-foreground/60 shrink-0" />}
       </div>
     );
   }
@@ -187,19 +181,15 @@ function TreeNodeRow({
       )}
       onClick={onSelect}
     >
-      {/* Drag handle -- only for non-coded nodes */}
-      {!isCoded ? (
-        <span
-          className="text-muted-foreground cursor-grab shrink-0"
-          {...attributes}
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical className="w-3.5 h-3.5" />
-        </span>
-      ) : (
-        <span className="w-3.5 shrink-0" />
-      )}
+      {/* Drag handle */}
+      <span
+        className="text-muted-foreground cursor-grab shrink-0"
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="w-3.5 h-3.5" />
+      </span>
 
       {/* Expand / collapse toggle */}
       {hasChildren ? (
@@ -243,8 +233,6 @@ function TreeNodeRow({
         )}
       </span>
 
-      {/* Lock icon for coded */}
-      {isCoded && <Lock className="w-3 h-3 text-muted-foreground/60 shrink-0" />}
     </div>
   );
 }

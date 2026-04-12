@@ -42,6 +42,20 @@ describe('PermissionService', () => {
       expect(await service.check('user-1', 'sys:users', 'create')).toBe(true);
     });
 
+    it('queries by menu.code instead of menuCode column', async () => {
+      prisma.sysRoleMenu.findMany.mockResolvedValue([
+        { permissions: ['view'] },
+      ]);
+      await service.check('user-1', 'sys:users', 'view');
+      expect(prisma.sysRoleMenu.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            menu: { code: 'sys:users' },
+          }),
+        }),
+      );
+    });
+
     it('returns false when no role grants the action', async () => {
       prisma.sysRoleMenu.findMany.mockResolvedValue([
         { permissions: ['view'] },
@@ -56,7 +70,7 @@ describe('PermissionService', () => {
   });
 
   describe('check (dynamic model menu)', () => {
-    it('resolves menu:model:{app}:{model} via sys_menu join', async () => {
+    it('resolves menu:model:{app}:{model} via targetModel join', async () => {
       prisma.sysRoleMenu.findMany.mockResolvedValue([
         { permissions: ['view', 'edit'] },
       ]);
@@ -67,8 +81,10 @@ describe('PermissionService', () => {
           where: expect.objectContaining({
             menu: expect.objectContaining({
               type: 'model',
-              targetAppCode: 'purchase',
-              targetModelCode: 'order',
+              targetModel: {
+                code: 'order',
+                app: { code: 'purchase' },
+              },
             }),
           }),
         }),

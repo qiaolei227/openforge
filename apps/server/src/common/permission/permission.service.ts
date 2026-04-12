@@ -27,9 +27,11 @@ export class PermissionService {
     menuCode: string,
     action: MenuAction,
   ): Promise<boolean> {
+    // Static menus no longer exist as sys_menu rows. Their permissions are
+    // checked via sys_role_menu by joining through the menu's code column.
     const rows = await this.prisma.sysRoleMenu.findMany({
       where: {
-        menuCode,
+        menu: { code: menuCode },
         role: {
           userRoles: { some: { userId } },
         },
@@ -49,12 +51,16 @@ export class PermissionService {
     const appCode = parts[2];
     const modelCode = parts[3];
 
+    // targetAppCode/targetModelCode columns no longer exist.
+    // Join through targetModel → model.app to resolve app code + model code.
     const rows = await this.prisma.sysRoleMenu.findMany({
       where: {
         menu: {
           type: 'model',
-          targetAppCode: appCode,
-          targetModelCode: modelCode,
+          targetModel: {
+            code: modelCode,
+            app: { code: appCode },
+          },
         },
         role: {
           userRoles: { some: { userId } },

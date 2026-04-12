@@ -342,21 +342,6 @@ describe('MenuService', () => {
   // ─── update ───
 
   describe('update', () => {
-    it('restricts coded menus to name/icon/sortOrder/visible changes', async () => {
-      prisma.sysMenu.findUnique.mockResolvedValue({
-        id: 'coded-id', source: 'coded', name: '用户', icon: null,
-        sortOrder: 10, visible: true, appId: APP_ID,
-      });
-      prisma.sysMenu.update.mockResolvedValue({ id: 'coded-id', name: '新名称' });
-
-      await service.update('coded-id', { name: '新名称' });
-
-      expect(prisma.sysMenu.update).toHaveBeenCalledWith({
-        where: { id: 'coded-id' },
-        data: expect.objectContaining({ name: '新名称' }),
-      });
-    });
-
     it('throws MENU_NOT_FOUND for unknown id', async () => {
       prisma.sysMenu.findUnique.mockResolvedValue(null);
 
@@ -370,26 +355,24 @@ describe('MenuService', () => {
   // ─── delete ───
 
   describe('delete', () => {
-    it('rejects deletion of coded menus', async () => {
-      prisma.sysMenu.findUnique.mockResolvedValue({
-        id: 'coded-id', source: 'coded',
-      });
+    it('throws MENU_NOT_FOUND for unknown id', async () => {
+      prisma.sysMenu.findUnique.mockResolvedValue(null);
 
-      const err = await service.delete('coded-id').catch((e) => e);
+      const err = await service.delete('unknown-id').catch((e) => e);
 
       expect(err).toBeInstanceOf(BusinessException);
-      expect(getErrorCode(err)).toBe(ErrorCodes.MENU_NOT_DELETABLE);
+      expect(getErrorCode(err)).toBe(ErrorCodes.MENU_NOT_FOUND);
     });
 
-    it('deletes designer menus', async () => {
+    it('deletes menus', async () => {
       prisma.sysMenu.findUnique.mockResolvedValue({
-        id: 'designer-id', source: 'designer',
+        id: 'menu-id', appId: APP_ID,
       });
       prisma.sysMenu.delete.mockResolvedValue({});
 
-      await service.delete('designer-id');
+      await service.delete('menu-id');
 
-      expect(prisma.sysMenu.delete).toHaveBeenCalledWith({ where: { id: 'designer-id' } });
+      expect(prisma.sysMenu.delete).toHaveBeenCalledWith({ where: { id: 'menu-id' } });
     });
   });
 });

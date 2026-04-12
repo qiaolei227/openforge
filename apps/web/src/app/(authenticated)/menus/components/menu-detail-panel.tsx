@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Lock, Loader2, Trash2, Save, Info } from 'lucide-react';
+import { Loader2, Trash2, Save, Info } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -86,7 +86,6 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
     );
   }
 
-  const isCoded = menu.source === 'coded';
   const isDivider = menu.type === 'divider';
 
   const handleSave = async (e: React.FormEvent) => {
@@ -138,24 +137,10 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
   return (
     <div className="border border-border rounded-lg flex flex-col overflow-hidden">
       {/* Panel header */}
-      <div
-        className={cn(
-          'flex items-center gap-2 px-4 py-3 border-b border-border shrink-0',
-          isCoded ? 'bg-muted/30' : 'bg-background',
-        )}
-      >
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0 bg-background">
         <span className="font-medium text-sm flex-1 truncate">
           {isDivider ? '分割线' : menu.name}
         </span>
-        {isCoded && (
-          <span
-            className="flex items-center gap-1 text-xs text-muted-foreground"
-            title="此菜单由系统代码定义，部分属性不可修改"
-          >
-            <Lock className="w-3.5 h-3.5" />
-            系统
-          </span>
-        )}
       </div>
 
       {/* Panel body */}
@@ -181,7 +166,7 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
             </div>
           </div>
 
-          {/* name — editable unless divider */}
+          {/* name -- editable unless divider */}
           {!isDivider && (
             <>
               <div className="space-y-1.5">
@@ -248,36 +233,40 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
             </button>
           </div>
 
-          {/* model type: target info (read-only in P2.1) */}
+          {/* model type: target info (read-only) */}
           {menu.type === 'model' && (
             <div className="rounded-md border border-border bg-muted/20 p-3 space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 关联信息
               </p>
-              {menu.targetAppCode && (
+              {menu.targetModelId && (
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground w-20 shrink-0">应用编码</span>
+                  <span className="text-muted-foreground w-20 shrink-0">模型 ID</span>
                   <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
-                    {menu.targetAppCode}
+                    {menu.targetModelId}
                   </code>
                 </div>
               )}
-              {menu.targetModelCode && (
+              {menu.targetViewType && (
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground w-20 shrink-0">模型编码</span>
-                  <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
-                    {menu.targetModelCode}
-                  </code>
+                  <span className="text-muted-foreground w-20 shrink-0">视图类型</span>
+                  <span className="text-sm">
+                    {menu.targetViewType}
+                  </span>
                 </div>
               )}
-              {menu.targetRoute && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground w-20 shrink-0">路由</span>
-                  <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded truncate max-w-[180px]">
-                    {menu.targetRoute}
-                  </code>
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground w-20 shrink-0">视图绑定</span>
+                <span className="text-sm">
+                  {menu.targetViewId ? (
+                    <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">
+                      {menu.targetViewId}
+                    </code>
+                  ) : (
+                    <span className="text-muted-foreground italic">默认(兜底)</span>
+                  )}
+                </span>
+              </div>
             </div>
           )}
 
@@ -285,20 +274,14 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
           {menu.type === 'link' && (
             <div className="space-y-1.5">
               <label className="text-sm font-medium">目标 URL</label>
-              {isCoded ? (
-                <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/30 px-3 py-1 text-sm">
-                  <span className="truncate text-xs">{menu.targetUrl ?? '-'}</span>
-                </div>
-              ) : (
-                <input
-                  className={inputClass}
-                  type="url"
-                  value={menu.targetUrl ?? ''}
-                  readOnly
-                  disabled
-                  placeholder="创建后请通过 PUT 接口修改"
-                />
-              )}
+              <input
+                className={inputClass}
+                type="url"
+                value={menu.targetUrl ?? ''}
+                readOnly
+                disabled
+                placeholder="创建后请通过 PUT 接口修改"
+              />
             </div>
           )}
 
@@ -322,55 +305,41 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
               )}
             </button>
 
-            {/* Delete: only for designer menus */}
-            {!isCoded && (
-              <>
-                {!deleteConfirm ? (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(true)}
-                    className={btnDestructive}
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    删除
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      disabled={deleting}
-                      className={btnDestructive}
-                    >
-                      {deleting ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        '确认删除'
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteConfirm(false)}
-                      disabled={deleting}
-                      className={btnOutline}
-                    >
-                      取消
-                    </button>
-                  </div>
-                )}
-              </>
+            {!deleteConfirm ? (
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(true)}
+                className={btnDestructive}
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                删除
+              </button>
+            ) : (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className={btnDestructive}
+                >
+                  {deleting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    '确认删除'
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(false)}
+                  disabled={deleting}
+                  className={btnOutline}
+                >
+                  取消
+                </button>
+              </div>
             )}
           </div>
         </form>
-
-        {/* Coded menu info note */}
-        {isCoded && (
-          <div className="mt-4 rounded-md bg-muted/30 border border-border p-3">
-            <p className="text-xs text-muted-foreground">
-              此菜单由系统代码定义（source=coded），可修改显示名称、图标、排序和显示/隐藏；不可删除。跨层级移动请联系开发配置。
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
