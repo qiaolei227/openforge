@@ -17,11 +17,10 @@ interface Props {
 function buildModelRoute(node: MenuNode): string {
   const base = `/workspace/${node.targetAppCode}/${node.targetModelCode}`;
   const qs = new URLSearchParams();
-  if (node.targetViewId) qs.set('view', node.targetViewId);
-  // TODO Task 16: fix after sidebar refactor — targetFilterPreset removed from MenuNode
-  const filterPreset = (node as any).targetFilterPreset;
-  if (filterPreset) {
-    qs.set('filter', btoa(encodeURIComponent(JSON.stringify(filterPreset))));
+  if (node.targetViewId) {
+    qs.set('view', node.targetViewId);
+  } else if (node.targetViewType) {
+    qs.set('type', node.targetViewType);
   }
   const qsStr = qs.toString();
   return qsStr ? `${base}?${qsStr}` : base;
@@ -87,9 +86,7 @@ export function MenuTreeNode({ node, depth = 0, collapsed }: Props) {
   }
 
   // page or model
-  const href =
-    // TODO Task 16: fix after sidebar refactor — targetRoute removed from MenuNode
-    node.type === 'page' ? ((node as any).targetRoute ?? '#') : buildModelRoute(node);
+  const href = node.type === 'model' ? buildModelRoute(node) : '#';
   const isActive = pathname === href || pathname?.startsWith(href + '/');
 
   return (

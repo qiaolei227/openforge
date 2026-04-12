@@ -13,7 +13,9 @@ import type { MenuNode } from '@openforge/shared';
  * as application cards. Clicking a card navigates into its first leaf.
  */
 export default function WorkspaceHomePage() {
-  const { tree, loaded, fetchTree } = useMenuStore();
+  const tree = useMenuStore((s) => s.globalTree);
+  const loaded = useMenuStore((s) => !!s.globalLoadedAt);
+  const fetchTree = useMenuStore((s) => s.fetchGlobal);
 
   useEffect(() => {
     if (!loaded) fetchTree();
@@ -90,16 +92,15 @@ function findFirstLeaf(node: MenuNode): MenuNode | null {
 }
 
 function routeForNode(node: MenuNode): string {
-  // TODO Task 16: fix after sidebar refactor — targetRoute/targetFilterPreset removed from MenuNode
-  if (node.type === 'page') return (node as any).targetRoute ?? '#';
+  if (node.type === 'page') return '#'; // page type not yet supported in workspace
   if (node.type === 'link') return node.targetUrl ?? '#';
   if (node.type === 'model') {
     const base = `/workspace/${node.targetAppCode}/${node.targetModelCode}`;
     const qs = new URLSearchParams();
-    if (node.targetViewId) qs.set('view', node.targetViewId);
-    const filterPreset = (node as any).targetFilterPreset;
-    if (filterPreset) {
-      qs.set('filter', btoa(encodeURIComponent(JSON.stringify(filterPreset))));
+    if (node.targetViewId) {
+      qs.set('view', node.targetViewId);
+    } else if (node.targetViewType) {
+      qs.set('type', node.targetViewType);
     }
     const qsStr = qs.toString();
     return qsStr ? `${base}?${qsStr}` : base;

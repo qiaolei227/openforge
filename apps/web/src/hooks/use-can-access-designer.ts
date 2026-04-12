@@ -13,8 +13,8 @@ import { useMenuStore } from '@/stores/menu-store';
  */
 export function useCanAccessDesigner(): boolean | null {
   const user = useAuthStore((s) => s.user);
-  const tree = useMenuStore((s) => s.tree);
-  const menuLoaded = useMenuStore((s) => s.loaded);
+  const tree = useMenuStore((s) => s.globalTree);
+  const menuLoaded = useMenuStore((s) => !!s.globalLoadedAt);
 
   if (!user) return null;
   if (user.isAdmin) return true;

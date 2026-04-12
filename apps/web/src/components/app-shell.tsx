@@ -1,31 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Layers, Paintbrush, LayoutGrid } from 'lucide-react';
+import { useEffect } from 'react';
 import { AreaProvider } from './layout/area-context';
+import { TopBar } from './layout/top-bar';
 import { DynamicSidebarNav } from './layout/dynamic-sidebar-nav';
 import { UserMenu } from './user-menu';
 import { LocaleSwitcher } from './locale-switcher';
 import { ThemeSwitcher } from './theme-switcher';
 import { AiSidebar } from './ai-sidebar';
 import { useAiStore } from '@/stores/ai-store';
-import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
-import { useArea } from '@/hooks/use-area';
+import { Layers } from 'lucide-react';
 
-const STORAGE_KEY = 'openforge_sidebar_collapsed';
 const AI_OPEN_KEY = 'openforge_ai_open';
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
   const aiStore = useAiStore();
-  const area = useArea();
-  const canAccessDesigner = useCanAccessDesigner() ?? false;
-
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'true') setCollapsed(true);
-  }, []);
 
   /* Restore AI panel open state from localStorage */
   useEffect(() => {
@@ -35,43 +24,15 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const handleToggle = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem(STORAGE_KEY, String(next));
-      return next;
-    });
-  };
-
-  const inWorkspace = area === 'workspace';
-  const inDesigner = area === 'designer';
-
   return (
     <>
-      <div className="flex h-screen">
-        <DynamicSidebarNav collapsed={collapsed} onToggle={handleToggle} />
-        <div className="flex-1 flex flex-col">
-          <header className="h-14 border-b flex items-center justify-end px-6 gap-3">
-            {inWorkspace && canAccessDesigner && (
-              <Link
-                href="/apps"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title="进入应用设计器"
-              >
-                <Paintbrush className="w-4 h-4" />
-                <span>设计器</span>
-              </Link>
-            )}
-            {inDesigner && (
-              <Link
-                href="/workspace"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title="返回业务工作台"
-              >
-                <LayoutGrid className="w-4 h-4" />
-                <span>工作台</span>
-              </Link>
-            )}
+      <div className="flex flex-col h-screen">
+        {/* Top bar with area-aware context + right-side controls */}
+        <div className="flex items-center shrink-0">
+          <div className="flex-1 min-w-0">
+            <TopBar />
+          </div>
+          <div className="flex items-center gap-1 px-4 h-12 border-b border-border shrink-0">
             <button
               onClick={() => aiStore.toggle()}
               className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground hover:opacity-90 transition-opacity"
@@ -82,10 +43,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             <ThemeSwitcher />
             <LocaleSwitcher />
             <UserMenu />
-          </header>
-          <main className="flex-1 overflow-auto p-6">
-            {children}
-          </main>
+          </div>
+        </div>
+
+        {/* Sidebar + main content */}
+        <div className="flex flex-1 min-h-0">
+          <DynamicSidebarNav />
+          <main className="flex-1 overflow-auto p-6">{children}</main>
         </div>
       </div>
       <AiSidebar />

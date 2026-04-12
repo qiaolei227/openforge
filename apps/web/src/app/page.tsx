@@ -19,8 +19,8 @@ export default function Home() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
-  const loaded = useMenuStore((s) => s.loaded);
-  const fetchTree = useMenuStore((s) => s.fetchTree);
+  const loaded = useMenuStore((s) => !!s.globalLoadedAt);
+  const fetchTree = useMenuStore((s) => s.fetchGlobal);
   const canDesign = useCanAccessDesigner();
 
   useEffect(() => {

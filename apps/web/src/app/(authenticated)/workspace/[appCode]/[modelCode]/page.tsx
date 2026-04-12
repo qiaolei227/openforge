@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { apiClient } from '@/lib/api-client';
@@ -37,6 +37,9 @@ export default function WorkspaceModelPage() {
     appCode: string;
     modelCode: string;
   }>();
+  const searchParams = useSearchParams();
+  const viewId = searchParams?.get('view') ?? null;
+  const viewType = searchParams?.get('type') ?? null;
   const tErrors = useTranslations('errorCodes');
   const [schema, setSchema] = useState<ModelSchema | null>(null);
   const [error, setError] = useState<string | null>(null);

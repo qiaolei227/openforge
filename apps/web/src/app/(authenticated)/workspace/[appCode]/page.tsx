@@ -14,11 +14,14 @@ import type { MenuNode } from '@openforge/shared';
  */
 export default function WorkspaceAppHomePage() {
   const { appCode } = useParams<{ appCode: string }>();
-  const { tree, loaded, fetchTree } = useMenuStore();
+  const appMenuState = useMenuStore((s) => s.byApp.get(appCode));
+  const fetchAppMenu = useMenuStore((s) => s.fetch);
+  const tree = appMenuState?.tree ?? [];
+  const loaded = !!appMenuState?.loadedAt;
 
   useEffect(() => {
-    if (!loaded) fetchTree();
-  }, [loaded, fetchTree]);
+    fetchAppMenu(appCode);
+  }, [appCode, fetchAppMenu]);
 
   // Find the top-level group node whose children include models targeting this appCode
   const { appNode, modelNodes } = useMemo(() => {
@@ -71,14 +74,10 @@ export default function WorkspaceAppHomePage() {
         {modelNodes.map((m) => {
           const base = `/workspace/${appCode}/${m.targetModelCode}`;
           const qs = new URLSearchParams();
-          if (m.targetViewId) qs.set('view', m.targetViewId);
-          // TODO Task 16: fix after sidebar refactor — targetFilterPreset removed from MenuNode
-          const filterPreset = (m as any).targetFilterPreset;
-          if (filterPreset) {
-            qs.set(
-              'filter',
-              btoa(encodeURIComponent(JSON.stringify(filterPreset))),
-            );
+          if (m.targetViewId) {
+            qs.set('view', m.targetViewId);
+          } else if (m.targetViewType) {
+            qs.set('type', m.targetViewType);
           }
           const qsStr = qs.toString();
           const href = qsStr ? `${base}?${qsStr}` : base;
