@@ -12,6 +12,12 @@ describe('PermissionService', () => {
       sysRoleMenu: {
         findMany: vi.fn(),
       },
+      sysUserRole: {
+        findMany: vi.fn(),
+      },
+      sysRolePermission: {
+        findFirst: vi.fn(),
+      },
       sysFieldPermission: {
         findMany: vi.fn(),
       },
@@ -95,6 +101,42 @@ describe('PermissionService', () => {
       expect(await service.check('any-user', 'sys:self', 'edit')).toBe(true);
       // should not have queried the DB
       expect(prisma.sysRoleMenu.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('checkResource', () => {
+    it('returns true when sys_role_permission has matching grant', async () => {
+      prisma.sysUserRole.findMany.mockResolvedValue([
+        { roleId: 'role-1' },
+        { roleId: 'role-2' },
+      ]);
+      prisma.sysRolePermission.findFirst.mockResolvedValue({
+        id: 'perm-1',
+        roleId: 'role-1',
+        resource: 'platform:users',
+        actions: ['view', 'edit'],
+      });
+      expect(await service.checkResource('user-1', 'platform:users', 'view')).toBe(true);
+      expect(prisma.sysRolePermission.findFirst).toHaveBeenCalledWith({
+        where: {
+          roleId: { in: ['role-1', 'role-2'] },
+          resource: 'platform:users',
+          actions: { has: 'view' },
+        },
+      });
+    });
+
+    it('returns false when no role grants the resource', async () => {
+      prisma.sysUserRole.findMany.mockResolvedValue([{ roleId: 'role-1' }]);
+      prisma.sysRolePermission.findFirst.mockResolvedValue(null);
+      expect(await service.checkResource('user-1', 'platform:users', 'delete')).toBe(false);
+    });
+
+    it('returns false when user has no roles', async () => {
+      prisma.sysUserRole.findMany.mockResolvedValue([]);
+      expect(await service.checkResource('user-1', 'platform:users', 'view')).toBe(false);
+      // should not query sys_role_permission when there are no roles
+      expect(prisma.sysRolePermission.findFirst).not.toHaveBeenCalled();
     });
   });
 

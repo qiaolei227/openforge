@@ -27,11 +27,11 @@ export class PermissionGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const req = this.reflector.getAllAndOverride<PermissionRequirement>(
+    const perm = this.reflector.getAllAndOverride<PermissionRequirement>(
       REQUIRE_PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
     );
-    if (!req) {
+    if (!perm) {
       throw new BusinessException(
         500,
         ErrorCodes.MISSING_PERMISSION_DECORATOR,
@@ -51,12 +51,20 @@ export class PermissionGuard implements CanActivate {
       );
     }
 
-    const menuCode =
-      typeof req.menuCode === 'function'
-        ? req.menuCode(request as Request)
-        : req.menuCode;
+    let allowed: boolean;
 
-    const allowed = await this.permissionService.check(user.userId, menuCode, req.action);
+    if (typeof perm.target === 'string') {
+      // Form A: static resource string → sys_role_permission
+      allowed = await this.permissionService.checkResource(user.userId, perm.target, perm.action);
+    } else {
+      // Form B: function → resolve menuCode → sys_role_menu
+      const menuCode = await perm.target(request as Request);
+      if (!menuCode) {
+        throw new BusinessException(403, ErrorCodes.FORBIDDEN, 'Forbidden');
+      }
+      allowed = await this.permissionService.check(user.userId, menuCode, perm.action);
+    }
+
     if (!allowed) {
       throw new BusinessException(403, ErrorCodes.FORBIDDEN, 'Forbidden');
     }

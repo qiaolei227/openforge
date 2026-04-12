@@ -76,6 +76,27 @@ export class PermissionService {
   }
 
   /**
+   * Form A: 检查用户是否拥有静态资源权限。
+   * 查询 sys_role_permission 表（resource + actions 列）。
+   */
+  async checkResource(userId: string, resource: string, action: string): Promise<boolean> {
+    const userRoles = await this.prisma.sysUserRole.findMany({
+      where: { userId },
+      select: { roleId: true },
+    });
+    if (userRoles.length === 0) return false;
+
+    const grant = await this.prisma.sysRolePermission.findFirst({
+      where: {
+        roleId: { in: userRoles.map((r) => r.roleId) },
+        resource,
+        actions: { has: action },
+      },
+    });
+    return grant !== null;
+  }
+
+  /**
    * 返回当前用户在某模型上的字段权限映射。
    * - 表里没有记录的字段 = 'editable'（默认值，不出现在 map 中）
    * - 多角色合并：取最宽（editable > readonly > hidden）
