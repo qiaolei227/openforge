@@ -691,7 +691,11 @@
     "MENU_NOT_DELETABLE": "System menus cannot be deleted",
     "MENU_CODE_INVALID": "Invalid menu code",
     "MENU_NOT_FOUND": "Menu not found",
-    "MENU_TARGET_MISMATCH": "Menu type and target fields mismatch"
+    "MENU_TARGET_MISMATCH": "Menu type and target fields mismatch",
+    "MENU_CROSS_APP": "Menus cannot reference models from other systems — create the menu inside the model's owning system",
+    "MENU_TARGET_INCONSISTENT": "Published view does not match selected model/type",
+    "MODEL_HAS_MENU_REF": "This model is referenced by one or more menus; remove them first",
+    "VIEW_HAS_MENU_REF": "This view is referenced by one or more menus; remove them first"
   },
   "workspace": {
     "title": "Workspace",

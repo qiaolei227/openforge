@@ -691,7 +691,11 @@
     "MENU_NOT_DELETABLE": "系统菜单不能删除",
     "MENU_CODE_INVALID": "菜单编码不合法",
     "MENU_NOT_FOUND": "菜单不存在",
-    "MENU_TARGET_MISMATCH": "菜单类型与目标字段不匹配"
+    "MENU_TARGET_MISMATCH": "菜单类型与目标字段不匹配",
+    "MENU_CROSS_APP": "菜单不能引用其他系统的模型——请把菜单建在该模型所属的系统内",
+    "MENU_TARGET_INCONSISTENT": "菜单发布的视图与所选模型/类型不一致",
+    "MODEL_HAS_MENU_REF": "此模型正在被菜单引用，请先移除菜单",
+    "VIEW_HAS_MENU_REF": "此视图正在被菜单引用，请先移除菜单"
   },
   "workspace": {
     "title": "工作台",
