@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Layers, Paintbrush, LayoutGrid } from 'lucide-react';
+import { AreaProvider } from './layout/area-context';
 import { DynamicSidebarNav } from './layout/dynamic-sidebar-nav';
 import { UserMenu } from './user-menu';
 import { LocaleSwitcher } from './locale-switcher';
@@ -11,14 +11,15 @@ import { ThemeSwitcher } from './theme-switcher';
 import { AiSidebar } from './ai-sidebar';
 import { useAiStore } from '@/stores/ai-store';
 import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
+import { useArea } from '@/hooks/use-area';
 
 const STORAGE_KEY = 'openforge_sidebar_collapsed';
 const AI_OPEN_KEY = 'openforge_ai_open';
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function AppShellInner({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const aiStore = useAiStore();
-  const pathname = usePathname();
+  const area = useArea();
   const canAccessDesigner = useCanAccessDesigner() ?? false;
 
   useEffect(() => {
@@ -42,8 +43,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const inWorkspace = pathname === '/workspace' || pathname?.startsWith('/workspace/');
-  const inDesigner = pathname === '/apps' || pathname?.startsWith('/apps/');
+  const inWorkspace = area === 'workspace';
+  const inDesigner = area === 'designer';
 
   return (
     <>
@@ -89,5 +90,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <AiSidebar />
     </>
+  );
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <AreaProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </AreaProvider>
   );
 }
