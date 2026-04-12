@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AppMgmtController } from './app-mgmt.controller';
+import { AccessibleAppsController } from './accessible-apps.controller';
 import { AppMgmtService } from './app-mgmt.service';
 import { AccessibleAppsService } from './accessible-apps.service';
 
 @Module({
-  controllers: [AppMgmtController],
+  controllers: [AppMgmtController, AccessibleAppsController],
   providers: [AppMgmtService, AccessibleAppsService],
   exports: [AppMgmtService, AccessibleAppsService],
 })

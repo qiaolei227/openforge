@@ -21,7 +21,7 @@ export function useAccessibleApps() {
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const { data } = await apiClient.get<AccessibleApp[]>('/apps/accessible', { signal });
+      const { data } = await apiClient.get<AccessibleApp[]>('/accessible-apps', { signal });
       setApps(data ?? []);
       setError(null);
     } catch (e) {

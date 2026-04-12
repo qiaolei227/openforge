@@ -9,7 +9,7 @@ import { LocaleSwitcher } from './locale-switcher';
 import { ThemeSwitcher } from './theme-switcher';
 import { AiSidebar } from './ai-sidebar';
 import { useAiStore } from '@/stores/ai-store';
-import { Layers } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 const AI_OPEN_KEY = 'openforge_ai_open';
 
@@ -33,16 +33,16 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             <TopBar />
           </div>
           <div className="flex items-center gap-1 px-4 h-12 border-b border-border shrink-0">
-            <button
-              onClick={() => aiStore.toggle()}
-              className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground hover:opacity-90 transition-opacity"
-              title="AI 助手"
-            >
-              <Layers className="w-4 h-4" />
-            </button>
             <ThemeSwitcher />
             <LocaleSwitcher />
             <UserMenu />
+            <button
+              onClick={() => aiStore.toggle()}
+              className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground hover:opacity-90 transition-opacity ml-1"
+              title="AI 助手"
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
           </div>
         </div>
 

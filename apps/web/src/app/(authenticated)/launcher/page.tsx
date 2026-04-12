@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Loader2, AlertCircle, LayoutGrid, Plus, ArrowRight } from 'lucide-react';
+import { Loader2, AlertCircle, LayoutGrid, ArrowRight } from 'lucide-react';
 import { useAccessibleApps, type AccessibleApp } from '@/hooks/use-accessible-apps';
 import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
 import { getLucideIcon } from '@/lib/app-icon';
@@ -60,12 +60,11 @@ function EmptyState({ isDesigner }: { isDesigner: boolean }) {
           {isDesigner ? t('emptyDesignerCta') : t('emptyContact')}
         </p>
       </div>
-      {isDesigner && (
+      {false && isDesigner && (
         <Link
           href="/apps?create=1"
           className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          <Plus className="h-4 w-4" />
           {t('emptyDesignerCta')}
         </Link>
       )}
@@ -127,30 +126,6 @@ function AppCard({ app }: { app: AccessibleApp }) {
   );
 }
 
-function NewAppTile() {
-  const t = useTranslations('launcher');
-  return (
-    <Link
-      href="/apps?create=1"
-      className={cn(
-        'group flex flex-col items-center justify-center gap-3 rounded-xl',
-        'border-2 border-dashed border-border bg-card/50',
-        'p-8 min-h-[144px]',
-        'transition-all duration-200',
-        'hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-      )}
-    >
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted transition-colors group-hover:bg-primary/10">
-        <Plus className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
-      </div>
-      <span className="text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
-        {t('newSystem')}
-      </span>
-    </Link>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -184,7 +159,6 @@ export default function LauncherPage() {
           {apps.map((app) => (
             <AppCard key={app.id} app={app} />
           ))}
-          {isDesigner && <NewAppTile />}
         </div>
       )}
     </div>
