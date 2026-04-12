@@ -32,8 +32,8 @@ export class MenuController {
 
   @Get('admin/tree')
   @RequirePermission('sys:menus', 'view')
-  async getAdminTree() {
-    return this.menuService.getAdminTree();
+  async getAdminTree(@Query('appCode') appCode?: string) {
+    return this.menuService.getAdminTree(appCode);
   }
 
   @Post()

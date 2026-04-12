@@ -138,9 +138,19 @@ export class MenuService {
   /**
    * Admin editing view: returns all menus (visible=false included, no role filter).
    * Used by the menu management page.
+   * When appCode is provided, filters menus by that app.
    */
-  async getAdminTree(): Promise<any[]> {
+  async getAdminTree(appCode?: string): Promise<any[]> {
+    const where: Record<string, unknown> = {};
+    if (appCode) {
+      const app = await this.prisma.sysApp.findUnique({ where: { code: appCode } });
+      if (!app) {
+        throw new BusinessException(404, ErrorCodes.APP_NOT_FOUND, `App not found: ${appCode}`);
+      }
+      where.appId = app.id;
+    }
     const all = await this.prisma.sysMenu.findMany({
+      where,
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
     const nodeMap = new Map<string, any>();
