@@ -9,5 +9,4 @@ export * from './types/layout';
 export * from './types/view';
 export * from './constants';
 export * from './menu/menu-actions';
-export * from './menu/menu-def';
 export * from './menu/menu-node';
