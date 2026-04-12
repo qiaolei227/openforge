@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { ModelCreatedEvent } from '../event-bus/events';
@@ -32,10 +32,11 @@ export class ModelService {
     { columnName: 'updated_at', name: '更新时间', fieldType: 'DATETIME' },
   ];
 
+  // Explicit @Inject required for esbuild/Vitest metadata workaround.
   constructor(
-    private prisma: PrismaService,
-    private eventBus: EventBusService,
-    private ddlManager: DdlManagerService,
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(EventBusService) private eventBus: EventBusService,
+    @Inject(DdlManagerService) private ddlManager: DdlManagerService,
   ) {}
 
   async findAll(params: ModelQueryParams = {}) {
@@ -186,6 +187,18 @@ export class ModelService {
 
   async delete(id: string) {
     const model = await this.findById(id);
+
+    // Guard: refuse if any menu references this model via targetModelId
+    const menuRefs = await this.prisma.sysMenu.count({
+      where: { targetModelId: id },
+    });
+    if (menuRefs > 0) {
+      throw new BusinessException(
+        409,
+        ErrorCodes.MODEL_HAS_MENU_REF,
+        `Model is referenced by ${menuRefs} menu(s); remove them first`,
+      );
+    }
 
     // Guard: refuse if any REFERENCE/MULTI_REFERENCE field in any other model
     // is pointing at this model. Otherwise we'd leave dangling targetModelId

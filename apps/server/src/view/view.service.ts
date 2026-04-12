@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
@@ -9,7 +9,8 @@ import { UpdateViewDto } from './dto/update-view.dto';
 export class ViewService {
   private readonly logger = new Logger(ViewService.name);
 
-  constructor(private prisma: PrismaService) {}
+  // Explicit @Inject required for esbuild/Vitest metadata workaround.
+  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
   async findByModel(modelId: string) {
     return this.prisma.sysView.findMany({
@@ -74,6 +75,19 @@ export class ViewService {
 
   async delete(id: string) {
     const view = await this.findById(id);
+
+    // Guard: refuse if any menu references this view via targetViewId
+    const menuRefs = await this.prisma.sysMenu.count({
+      where: { targetViewId: id },
+    });
+    if (menuRefs > 0) {
+      throw new BusinessException(
+        409,
+        ErrorCodes.VIEW_HAS_MENU_REF,
+        `View is referenced by ${menuRefs} menu(s); remove them first`,
+      );
+    }
+
     await this.prisma.sysView.delete({ where: { id } });
 
     // If deleted view was default, promote the next one of same type
