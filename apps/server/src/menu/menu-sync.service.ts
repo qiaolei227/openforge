@@ -16,7 +16,7 @@ export class MenuSyncService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     this.logger.log(`Syncing ${this.menuDefs.length} coded MenuDef entries...`);
 
-    // Upsert all defs. `name / nameEn / icon / sortOrder` are intentionally not in
+    // Upsert all defs. `name / icon / sortOrder` are intentionally not in
     // the update payload — admins can customize them via the menu admin UI and we
     // don't want to overwrite their changes on every boot.
     await this.prisma.$transaction(
@@ -34,7 +34,6 @@ export class MenuSyncService implements OnModuleInit {
             source: 'coded',
             type: def.type,
             name: def.name,
-            nameEn: def.nameEn ?? null,
             icon: def.icon ?? null,
             sortOrder: def.sortOrder ?? 0,
             targetRoute: def.targetRoute ?? null,

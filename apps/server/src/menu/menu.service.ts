@@ -40,7 +40,6 @@ export class MenuService {
         code: m.code,
         type: m.type as MenuNode['type'],
         name: m.name,
-        nameEn: m.nameEn,
         icon: m.icon,
         sortOrder: m.sortOrder,
         targetRoute: m.targetRoute,
@@ -138,7 +137,6 @@ export class MenuService {
         parentId: dto.parentId ?? null,
         type: dto.type,
         name: dto.name,
-        nameEn: dto.nameEn ?? null,
         icon: dto.icon ?? null,
         sortOrder: 0,
         visible: true,
@@ -181,12 +179,11 @@ export class MenuService {
     }
 
     if (menu.source === 'coded') {
-      // coded menus only allow changing name/nameEn/icon/sortOrder/visible
+      // coded menus only allow changing name/icon/sortOrder/visible
       return this.prisma.sysMenu.update({
         where: { id },
         data: {
           name: dto.name ?? menu.name,
-          nameEn: dto.nameEn ?? menu.nameEn,
           icon: dto.icon ?? menu.icon,
           sortOrder: dto.sortOrder ?? menu.sortOrder,
           visible: dto.visible ?? menu.visible,

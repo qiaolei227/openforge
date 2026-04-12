@@ -5,7 +5,6 @@ export const SYS_CONFIG: MenuDef = {
   parentCode: 'sys:management',
   type: 'page',
   name: '系统参数',
-  nameEn: 'Config',
   icon: 'SlidersHorizontal',
   sortOrder: 50,
   targetRoute: '/config',

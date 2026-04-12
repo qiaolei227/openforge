@@ -5,7 +5,6 @@ export const SYS_ROLES: MenuDef = {
   parentCode: 'sys:management',
   type: 'page',
   name: '角色管理',
-  nameEn: 'Roles',
   icon: 'Shield',
   sortOrder: 30,
   targetRoute: '/roles',

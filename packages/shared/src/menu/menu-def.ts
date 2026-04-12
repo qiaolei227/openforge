@@ -12,10 +12,8 @@ export interface MenuDef {
   parentCode: string | null;
   /** coded 菜单只能是 group 或 page 两种类型 */
   type: 'group' | 'page';
-  /** 中文显示名 */
+  /** 显示名（当前 schema 单语言；多语言由 P3 i18n 重构统一处理） */
   name: string;
-  /** 英文显示名（可选） */
-  nameEn?: string;
   /** lucide 图标名（可选） */
   icon?: string;
   /** 同级排序（可选，默认 0） */

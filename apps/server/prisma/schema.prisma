@@ -285,7 +285,6 @@ model SysMenu {
   source              String   @db.VarChar(10)
   type                String   @db.VarChar(20)
   name                String   @db.VarChar(100)
-  nameEn              String?  @map("name_en") @db.VarChar(100)
   icon                String?  @db.VarChar(50)
   sortOrder           Int      @default(0) @map("sort_order")
   visible             Boolean  @default(true)

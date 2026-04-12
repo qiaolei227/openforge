@@ -25,7 +25,6 @@ export interface AdminMenuNode {
   source: 'coded' | 'designer';
   type: 'group' | 'model' | 'page' | 'link' | 'divider';
   name: string;
-  nameEn?: string | null;
   icon?: string | null;
   sortOrder: number;
   visible: boolean;

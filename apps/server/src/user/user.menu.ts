@@ -5,7 +5,6 @@ export const SYS_USERS: MenuDef = {
   parentCode: 'sys:management',
   type: 'page',
   name: '用户管理',
-  nameEn: 'Users',
   icon: 'Users',
   sortOrder: 10,
   targetRoute: '/users',

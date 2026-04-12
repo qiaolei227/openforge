@@ -86,7 +86,6 @@ export function CreateMenuDialog({
 
   // Form fields
   const [name, setName] = useState('');
-  const [nameEn, setNameEn] = useState('');
   const [icon, setIcon] = useState('');
   const [targetUrl, setTargetUrl] = useState('');
   // For model type: we track app.id to load models, but submit app.code + model.code
@@ -108,7 +107,6 @@ export function CreateMenuDialog({
   useEffect(() => {
     if (!open) return;
     setName('');
-    setNameEn('');
     setIcon('');
     setTargetUrl('');
     setSelectedAppId('');
@@ -190,7 +188,6 @@ export function CreateMenuDialog({
         payload.name = '---';
       } else {
         payload.name = name;
-        if (nameEn) payload.nameEn = nameEn;
         if (icon) payload.icon = icon;
       }
 
@@ -275,19 +272,6 @@ export function CreateMenuDialog({
                 placeholder="例如：销售中心"
                 required
                 autoFocus
-              />
-            </div>
-
-            {/* English name */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                英文名称 <span className="text-xs text-muted-foreground">(可选)</span>
-              </label>
-              <input
-                className={inputClass}
-                value={nameEn}
-                onChange={(e) => setNameEn(e.target.value)}
-                placeholder="如：Sales Center"
               />
             </div>
 

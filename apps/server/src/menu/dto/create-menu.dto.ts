@@ -8,7 +8,6 @@ export class CreateMenuDto {
 
   @IsString() @MaxLength(100) name!: string;
 
-  @IsOptional() @IsString() @MaxLength(100) nameEn?: string;
   @IsOptional() @IsString() @MaxLength(50) icon?: string;
 
   // type=model

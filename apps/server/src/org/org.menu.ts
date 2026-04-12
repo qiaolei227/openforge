@@ -5,7 +5,6 @@ export const SYS_ORGS: MenuDef = {
   parentCode: 'sys:management',
   type: 'page',
   name: '组织管理',
-  nameEn: 'Organizations',
   icon: 'Building2',
   sortOrder: 20,
   targetRoute: '/orgs',

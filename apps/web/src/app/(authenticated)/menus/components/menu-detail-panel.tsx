@@ -54,7 +54,6 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
 
   // Form state
   const [name, setName] = useState('');
-  const [nameEn, setNameEn] = useState('');
   const [icon, setIcon] = useState('');
   const [visible, setVisible] = useState(true);
   const [sortOrder, setSortOrder] = useState(0);
@@ -71,7 +70,6 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
   useEffect(() => {
     if (!menu) return;
     setName(menu.name ?? '');
-    setNameEn(menu.nameEn ?? '');
     setIcon(menu.icon ?? '');
     setVisible(menu.visible ?? true);
     setSortOrder(menu.sortOrder ?? 0);
@@ -103,7 +101,6 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
 
       if (!isDivider) {
         payload.name = name;
-        if (nameEn !== undefined) payload.nameEn = nameEn || null;
         payload.icon = icon || null;
       }
 
@@ -113,7 +110,6 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
       onSaved({
         ...menu,
         name: data.name ?? menu.name,
-        nameEn: data.nameEn ?? menu.nameEn,
         icon: data.icon ?? menu.icon,
         visible: data.visible ?? menu.visible,
         sortOrder: data.sortOrder ?? menu.sortOrder,
@@ -198,19 +194,6 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
                   onChange={(e) => setName(e.target.value)}
                   placeholder="菜单显示名称"
                   required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">
-                  英文名称{' '}
-                  <span className="text-xs text-muted-foreground">(可选)</span>
-                </label>
-                <input
-                  className={inputClass}
-                  value={nameEn}
-                  onChange={(e) => setNameEn(e.target.value)}
-                  placeholder="English name"
                 />
               </div>
 
