@@ -6,22 +6,16 @@ import { Loader2 } from 'lucide-react';
 import { getAccessToken } from '@/lib/auth';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/stores/auth-store';
-import { useMenuStore } from '@/stores/menu-store';
-import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
 
 /**
- * 根路径重定向规则（P2.1）：
+ * 根路径重定向规则：
  *   未登录              → /setup（首次部署）或 /login
- *   is_admin 或有 sys:designer → /apps
- *   其他业务用户        → /workspace
+ *   已登录任何用户      → /launcher
  */
 export default function Home() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const fetchProfile = useAuthStore((s) => s.fetchProfile);
-  const loaded = useMenuStore((s) => !!s.globalLoadedAt);
-  const fetchTree = useMenuStore((s) => s.fetchGlobal);
-  const canDesign = useCanAccessDesigner();
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -40,13 +34,9 @@ export default function Home() {
       fetchProfile();
       return;
     }
-    if (!loaded) {
-      fetchTree();
-      return;
-    }
-    // canDesign can only be non-null at this point (user and menu both loaded)
-    router.replace(canDesign ? '/apps' : '/workspace');
-  }, [router, user, loaded, canDesign, fetchProfile, fetchTree]);
+
+    router.replace('/launcher');
+  }, [router, user, fetchProfile]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">

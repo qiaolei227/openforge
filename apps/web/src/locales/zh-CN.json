@@ -7,7 +7,7 @@
     "dashboard": "仪表盘",
     "orgs": "组织架构",
     "users": "用户管理",
-    "apps": "应用管理",
+    "apps": "系统管理",
     "config": "平台参数"
   },
   "auth": {
@@ -147,7 +147,7 @@
   },
   "dashboard": {
     "title": "仪表盘",
-    "welcome": "欢迎使用 OpenForge（开匠）Designer。请从左侧菜单开始配置你的应用。"
+    "welcome": "欢迎使用 OpenForge（开匠）Designer。请从左侧菜单开始配置你的系统。"
   },
   "theme": {
     "toggle": "切换主题",
@@ -189,31 +189,31 @@
     "wrongPassword": "当前密码错误"
   },
   "apps": {
-    "title": "应用管理",
-    "subtitle": "管理平台中的所有业务应用",
-    "search": "搜索应用...",
-    "create": "新建应用",
-    "edit": "编辑应用",
-    "name": "应用名称",
-    "code": "应用编码",
+    "title": "系统管理",
+    "subtitle": "管理平台中的所有业务系统",
+    "search": "搜索系统...",
+    "create": "新建系统",
+    "edit": "编辑系统",
+    "name": "系统名称",
+    "code": "系统编码",
     "icon": "图标",
     "description": "描述",
     "modelCount": "{count} 个模型",
-    "createTitle": "新建应用",
-    "editTitle": "编辑应用",
-    "namePlaceholder": "请输入应用名称",
+    "createTitle": "新建系统",
+    "editTitle": "编辑系统",
+    "namePlaceholder": "请输入系统名称",
     "codePlaceholder": "小写字母开头，仅限字母、数字、下划线",
     "codeReadonly": "编码创建后不可修改",
     "codeInvalid": "编码必须以字母开头，仅含字母、数字、下划线，2-50个字符",
-    "descriptionPlaceholder": "简要描述应用的用途",
-    "confirmDelete": "确定要删除应用「{name}」吗？",
-    "deleteHasModels": "该应用下有模型，请先删除所有模型",
-    "emptyTitle": "还没有应用",
-    "emptySubtitle": "创建你的第一个业务应用开始建模",
-    "fetchFailed": "获取应用列表失败",
-    "createSuccess": "应用创建成功",
-    "updateSuccess": "应用更新成功",
-    "deleteSuccess": "应用删除成功"
+    "descriptionPlaceholder": "简要描述系统的用途",
+    "confirmDelete": "确定要删除系统「{name}」吗？",
+    "deleteHasModels": "该系统下有模型，请先删除所有模型",
+    "emptyTitle": "还没有系统",
+    "emptySubtitle": "创建你的第一个业务系统开始建模",
+    "fetchFailed": "获取系统列表失败",
+    "createSuccess": "系统创建成功",
+    "updateSuccess": "系统更新成功",
+    "deleteSuccess": "系统删除成功"
   },
   "models": {
     "title": "模型列表",
@@ -248,12 +248,12 @@
       "subtables": "子表",
       "fieldPermissions": "字段权限"
     },
-    "editApp": "编辑应用",
+    "editApp": "编辑系统",
     "confirmDelete": "确定要删除模型「{name}」吗？",
     "deleteHasFields": "该模型下有字段，请先删除所有字段",
     "modelSettings": "模型设置",
     "fetchFailed": "获取模型列表失败",
-    "fetchAppFailed": "获取应用信息失败",
+    "fetchAppFailed": "获取系统信息失败",
     "createSuccess": "模型创建成功",
     "updateSuccess": "模型更新成功",
     "deleteSuccess": "模型删除成功",
@@ -359,7 +359,7 @@
   },
   "config": {
     "title": "平台参数",
-    "subtitle": "配置平台全局参数，影响所有应用的默认行为",
+    "subtitle": "配置平台全局参数，影响所有系统的默认行为",
     "groupField": "字段设置",
     "groupDecimal": "数值设置",
     "stringDefaultLength": "字符串默认最大长度",
@@ -385,8 +385,8 @@
     "suggestFields": "建议字段",
     "reviewModel": "审查模型",
     "explainModel": "解释模型",
-    "createApp": "创建应用",
-    "recommendStructure": "推荐应用结构",
+    "createApp": "创建系统",
+    "recommendStructure": "推荐系统结构",
     "createModel": "创建模型",
     "planRelations": "规划模型关系",
     "explainConfig": "解释参数",
@@ -403,7 +403,7 @@
     "aiTag": "AI",
     "emptyChat": "输入指令或提问开始对话",
     "aiDisabled": "AI 功能将在后续版本中启用",
-    "contextApp": "应用",
+    "contextApp": "系统",
     "contextModel": "模型"
   },
   "dataTab": {
@@ -639,9 +639,9 @@
     "AUTH_INVALID_REFRESH_TOKEN": "登录已过期，请重新登录",
     "AUTH_INVALID_HANDOFF_CODE": "登录凭证已过期，请重新登录",
     "CONFIG_NOT_FOUND": "配置项不存在",
-    "APP_CODE_EXISTS": "应用编码已存在",
-    "APP_HAS_MODELS": "应用下存在模型，无法删除",
-    "APP_NOT_FOUND": "应用不存在",
+    "APP_CODE_EXISTS": "系统编码已存在",
+    "APP_HAS_MODELS": "系统下存在模型，无法删除",
+    "APP_NOT_FOUND": "系统不存在",
     "MODEL_TABLE_NAME_EXISTS": "模型表名已存在",
     "MODEL_HAS_DATA": "模型已有业务数据，请先清空数据",
     "MODEL_HAS_FIELDS": "模型下存在字段，无法删除",
@@ -700,7 +700,7 @@
   "workspace": {
     "title": "工作台",
     "loading": "加载中…",
-    "emptyTitle": "暂无可访问的应用",
+    "emptyTitle": "暂无可访问的系统",
     "emptyDesc": "请联系管理员分配角色和菜单权限"
   },
   "roles": {
@@ -732,5 +732,24 @@
     "hidden": "隐藏",
     "selectRole": "选择角色",
     "selectModel": "选择模型"
+  },
+  "launcher": {
+    "title": "选择一个系统",
+    "subtitle": "{count} 个可访问的系统",
+    "empty": "暂无可访问的系统",
+    "emptyDesignerCta": "立即创建第一个系统",
+    "emptyContact": "您的账号尚未被授权访问任何系统，请联系管理员",
+    "loadError": "无法加载系统列表",
+    "newSystem": "新建系统"
+  },
+  "systemSwitcher": {
+    "select": "选择系统",
+    "none": "暂无可访问的系统",
+    "allSystems": "全部系统"
+  },
+  "topBar": {
+    "designer": "设计器",
+    "settings": "平台设置",
+    "home": "首页"
   }
 }

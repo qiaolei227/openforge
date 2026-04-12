@@ -7,7 +7,7 @@
     "dashboard": "Dashboard",
     "orgs": "Org Structure",
     "users": "Users",
-    "apps": "Applications",
+    "apps": "Systems",
     "config": "Platform Config"
   },
   "auth": {
@@ -147,7 +147,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "welcome": "Welcome to OpenForge Designer. Start configuring your application from the left menu."
+    "welcome": "Welcome to OpenForge Designer. Start configuring your system from the left menu."
   },
   "theme": {
     "toggle": "Toggle theme",
@@ -189,31 +189,31 @@
     "wrongPassword": "Current password is incorrect"
   },
   "apps": {
-    "title": "Applications",
-    "subtitle": "Manage all business applications on the platform",
-    "search": "Search applications...",
-    "create": "New Application",
-    "edit": "Edit Application",
-    "name": "Application Name",
-    "code": "Application Code",
+    "title": "Systems",
+    "subtitle": "Manage all business systems on the platform",
+    "search": "Search systems...",
+    "create": "New System",
+    "edit": "Edit System",
+    "name": "System Name",
+    "code": "System Code",
     "icon": "Icon",
     "description": "Description",
     "modelCount": "{count} models",
-    "createTitle": "New Application",
-    "editTitle": "Edit Application",
-    "namePlaceholder": "Enter application name",
+    "createTitle": "New System",
+    "editTitle": "Edit System",
+    "namePlaceholder": "Enter system name",
     "codePlaceholder": "Start with lowercase letter, only letters, digits, underscores",
     "codeReadonly": "Code cannot be changed after creation",
     "codeInvalid": "Code must start with a letter, contain only letters, digits, underscores, 2-50 chars",
-    "descriptionPlaceholder": "Briefly describe the purpose of this application",
-    "confirmDelete": "Are you sure you want to delete application \"{name}\"?",
-    "deleteHasModels": "This application has models. Please delete all models first.",
-    "emptyTitle": "No applications yet",
-    "emptySubtitle": "Create your first business application to start modeling",
-    "fetchFailed": "Failed to fetch applications",
-    "createSuccess": "Application created successfully",
-    "updateSuccess": "Application updated successfully",
-    "deleteSuccess": "Application deleted successfully"
+    "descriptionPlaceholder": "Briefly describe the purpose of this system",
+    "confirmDelete": "Are you sure you want to delete system \"{name}\"?",
+    "deleteHasModels": "This system has models. Please delete all models first.",
+    "emptyTitle": "No systems yet",
+    "emptySubtitle": "Create your first business system to start modeling",
+    "fetchFailed": "Failed to fetch systems",
+    "createSuccess": "System created successfully",
+    "updateSuccess": "System updated successfully",
+    "deleteSuccess": "System deleted successfully"
   },
   "models": {
     "title": "Models",
@@ -248,12 +248,12 @@
       "subtables": "Sub Tables",
       "fieldPermissions": "Field Permissions"
     },
-    "editApp": "Edit Application",
+    "editApp": "Edit System",
     "confirmDelete": "Are you sure you want to delete model \"{name}\"?",
     "deleteHasFields": "This model has fields. Please delete all fields first.",
     "modelSettings": "Model Settings",
     "fetchFailed": "Failed to fetch models",
-    "fetchAppFailed": "Failed to fetch application info",
+    "fetchAppFailed": "Failed to fetch system info",
     "createSuccess": "Model created successfully",
     "updateSuccess": "Model updated successfully",
     "deleteSuccess": "Model deleted successfully",
@@ -359,7 +359,7 @@
   },
   "config": {
     "title": "Platform Configuration",
-    "subtitle": "Configure global platform parameters that affect default behavior of all applications",
+    "subtitle": "Configure global platform parameters that affect default behavior of all systems",
     "groupField": "Field Settings",
     "groupDecimal": "Numeric Settings",
     "stringDefaultLength": "Default String Max Length",
@@ -385,7 +385,7 @@
     "suggestFields": "Suggest Fields",
     "reviewModel": "Review Model",
     "explainModel": "Explain Model",
-    "createApp": "Create Application",
+    "createApp": "Create System",
     "recommendStructure": "Recommend Structure",
     "createModel": "Create Model",
     "planRelations": "Plan Relations",
@@ -403,7 +403,7 @@
     "aiTag": "AI",
     "emptyChat": "Enter a command or question to start",
     "aiDisabled": "AI features will be available in a future release",
-    "contextApp": "App",
+    "contextApp": "System",
     "contextModel": "Model"
   },
   "dataTab": {
@@ -639,9 +639,9 @@
     "AUTH_INVALID_REFRESH_TOKEN": "Session expired, please log in again",
     "AUTH_INVALID_HANDOFF_CODE": "Login credential expired, please log in again",
     "CONFIG_NOT_FOUND": "Configuration not found",
-    "APP_CODE_EXISTS": "Application code already exists",
-    "APP_HAS_MODELS": "Application has models, cannot delete",
-    "APP_NOT_FOUND": "Application not found",
+    "APP_CODE_EXISTS": "System code already exists",
+    "APP_HAS_MODELS": "System has models, cannot delete",
+    "APP_NOT_FOUND": "System not found",
     "MODEL_TABLE_NAME_EXISTS": "Model table name already exists",
     "MODEL_HAS_DATA": "Model has data records, please clear data first",
     "MODEL_HAS_FIELDS": "Model has fields, cannot delete",
@@ -700,7 +700,7 @@
   "workspace": {
     "title": "Workspace",
     "loading": "Loading…",
-    "emptyTitle": "No accessible apps",
+    "emptyTitle": "No accessible systems",
     "emptyDesc": "Contact your administrator to assign roles and menu permissions"
   },
   "roles": {
@@ -732,5 +732,24 @@
     "hidden": "Hidden",
     "selectRole": "Select Role",
     "selectModel": "Select Model"
+  },
+  "launcher": {
+    "title": "Choose a system",
+    "subtitle": "{count} accessible systems",
+    "empty": "No accessible systems",
+    "emptyDesignerCta": "Create your first system",
+    "emptyContact": "Your account has no system access. Contact your administrator.",
+    "loadError": "Failed to load systems",
+    "newSystem": "New system"
+  },
+  "systemSwitcher": {
+    "select": "Select system",
+    "none": "No accessible systems",
+    "allSystems": "All systems"
+  },
+  "topBar": {
+    "designer": "Designer",
+    "settings": "Platform Settings",
+    "home": "Home"
   }
 }

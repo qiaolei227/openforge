@@ -31,7 +31,7 @@ export default function LoginPage() {
   // Check initialization status + redirect if already authenticated
   useEffect(() => {
     if (getAccessToken()) {
-      router.replace('/dashboard');
+      router.replace('/launcher');
       return;
     }
     apiClient.get('/setup/status').then(({ data }) => {
@@ -66,7 +66,7 @@ export default function LoginPage() {
         localStorage.removeItem(REMEMBER_KEY);
       }
 
-      router.push('/dashboard');
+      router.push('/launcher');
     } catch (err) {
       setError(getApiErrorMessage(err, (key: string) => tErrors(key), t('loginFailed')));
     } finally {

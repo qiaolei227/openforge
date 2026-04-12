@@ -2,6 +2,7 @@
 
 import * as LucideIcons from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useAccessibleApps, type AccessibleApp } from '@/hooks/use-accessible-apps';
 import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
 import { cn } from '@/lib/utils';
@@ -36,19 +37,20 @@ function LoadingState() {
 }
 
 function ErrorState({ error }: { error: unknown }) {
+  const t = useTranslations('launcher');
   const message =
     error instanceof Error
       ? error.message
       : typeof error === 'string'
         ? error
-        : '加载失败，请刷新重试';
+        : t('loadError');
 
   return (
     <div className="flex flex-1 items-center justify-center min-h-[60vh]">
       <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-6 py-4 max-w-md">
         <LucideIcons.AlertCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
         <div>
-          <p className="text-sm font-medium text-destructive">无法加载系统列表</p>
+          <p className="text-sm font-medium text-destructive">{t('loadError')}</p>
           <p className="text-sm text-muted-foreground mt-1">{message}</p>
         </div>
       </div>
@@ -57,15 +59,16 @@ function ErrorState({ error }: { error: unknown }) {
 }
 
 function EmptyState({ isDesigner }: { isDesigner: boolean }) {
+  const t = useTranslations('launcher');
   return (
     <div className="flex flex-1 flex-col items-center justify-center min-h-[60vh] gap-4">
       <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
         <LucideIcons.LayoutGrid className="h-8 w-8 text-muted-foreground" />
       </div>
       <div className="text-center">
-        <p className="text-base font-semibold">暂无可访问的系统</p>
+        <p className="text-base font-semibold">{t('empty')}</p>
         <p className="text-sm text-muted-foreground mt-1">
-          {isDesigner ? '创建第一个系统来开始构建您的平台' : '请联系管理员为您配置访问权限'}
+          {isDesigner ? t('emptyDesignerCta') : t('emptyContact')}
         </p>
       </div>
       {isDesigner && (
@@ -74,7 +77,7 @@ function EmptyState({ isDesigner }: { isDesigner: boolean }) {
           className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <LucideIcons.Plus className="h-4 w-4" />
-          立即创建第一个系统
+          {t('emptyDesignerCta')}
         </Link>
       )}
     </div>
@@ -136,6 +139,7 @@ function AppCard({ app }: { app: AccessibleApp }) {
 }
 
 function NewAppTile() {
+  const t = useTranslations('launcher');
   return (
     <Link
       href="/apps?create=1"
@@ -152,7 +156,7 @@ function NewAppTile() {
         <LucideIcons.Plus className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
       </div>
       <span className="text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
-        新建系统
+        {t('newSystem')}
       </span>
     </Link>
   );
@@ -163,6 +167,7 @@ function NewAppTile() {
 // ---------------------------------------------------------------------------
 
 export default function LauncherPage() {
+  const t = useTranslations('launcher');
   const { apps, loading, error } = useAccessibleApps();
   const canDesign = useCanAccessDesigner();
   const isDesigner = canDesign === true;
@@ -176,9 +181,9 @@ export default function LauncherPage() {
     <div className="flex flex-col gap-6 p-6 md:p-8">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">系统启动器</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          选择一个系统开始工作，或前往设计器构建新系统。
+          {t('subtitle', { count: apps.length })}
         </p>
       </div>
 

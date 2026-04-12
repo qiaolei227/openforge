@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ChevronDown, Loader2, LayoutGrid } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import {
@@ -24,11 +25,12 @@ function AppIcon({ iconName }: { iconName: string | null }) {
 
 export function SystemSwitcher() {
   const router = useRouter();
+  const t = useTranslations('systemSwitcher');
   const { appCode } = useCurrentApp();
   const { apps, loading } = useAccessibleApps();
 
   const currentApp = apps.find((a) => a.code === appCode);
-  const currentName = currentApp?.name ?? '选择系统';
+  const currentName = currentApp?.name ?? t('select');
 
   return (
     <DropdownMenu>
@@ -46,7 +48,7 @@ export function SystemSwitcher() {
           )}
           {!loading && apps.length === 0 && (
             <div className="px-3 py-2 text-xs text-muted-foreground">
-              暂无可访问的系统
+              {t('none')}
             </div>
           )}
           {apps.map((app) => (
@@ -69,7 +71,7 @@ export function SystemSwitcher() {
           className="flex items-center gap-2"
         >
           <LayoutGrid className="w-4 h-4" />
-          <span>全部系统</span>
+          <span>{t('allSystems')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

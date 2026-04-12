@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Settings, Paintbrush, Home } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useArea } from '@/hooks/use-area';
 import { useCurrentApp } from '@/hooks/use-current-app';
 import { SystemSwitcher } from './system-switcher';
@@ -10,6 +11,7 @@ import { cn } from '@/lib/utils';
 
 export function TopBar() {
   const area = useArea();
+  const t = useTranslations('topBar');
   const { appCode } = useCurrentApp();
   const canAccessDesigner = useCanAccessDesigner();
 
@@ -28,6 +30,7 @@ export function TopBar() {
       <Link
         href="/launcher"
         className="font-semibold text-base flex items-center gap-2 shrink-0"
+        title={t('home')}
       >
         <Home className="w-4 h-4" />
         OpenForge
@@ -36,10 +39,10 @@ export function TopBar() {
       {/* Center / context-aware section */}
       <div className="flex-1 min-w-0">
         {isSettings && (
-          <span className="text-sm font-medium text-muted-foreground">平台设置</span>
+          <span className="text-sm font-medium text-muted-foreground">{t('settings')}</span>
         )}
         {isLauncher && (
-          <span className="text-sm font-medium text-muted-foreground">系统启动器</span>
+          <span className="text-sm font-medium text-muted-foreground">{t('home')}</span>
         )}
         {isWorkspaceOrDesigner && <SystemSwitcher />}
       </div>
@@ -50,17 +53,17 @@ export function TopBar() {
           <Link
             href={`/apps?fromWorkspace=${appCode}`}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md hover:bg-accent transition-colors"
-            title="进入系统设计器"
+            title={t('designer')}
           >
             <Paintbrush className="w-4 h-4" />
-            设计器
+            {t('designer')}
           </Link>
         )}
         {canAccessDesigner && !isSettings && (
           <Link
             href="/settings"
             className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors"
-            title="平台设置"
+            title={t('settings')}
           >
             <Settings className="w-4 h-4" />
           </Link>
