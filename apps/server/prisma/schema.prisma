@@ -85,11 +85,14 @@ model SysApp {
   icon        String?  @db.VarChar(50)
   description String?  @db.Text
   version     String?  @db.VarChar(20)
+  themeColor  String?  @map("theme_color") @db.VarChar(20)
+  sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   models SysModel[]
   dicts  SysDict[]
+  menus  SysMenu[] @relation("AppMenus")
 
   @@map("sys_app")
 }
@@ -147,6 +150,7 @@ model SysModel {
   entities             SysEntity[]
   distributionPolicies SysDistributionPolicy[]
   fieldPermissions     SysFieldPermission[]
+  menuTargets          SysMenu[]               @relation("MenuTargetModel")
 
   @@unique([appId, code])
   @@unique([tableName])
@@ -227,7 +231,8 @@ model SysView {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  model SysModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  model       SysModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  menuTargets SysMenu[] @relation("MenuTargetView")
 
   @@map("sys_view")
 }
@@ -258,6 +263,7 @@ model SysRole {
 
   userRoles        SysUserRole[]
   roleMenus        SysRoleMenu[]
+  rolePermissions  SysRolePermission[]
   fieldPermissions SysFieldPermission[]
 
   @@map("sys_role")
@@ -280,6 +286,7 @@ model SysUserRole {
 
 model SysMenu {
   id                  String   @id @default(uuid()) @db.Uuid
+  appId               String?  @map("app_id") @db.Uuid
   parentId            String?  @map("parent_id") @db.Uuid
   code                String   @unique @db.VarChar(100)
   source              String   @db.VarChar(10)
@@ -291,16 +298,22 @@ model SysMenu {
   targetRoute         String?  @map("target_route") @db.VarChar(200)
   targetAppCode       String?  @map("target_app_code") @db.VarChar(50)
   targetModelCode     String?  @map("target_model_code") @db.VarChar(100)
+  targetModelId       String?  @map("target_model_id") @db.Uuid
+  targetViewType      String?  @map("target_view_type") @db.VarChar(20)
   targetViewId        String?  @map("target_view_id") @db.Uuid
   targetFilterPreset  Json?    @map("target_filter_preset")
   targetUrl           String?  @map("target_url") @db.VarChar(500)
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  parent    SysMenu?      @relation("MenuHierarchy", fields: [parentId], references: [id])
-  children  SysMenu[]     @relation("MenuHierarchy")
-  roleMenus SysRoleMenu[]
+  app          SysApp?     @relation("AppMenus", fields: [appId], references: [id])
+  parent       SysMenu?    @relation("MenuHierarchy", fields: [parentId], references: [id])
+  children     SysMenu[]   @relation("MenuHierarchy")
+  targetModel  SysModel?   @relation("MenuTargetModel", fields: [targetModelId], references: [id])
+  targetView   SysView?    @relation("MenuTargetView", fields: [targetViewId], references: [id])
+  roleMenus    SysRoleMenu[]
 
+  @@index([appId])
   @@index([parentId])
   @@index([source])
   @@index([type])
@@ -342,4 +355,18 @@ model SysFieldPermission {
   @@index([modelId])
   @@index([fieldId])
   @@map("sys_field_permission")
+}
+
+model SysRolePermission {
+  id        String   @id @default(uuid()) @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  resource  String   @db.VarChar(100)
+  actions   String[] @default([])
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  role SysRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, resource])
+  @@index([roleId])
+  @@map("sys_role_permission")
 }
