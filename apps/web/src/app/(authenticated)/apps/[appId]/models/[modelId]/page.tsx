@@ -109,6 +109,7 @@ interface ModelItem {
   description: string | null;
   dataScope: 'private' | 'shared' | 'distributed';
   isTree: boolean;
+  enableDataStatus: boolean;
   app?: { id?: string; code?: string; name?: string };
 }
 
@@ -143,13 +144,22 @@ interface FieldSuggestion {
 /* ------------------------------------------------------------------ */
 
 /** System fields are platform conventions — not stored in sys_field, generated client-side for display */
-const SYSTEM_FIELDS_DISPLAY: Field[] = [
+const SYSTEM_FIELDS_BASE: Field[] = [
   { id: '_sys_org_id', modelId: '', name: '所属组织', columnName: 'org_id', fieldType: 'ORGANIZATION', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -800, isSystem: true, deletedAt: null },
   { id: '_sys_is_archived', modelId: '', name: '是否归档', columnName: 'is_archived', fieldType: 'BOOLEAN', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -700, isSystem: true, deletedAt: null },
   { id: '_sys_created_by', modelId: '', name: '创建人', columnName: 'created_by', fieldType: 'USER', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -500, isSystem: true, deletedAt: null },
   { id: '_sys_updated_by', modelId: '', name: '更新人', columnName: 'updated_by', fieldType: 'USER', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -400, isSystem: true, deletedAt: null },
   { id: '_sys_created_at', modelId: '', name: '创建时间', columnName: 'created_at', fieldType: 'DATETIME', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -300, isSystem: true, deletedAt: null },
   { id: '_sys_updated_at', modelId: '', name: '更新时间', columnName: 'updated_at', fieldType: 'DATETIME', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -200, isSystem: true, deletedAt: null },
+];
+
+/** Extra system fields injected when enableDataStatus is turned on */
+const DATA_STATUS_FIELDS: Field[] = [
+  { id: '_sys_data_status', modelId: '', name: '数据状态', columnName: 'data_status', fieldType: 'ENUM', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -600, isSystem: true, deletedAt: null },
+  { id: '_sys_submitted_by', modelId: '', name: '提交人', columnName: 'submitted_by', fieldType: 'USER', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -590, isSystem: true, deletedAt: null },
+  { id: '_sys_submitted_at', modelId: '', name: '提交时间', columnName: 'submitted_at', fieldType: 'DATETIME', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -580, isSystem: true, deletedAt: null },
+  { id: '_sys_approved_by', modelId: '', name: '审核人', columnName: 'approved_by', fieldType: 'USER', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -570, isSystem: true, deletedAt: null },
+  { id: '_sys_approved_at', modelId: '', name: '审核时间', columnName: 'approved_at', fieldType: 'DATETIME', isRequired: false, isUnique: false, defaultValue: null, options: null, sortOrder: -560, isSystem: true, deletedAt: null },
 ];
 
 const DATE_FORMAT_OPTIONS = ['YYYYMMDD', 'YYYY-MM-DD', 'YYYYMM', 'YYYY'] as const;
@@ -350,6 +360,7 @@ export default function ModelDetailPage() {
   const [systemFields, setSystemFields] = useState<Field[]>([]);
   const [views, setViews] = useState<import('@openforge/shared').SysView[]>([]);
   const [entities, setEntities] = useState<SysEntity[]>([]);
+  const [actionsCount, setActionsCount] = useState(0);
 
   /* ---------- UI state ---------- */
   const searchParams = useSearchParams();
@@ -497,11 +508,15 @@ export default function ModelDetailPage() {
           .sort((a, b) => a.sortOrder - b.sortOrder),
       );
       // System fields are platform conventions — use client-side constant
-      setSystemFields(SYSTEM_FIELDS_DISPLAY);
+      // Data status fields are conditionally included based on model setting
+      setSystemFields([
+        ...SYSTEM_FIELDS_BASE,
+        ...(model?.enableDataStatus ? DATA_STATUS_FIELDS : []),
+      ]);
     } catch {
       showToast(tFields('fetchFailed'), 'error');
     }
-  }, [modelId, showToast, tFields]);
+  }, [modelId, model?.enableDataStatus, showToast, tFields]);
 
   const fetchViews = useCallback(async () => {
     try {
@@ -514,6 +529,13 @@ export default function ModelDetailPage() {
     try {
       const { data } = await apiClient.get<SysEntity[]>(`/models/${modelId}/entities`);
       setEntities(data);
+    } catch { /* silent */ }
+  }, [modelId]);
+
+  const fetchActionsCount = useCallback(async () => {
+    try {
+      const { data } = await apiClient.get<Array<{ id: string }>>(`/models/${modelId}/actions`);
+      setActionsCount(data.length);
     } catch { /* silent */ }
   }, [modelId]);
 
@@ -531,11 +553,11 @@ export default function ModelDetailPage() {
   useEffect(() => {
     const loadAll = async () => {
       setLoading(true);
-      await Promise.all([fetchApp(), fetchModel(), fetchFields(), fetchViews(), fetchEntities()]);
+      await Promise.all([fetchApp(), fetchModel(), fetchFields(), fetchViews(), fetchEntities(), fetchActionsCount()]);
       setLoading(false);
     };
     loadAll();
-  }, [fetchApp, fetchModel, fetchFields, fetchViews, fetchEntities]);
+  }, [fetchApp, fetchModel, fetchFields, fetchViews, fetchEntities, fetchActionsCount]);
 
   const refreshFields = useCallback(async () => {
     await Promise.all([fetchFields(), fetchEntities()]);
@@ -1351,7 +1373,7 @@ export default function ModelDetailPage() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {tActions('title')}
+              {tActions('title')} ({actionsCount})
               {activeTab === 'actions' && (
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
               )}
@@ -2200,7 +2222,7 @@ export default function ModelDetailPage() {
 
       {/* Actions tab content */}
       {activeTab === 'actions' && (
-        <ModelActionsTab modelId={modelId} />
+        <ModelActionsTab modelId={modelId} onCountChange={setActionsCount} />
       )}
 
       {/* Distribution Policy tab content */}
@@ -2339,7 +2361,7 @@ export default function ModelDetailPage() {
                           { label: tFields('groupBasic'), types: ['STRING', 'TEXT', 'RICHTEXT', 'INTEGER', 'DECIMAL', 'BOOLEAN'] },
                           { label: tFields('groupDateTime'), types: ['DATE', 'DATETIME', 'TIME'] },
                           { label: tFields('groupChoice'), types: ['ENUM', 'MULTI_ENUM', 'AUTO_NUMBER'] },
-                          { label: tFields('groupRelation'), types: ['REFERENCE', 'MULTI_REFERENCE'] },
+                          { label: tFields('groupRelation'), types: currentEntityId ? ['REFERENCE'] : ['REFERENCE', 'MULTI_REFERENCE'] },
                           { label: tFields('groupSystem'), types: ['USER', 'ORGANIZATION'] },
                           { label: tFields('groupFile'), types: ['FILE', 'IMAGE'] },
                         ].map((group, gi) => (
