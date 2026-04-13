@@ -165,6 +165,26 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
     );
   }
 
+  // SubTable mode: inject entityContext for REFERENCE fields
+  const buildCellExtraProps = useCallback(
+    (field: Field, row: Record<string, any>) => {
+      const base = buildFieldExtraProps?.(field, row) ?? {};
+      if (field.fieldType === 'REFERENCE') {
+        const existingIds = rows
+          .map((r) => r[field.columnName])
+          .filter(Boolean) as string[];
+        base.entityContext = {
+          existingIds,
+          onBatchAddRows: (newRows: Record<string, any>[]) => {
+            onChange([...rows, ...newRows]);
+          },
+        };
+      }
+      return base;
+    },
+    [buildFieldExtraProps, rows, onChange],
+  );
+
   // SubTable mode: editable grid
   const toggleRow = (index: number) => {
     setSelectedRows((prev) => {
@@ -278,7 +298,7 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
                       value={row[field.columnName]}
                       onChange={(val) => handleCellChange(rowIndex, field.columnName, val)}
                       disabled={!isEditable}
-                      extraProps={buildFieldExtraProps?.(field, row)}
+                      extraProps={buildCellExtraProps(field, row)}
                     />
                   </td>
                 ))}
