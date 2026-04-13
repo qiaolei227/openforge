@@ -147,9 +147,10 @@ model SysModel {
   code        String   @db.VarChar(100)
   tableName   String   @map("table_name") @db.VarChar(200)
   description String?  @db.Text
-  dataScope   String   @default("private") @map("data_scope") @db.VarChar(20)
-  isTree      Boolean  @default(false) @map("is_tree")
-  semantic    String?  @db.Text
+  dataScope        String   @default("private") @map("data_scope") @db.VarChar(20)
+  isTree           Boolean  @default(false) @map("is_tree")
+  enableDataStatus Boolean  @default(false) @map("enable_data_status")
+  semantic         String?  @db.Text
   aiHint      String?  @map("ai_hint") @db.Text
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -161,6 +162,7 @@ model SysModel {
   distributionPolicies SysDistributionPolicy[]
   fieldPermissions     SysFieldPermission[]
   menuTargets          SysMenu[]               @relation("MenuTargetModel")
+  actions              SysAction[]
 
   @@unique([appId, code])
   @@unique([tableName])
@@ -236,15 +238,42 @@ model SysView {
   name      String   @db.VarChar(100)
   type      String   @db.VarChar(20)
   layout    Json     @db.JsonB
-  config    Json?    @db.JsonB
-  isDefault Boolean  @default(false) @map("is_default")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  config         Json?    @db.JsonB
+  isDefault      Boolean  @default(false) @map("is_default")
+  visibleActions String[] @default([]) @map("visible_actions") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   model       SysModel  @relation(fields: [modelId], references: [id], onDelete: Cascade)
   menuTargets SysMenu[] @relation("MenuTargetView")
 
   @@map("sys_view")
+}
+
+model SysAction {
+  id          String   @id @default(uuid()) @db.Uuid
+  modelId     String   @map("model_id") @db.Uuid
+  parentId    String?  @map("parent_id") @db.Uuid
+  code        String   @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  icon        String?  @db.VarChar(50)
+  category    String   @default("system") @db.VarChar(20)
+  actionType  String   @default("builtin") @map("action_type") @db.VarChar(20)
+  displayType String   @default("button") @map("display_type") @db.VarChar(20)
+  position    String   @default("both") @db.VarChar(20)
+  sortOrder   Int      @default(0) @map("sort_order")
+  config      Json?    @db.JsonB
+  visibility  Json?    @db.JsonB
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  model    SysModel    @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  parent   SysAction?  @relation("ActionHierarchy", fields: [parentId], references: [id])
+  children SysAction[] @relation("ActionHierarchy")
+
+  @@unique([modelId, code])
+  @@index([modelId])
+  @@map("sys_action")
 }
 
 model SysFile {
