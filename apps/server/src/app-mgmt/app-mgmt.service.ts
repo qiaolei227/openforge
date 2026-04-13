@@ -56,7 +56,7 @@ export class AppMgmtService {
     return app;
   }
 
-  async create(dto: CreateAppDto) {
+  async create(dto: CreateAppDto, createdBy?: string) {
     const existing = await this.prisma.sysApp.findUnique({
       where: { code: dto.code },
     });
@@ -70,6 +70,7 @@ export class AppMgmtService {
         code: dto.code,
         icon: dto.icon || null,
         description: dto.description || null,
+        createdBy: createdBy ?? null,
       },
     });
   }

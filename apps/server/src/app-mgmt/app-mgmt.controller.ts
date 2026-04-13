@@ -3,6 +3,7 @@ import { AppMgmtService } from './app-mgmt.service';
 import { CreateAppDto } from './dto/create-app.dto';
 import { UpdateAppDto } from './dto/update-app.dto';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('apps')
 export class AppMgmtController {
@@ -30,8 +31,8 @@ export class AppMgmtController {
 
   @Post()
   @RequirePermission('sys:designer', 'create')
-  create(@Body() dto: CreateAppDto) {
-    return this.appMgmtService.create(dto);
+  create(@Body() dto: CreateAppDto, @CurrentUser('userId') userId: string) {
+    return this.appMgmtService.create(dto, userId);
   }
 
   @Put(':id')
