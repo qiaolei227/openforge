@@ -32,6 +32,13 @@ export class ModelService {
     { columnName: 'updated_at', name: '更新时间', fieldType: 'DATETIME' },
   ];
 
+  /** Read-only data status field metadata — conditionally present when enableDataStatus=true */
+  static readonly DATA_STATUS_FIELDS_META = [
+    { columnName: 'data_status', name: '数据状态', fieldType: 'ENUM' },
+    { columnName: 'submitted_by', name: '提交人', fieldType: 'USER' },
+    { columnName: 'submitted_at', name: '提交时间', fieldType: 'DATETIME' },
+  ];
+
   // Explicit @Inject required for esbuild/Vitest metadata workaround.
   constructor(
     @Inject(PrismaService) private prisma: PrismaService,
@@ -155,7 +162,13 @@ export class ModelService {
       // DDL inside transaction scope — if this fails, metadata rolls back
       // System fields (id, org_id, is_archived, etc.) are platform conventions —
       // they are created physically by DDL but NOT stored in sys_field.
-      await this.ddlManager.createTable(tableName, [], m.dataScope as string, dto.isTree);
+      await this.ddlManager.createTable(
+        tableName,
+        [],
+        m.dataScope as string,
+        dto.isTree || false,
+        dto.enableDataStatus || false,
+      );
       this.logger.log(`Physical table biz.${tableName} created`);
 
       return m;
@@ -255,5 +268,40 @@ export class ModelService {
     await this.prisma.sysField.deleteMany({ where: { modelId: id } });
 
     return this.prisma.sysModel.delete({ where: { id } });
+  }
+
+  async toggleDataStatus(modelId: string, enable: boolean): Promise<void> {
+    const model = await this.prisma.sysModel.findUnique({
+      where: { id: modelId },
+    });
+    if (!model) {
+      throw new BusinessException(404, ErrorCodes.MODEL_NOT_FOUND, 'Model not found');
+    }
+
+    if (model.enableDataStatus === enable) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.sysModel.update({
+        where: { id: modelId },
+        data: { enableDataStatus: enable },
+      });
+
+      if (enable) {
+        await this.ddlManager.addDataStatusColumns(model.tableName);
+      } else {
+        await this.ddlManager.removeDataStatusColumns(model.tableName);
+      }
+    });
+  }
+
+  getSystemFieldsMeta(model: { isTree: boolean; enableDataStatus: boolean; dataScope: string }) {
+    const base = [...ModelService.SYSTEM_FIELDS_META];
+    if (model.isTree) {
+      base.push({ columnName: 'parent_id', name: '父节点', fieldType: 'REFERENCE' });
+    }
+    if (model.enableDataStatus) {
+      base.push(...ModelService.DATA_STATUS_FIELDS_META);
+    }
+    return base;
   }
 }
