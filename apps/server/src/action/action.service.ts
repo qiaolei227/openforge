@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
@@ -22,30 +22,8 @@ const DATA_STATUS_ACTIONS = [
 ];
 
 @Injectable()
-export class ActionService implements OnModuleInit {
-  private readonly logger = new Logger(ActionService.name);
-
+export class ActionService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
-
-  /** Backfill/repair system actions for all models on startup */
-  async onModuleInit() {
-    // Remove stale 'edit' system action (no longer a system action)
-    await this.prisma.sysAction.deleteMany({
-      where: { code: 'edit', category: 'system' },
-    });
-
-    const modelsWithoutActions = await this.prisma.sysModel.findMany({
-      where: { actions: { none: {} } },
-      select: { id: true },
-    });
-    if (modelsWithoutActions.length > 0) {
-      this.logger.log(`Backfilling system actions for ${modelsWithoutActions.length} model(s)...`);
-      for (const model of modelsWithoutActions) {
-        await this.generateSystemActions(model.id);
-      }
-      this.logger.log('System actions backfill complete');
-    }
-  }
 
   @OnEvent('model.created')
   async handleModelCreated(event: ModelCreatedEvent): Promise<void> {
