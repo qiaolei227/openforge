@@ -42,6 +42,7 @@ import { FIELD_TYPES, type LayoutConfig, type Field as SharedField, type SysEnti
 import { generateDefaultFormLayout, generateDefaultListLayout } from '@openforge/render-engine';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { fieldTypeBadgeClass } from './designer/field-type-styles';
+import { ModelActionsTab } from './components/model-actions-tab';
 import { CreateViewDialog } from './designer/create-view-dialog';
 import { PreviewMode } from './designer/preview-mode';
 import { Badge } from '@/components/ui/badge';
@@ -340,6 +341,7 @@ export default function ModelDetailPage() {
   const tErrors = useTranslations('errorCodes');
   const tEntities = useTranslations('entities');
   const tDicts = useTranslations('dicts');
+  const tActions = useTranslations('actions');
 
   /* ---------- Core data ---------- */
   const [app, setApp] = useState<AppItem | null>(null);
@@ -351,8 +353,8 @@ export default function ModelDetailPage() {
 
   /* ---------- UI state ---------- */
   const searchParams = useSearchParams();
-  type TabType = 'fields' | 'subtables' | 'views' | 'distribution-policy';
-  const validTabs: TabType[] = ['fields', 'subtables', 'views', 'distribution-policy'];
+  type TabType = 'fields' | 'subtables' | 'views' | 'actions' | 'distribution-policy';
+  const validTabs: TabType[] = ['fields', 'subtables', 'views', 'actions', 'distribution-policy'];
   const initialTab = validTabs.includes(searchParams.get('tab') as TabType)
     ? (searchParams.get('tab') as TabType)
     : 'fields';
@@ -1240,7 +1242,7 @@ export default function ModelDetailPage() {
   /* ------------------------------------------------------------------ */
 
   return (
-    <div>
+    <div className="-m-6">
       {/* Toast */}
       {toast && (
         <div
@@ -1254,14 +1256,19 @@ export default function ModelDetailPage() {
         </div>
       )}
 
-      {/* Breadcrumb */}
-      <Breadcrumb
-        items={[
-          { label: tApps('title'), href: '/apps' },
-          { label: app?.name || '...', href: `/apps/${appId}` },
-          { label: model?.name || '...' },
-        ]}
-      />
+      {/* Breadcrumb — full-width strip at the top */}
+      <div className="px-6 py-2 border-b bg-muted/30">
+        <Breadcrumb
+          items={[
+            { label: tApps('title'), href: '/apps' },
+            { label: app?.name || '...', href: `/apps/${appId}` },
+            { label: model?.name || '...' },
+          ]}
+        />
+      </div>
+
+      {/* Padded content below breadcrumb */}
+      <div className="p-6">
 
       {/* Model Header */}
       {loading ? (
@@ -1336,6 +1343,19 @@ export default function ModelDetailPage() {
             >
               {t('designer.viewList')} ({views.length})
               {activeTab === 'views' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('actions')}
+              className={`pb-2 text-sm transition-colors relative ${
+                activeTab === 'actions'
+                  ? 'text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tActions('title')}
+              {activeTab === 'actions' && (
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
               )}
             </button>
@@ -2181,6 +2201,11 @@ export default function ModelDetailPage() {
         </div>
       )}
 
+      {/* Actions tab content */}
+      {activeTab === 'actions' && (
+        <ModelActionsTab modelId={modelId} />
+      )}
+
       {/* Distribution Policy tab content */}
       {activeTab === 'distribution-policy' && model?.dataScope === 'distributed' && (
         <div className="mt-4">
@@ -2864,6 +2889,7 @@ export default function ModelDetailPage() {
         </div>
       )}
 
+    </div>
     </div>
   );
 }

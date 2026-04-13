@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
-import { Loader2, Blocks, Plus, MoreVertical, Database } from 'lucide-react';
+import { Loader2, Plus, MoreVertical, Database } from 'lucide-react';
+import { AppIcon } from '@/lib/app-icon';
+import { IconPicker } from '@/components/icon-picker';
 import { useAiStore } from '@/stores/ai-store';
 import {
   DropdownMenu,
@@ -67,6 +69,7 @@ export default function AppsPage() {
   const [editingApp, setEditingApp] = useState<AppItem | null>(null);
   const [formName, setFormName] = useState('');
   const [formCode, setFormCode] = useState('');
+  const [formIcon, setFormIcon] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formError, setFormError] = useState('');
   const [codeError, setCodeError] = useState('');
@@ -130,6 +133,7 @@ export default function AppsPage() {
     setEditingApp(null);
     setFormName('');
     setFormCode('');
+    setFormIcon('');
     setFormDescription('');
     setFormError('');
     setCodeError('');
@@ -140,6 +144,7 @@ export default function AppsPage() {
     setEditingApp(app);
     setFormName(app.name);
     setFormCode(app.code);
+    setFormIcon(app.icon || '');
     setFormDescription(app.description || '');
     setFormError('');
     setCodeError('');
@@ -175,12 +180,14 @@ export default function AppsPage() {
         await apiClient.post('/apps', {
           name: formName,
           code: formCode,
+          icon: formIcon || undefined,
           description: formDescription || undefined,
         });
         showToast(tApps('createSuccess'), 'success');
       } else if (dialogMode === 'edit' && editingApp) {
         await apiClient.put(`/apps/${editingApp.id}`, {
           name: formName,
+          icon: formIcon || undefined,
           description: formDescription || undefined,
         });
         showToast(tApps('updateSuccess'), 'success');
@@ -245,19 +252,7 @@ export default function AppsPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">{tApps('title')}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{tApps('subtitle')}</p>
-        </div>
-        <button onClick={openCreate} className={btnPrimary}>
-          <Plus className="w-4 h-4 mr-1" />
-          {tApps('create')}
-        </button>
-      </div>
-
-      {/* Search Bar */}
+      {/* Search Bar + Create */}
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-sm">
           <input
@@ -270,6 +265,10 @@ export default function AppsPage() {
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
           )}
         </div>
+        <button onClick={openCreate} className={btnPrimary}>
+          <Plus className="w-4 h-4 mr-1" />
+          {tApps('create')}
+        </button>
       </div>
 
       {/* Card Grid */}
@@ -303,7 +302,7 @@ export default function AppsPage() {
               {/* Card header: icon + name + code */}
               <div className="flex items-start gap-3 mb-3">
                 <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary shrink-0">
-                  <Blocks className="w-5 h-5" />
+                  <AppIcon iconName={app.icon} className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-sm font-semibold truncate">{app.name}</h3>
@@ -423,6 +422,15 @@ export default function AppsPage() {
                 {codeError && (
                   <p className="text-xs text-destructive">{codeError}</p>
                 )}
+              </div>
+
+              {/* Icon */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  {tApps('icon')}
+                  <span className="text-muted-foreground font-normal ml-1">({tCommon('optional')})</span>
+                </label>
+                <IconPicker value={formIcon} onChange={setFormIcon} />
               </div>
 
               {/* Description */}
