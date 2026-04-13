@@ -31,6 +31,7 @@ describe('MenuService', () => {
     prisma = {
       sysApp: {
         findUnique: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([]),
       },
       sysMenu: {
         findMany: vi.fn(),
@@ -78,7 +79,7 @@ describe('MenuService', () => {
       prisma.sysRoleMenu.findMany.mockResolvedValue([]);
 
       const tree = await service.buildTreeForUser(
-        { userId: 'u1', orgId: 'org1', roles: [], isAdmin: true },
+        { userId: 'u1', orgId: 'org1', roles: [], isAdmin: true, identity: 'admin' as const },
         APP_CODE,
       );
 
@@ -98,7 +99,7 @@ describe('MenuService', () => {
       prisma.sysApp.findUnique.mockResolvedValue(null);
 
       const err = await service.buildTreeForUser(
-        { userId: 'u1', orgId: 'org1', roles: [], isAdmin: true },
+        { userId: 'u1', orgId: 'org1', roles: [], isAdmin: true, identity: 'admin' as const },
         'nonexistent',
       ).catch((e) => e);
 
@@ -127,7 +128,7 @@ describe('MenuService', () => {
       prisma.sysModel.findMany.mockResolvedValue([]);
 
       const tree = await service.buildTreeForUser(
-        { userId: 'u1', orgId: 'org1', roles: [], isAdmin: true },
+        { userId: 'u1', orgId: 'org1', roles: [], isAdmin: true, identity: 'admin' as const },
         APP_CODE,
       );
 
@@ -156,7 +157,7 @@ describe('MenuService', () => {
       ]);
 
       const tree = await service.buildTreeForUser(
-        { userId: 'u1', orgId: 'org1', roles: [], isAdmin: true },
+        { userId: 'u1', orgId: 'org1', roles: [], isAdmin: true, identity: 'admin' as const },
         APP_CODE,
       );
 
@@ -187,12 +188,65 @@ describe('MenuService', () => {
       ]);
 
       const tree = await service.buildTreeForUser(
-        { userId: 'u1', orgId: 'org1', roles: ['role1'], isAdmin: false },
+        { userId: 'u1', orgId: 'org1', roles: ['role1'], isAdmin: false, identity: 'user' as const },
         APP_CODE,
       );
 
       expect(tree[0].permissions).toContain('view');
       expect(tree[0].permissions).toContain('create');
+    });
+
+    it('designer gets full permissions for apps they created (no role needed)', async () => {
+      prisma.sysApp.findUnique.mockResolvedValue({ id: APP_ID, code: APP_CODE, createdBy: 'designer1' });
+      prisma.sysMenu.findMany.mockResolvedValue([
+        {
+          id: 'm1', appId: APP_ID, parentId: null, code: 'menu:m1',
+          type: 'model', name: '客户', icon: null, sortOrder: 10, visible: true,
+          targetModelId: MODEL_ID, targetViewType: VIEW_TYPE, targetViewId: null,
+          targetUrl: null,
+        },
+      ]);
+      prisma.sysView.findMany.mockResolvedValue([]);
+      prisma.sysModel.findMany.mockResolvedValue([
+        { id: MODEL_ID, code: MODEL_CODE, appId: APP_ID, app: { id: APP_ID, code: APP_CODE } },
+      ]);
+      prisma.sysRoleMenu.findMany.mockResolvedValue([]);
+
+      const tree = await service.buildTreeForUser(
+        { userId: 'designer1', orgId: 'org1', roles: [], isAdmin: false, identity: 'designer' as const },
+        APP_CODE,
+      );
+
+      expect(tree).toHaveLength(1);
+      expect(tree[0].permissions).toContain('view');
+      expect(tree[0].permissions).toContain('create');
+      expect(tree[0].permissions).toContain('edit');
+      expect(tree[0].permissions).toContain('delete');
+    });
+
+    it('designer does NOT get full permissions for apps created by someone else', async () => {
+      prisma.sysApp.findUnique.mockResolvedValue({ id: APP_ID, code: APP_CODE, createdBy: 'other-user' });
+      prisma.sysMenu.findMany.mockResolvedValue([
+        {
+          id: 'm1', appId: APP_ID, parentId: null, code: 'menu:m1',
+          type: 'model', name: '客户', icon: null, sortOrder: 10, visible: true,
+          targetModelId: MODEL_ID, targetViewType: VIEW_TYPE, targetViewId: null,
+          targetUrl: null,
+        },
+      ]);
+      prisma.sysView.findMany.mockResolvedValue([]);
+      prisma.sysModel.findMany.mockResolvedValue([
+        { id: MODEL_ID, code: MODEL_CODE, appId: APP_ID, app: { id: APP_ID, code: APP_CODE } },
+      ]);
+      prisma.sysRoleMenu.findMany.mockResolvedValue([]);
+
+      const tree = await service.buildTreeForUser(
+        { userId: 'designer1', orgId: 'org1', roles: [], isAdmin: false, identity: 'designer' as const },
+        APP_CODE,
+      );
+
+      // No role permissions → menu pruned
+      expect(tree).toHaveLength(0);
     });
   });
 

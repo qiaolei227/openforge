@@ -25,24 +25,32 @@ export class MenuService {
   async buildTreeForUser(user: RequestUser, appCode?: string): Promise<MenuNode[]> {
     // 1. Optionally look up app by code
     let appId: string | undefined;
+    let designerOwnsApp = false;
     if (appCode) {
       const app = await this.prisma.sysApp.findUnique({ where: { code: appCode } });
       if (!app) {
         throw new BusinessException(404, ErrorCodes.APP_NOT_FOUND, `App not found: ${appCode}`);
       }
       appId = app.id;
+
+      // Designer who created this app gets full access
+      if (!user.isAdmin && user.identity === 'designer' && app.createdBy === user.userId) {
+        designerOwnsApp = true;
+      }
     }
 
     // 2. Fetch all visible menus (filtered by appId if provided) + permission map in parallel
     const menuWhere: any = { visible: true };
     if (appId) menuWhere.appId = appId;
 
+    const needsPermissionMap = !user.isAdmin && !designerOwnsApp;
+
     const [allMenus, permissionMap] = await Promise.all([
       this.prisma.sysMenu.findMany({
         where: menuWhere,
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       }),
-      this.getPermissionMap(user),
+      needsPermissionMap ? this.getPermissionMap(user) : Promise.resolve(new Map<string, MenuAction[]>()),
     ]);
 
     // 3. Batch-fetch views (with model→app) for menus that have targetViewId
@@ -71,6 +79,16 @@ export class MenuService {
         include: { app: true },
       });
       for (const m of models) modelMap.set(m.id, m);
+    }
+
+    // 4b. For the multi-app case (no appCode filter), find designer-owned apps
+    let designerOwnedAppIds: Set<string> | null = null;
+    if (!appCode && !user.isAdmin && user.identity === 'designer') {
+      const ownedApps = await this.prisma.sysApp.findMany({
+        where: { createdBy: user.userId },
+        select: { id: true },
+      });
+      designerOwnedAppIds = new Set(ownedApps.map((a) => a.id));
     }
 
     // 5. Build MenuNode objects
@@ -106,7 +124,7 @@ export class MenuService {
         targetViewId: m.targetViewId ?? null,
         targetUrl: m.targetUrl ?? null,
         children: [],
-        permissions: user.isAdmin
+        permissions: (user.isAdmin || designerOwnsApp || designerOwnedAppIds?.has(m.appId))
           ? adminActions
           : (permissionMap.get(m.id) ?? []),
       });
@@ -123,7 +141,7 @@ export class MenuService {
       }
     }
 
-    if (user.isAdmin) return roots;
+    if (user.isAdmin || designerOwnsApp) return roots;
     return this.pruneWithoutView(roots);
   }
 
