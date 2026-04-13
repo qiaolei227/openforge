@@ -591,9 +591,27 @@ export class DynamicDataService {
         `Model '${appCode}/${modelCode}' not found`,
       );
     }
-    const allFields = await this.fieldService.findByModelId(model.id);
+    // Fetch fields, entities, and views in parallel
+    const [allFields, entities, views] = await Promise.all([
+      this.fieldService.findByModelId(model.id),
+      this.prisma.sysEntity.findMany({
+        where: { modelId: model.id },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        include: {
+          fields: {
+            where: { deletedAt: null },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      }),
+      this.prisma.sysView.findMany({
+        where: { modelId: model.id },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
     const nonSystem = allFields.filter((f) => !f.isSystem);
-    if (user.isAdmin) return { ...model, fields: nonSystem };
+    if (user.isAdmin) return { ...model, fields: nonSystem, entities, views };
 
     const perms = await this.prisma.sysFieldPermission.findMany({
       where: {
@@ -619,7 +637,7 @@ export class DynamicDataService {
         const access = accessByField.get(f.id);
         return access === 'readonly' ? { ...f, access } : f;
       });
-    return { ...model, fields: filtered };
+    return { ...model, fields: filtered, entities, views };
   }
 
   /**
