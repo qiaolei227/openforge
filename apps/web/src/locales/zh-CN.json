@@ -20,7 +20,9 @@
     "loginButton": "登录",
     "loggingIn": "登录中...",
     "loginFailed": "登录失败",
-    "rememberUsername": "记住用户名"
+    "rememberUsername": "记住用户名",
+    "usernameRequired": "请输入用户名",
+    "passwordRequired": "请输入密码"
   },
   "setup": {
     "title": "系统初始化",
@@ -97,7 +99,7 @@
     "name": "组织名称",
     "namePlaceholder": "请输入组织名称",
     "code": "组织编码",
-    "codePlaceholder": "字母开头，仅含字母/数字/下划线",
+    "codePlaceholder": "请输入组织编码",
     "codeReadonly": "编码创建后不可修改",
     "searchPlaceholder": "搜索名称或编码...",
     "createSuccess": "组织创建成功",
@@ -140,10 +142,17 @@
     "confirmDelete": "确定要删除用户「{name}」({username}) 吗？此操作不可撤销。",
     "confirmDisable": "确定要禁用用户「{name}」吗？禁用后该用户将无法登录。",
     "confirmEnable": "确定要启用用户「{name}」吗？",
+    "identity": "身份",
+    "identityUser": "普通用户",
+    "identityDesigner": "设计师",
+    "identityAdmin": "平台管理员",
     "roles": "角色",
     "rolesPlaceholder": "选择角色",
     "noRolesAvailable": "暂无可用角色",
-    "roleBindFailed": "角色绑定失败"
+    "roleBindFailed": "角色绑定失败",
+    "rolesNotNeeded": "该身份无需分配角色",
+    "rolesNotNeededAdmin": "平台管理员拥有全部权限，无需分配角色",
+    "rolesNotNeededDesigner": "设计师自动拥有所创建系统的完整访问权限"
   },
   "dashboard": {
     "title": "仪表盘",
@@ -705,12 +714,33 @@
   },
   "roles": {
     "title": "角色管理",
+    "subtitle": "管理系统角色及其权限配置",
     "new": "新建角色",
     "edit": "编辑角色",
     "code": "角色编码",
     "name": "角色名称",
     "description": "描述",
     "userCount": "用户数",
+    "userCountValue": "{count} 人",
+    "usersBindCount": "{count} 名用户绑定此角色",
+    "search": "搜索角色编码或名称…",
+    "authorize": "授权",
+    "deleteTitle": "删除角色",
+    "deleteConfirmText": "此操作不可撤销。请输入角色编码 {code} 以确认删除。",
+    "deleteHasUsers": "该角色当前绑定了 {count} 名用户，删除将被拒绝。请先解绑所有用户。",
+    "deleteConfirmPlaceholder": "请输入: {code}",
+    "confirmDelete": "确认删除",
+    "fetchFailed": "加载角色列表失败",
+    "deleteFailed": "删除失败",
+    "notFound": "角色不存在或已被删除",
+    "namePlaceholder": "例如：销售经理",
+    "codePlaceholder": "snake_case，如：sales_manager",
+    "codeReadonly": "编码创建后不可修改",
+    "codePattern": "编码只能包含小写字母、数字和下划线，且必须以字母开头",
+    "codeAutoGenHint": "自动根据名称生成，可手动修改；创建后不可更改",
+    "descriptionPlaceholder": "可选，简短描述角色职责",
+    "menuPermissions": "菜单权限",
+    "fieldPermissions": "字段权限",
     "createSuccess": "角色已创建",
     "updateSuccess": "已保存",
     "deleteSuccess": "已删除"
@@ -723,7 +753,10 @@
     "newLink": "新建外链",
     "newDivider": "新建分割线",
     "saveSuccess": "已保存",
-    "unsavedChanges": "有未保存的调整"
+    "unsavedChanges": "有未保存的调整",
+    "description": "管理 {name} 的导航菜单结构",
+    "deleteSuccess": "菜单已删除",
+    "confirmDelete": "确定要删除菜单「{name}」吗？此操作不可恢复。"
   },
   "fieldPermissions": {
     "title": "字段权限",
@@ -731,7 +764,53 @@
     "readonly": "只读",
     "hidden": "隐藏",
     "selectRole": "选择角色",
-    "selectModel": "选择模型"
+    "selectModel": "选择模型",
+    "selectModelPlaceholder": "— 请选择模型 —",
+    "selectRolePlaceholder": "— 请选择角色 —",
+    "fieldCount": "{count} 个用户字段",
+    "emptySelectModel": "请先选择一个模型以配置字段权限",
+    "emptySelectRole": "请先选择一个角色以配置字段权限",
+    "emptyFields": "该模型暂无用户字段",
+    "fieldName": "字段名称",
+    "columnName": "列名",
+    "type": "类型",
+    "fetchModelsFailed": "加载模型列表失败",
+    "fetchPermsFailed": "加载字段权限失败",
+    "saveFailed": "保存失败",
+    "legend": "点击单选按钮立即保存。可编辑为默认状态（无限制），只读使字段不可修改，隐藏完全隐藏该字段。"
+  },
+  "menuPermissions": {
+    "description": "配置此角色可见的菜单项",
+    "saving": "保存中…",
+    "save": "保存权限",
+    "menuItem": "菜单项",
+    "type": "类型",
+    "visible": "可见",
+    "empty": "暂无菜单配置",
+    "divider": "— 分隔线 —",
+    "saved": "菜单权限已保存",
+    "saveFailed": "保存失败",
+    "fetchFailed": "加载菜单权限失败",
+    "unsaved": "有未保存的修改，请点击「保存权限」提交",
+    "typeGroup": "分组",
+    "typeModel": "模型",
+    "typePage": "页面",
+    "typeLink": "链接",
+    "typeDivider": "分隔线"
+  },
+  "settingsNav": {
+    "groupUsersPermissions": "用户与权限",
+    "groupPlatformConfig": "平台配置",
+    "groupAdvanced": "高级（即将推出）",
+    "users": "用户",
+    "roles": "角色",
+    "orgs": "组织",
+    "config": "平台参数",
+    "audit": "操作日志",
+    "aiServices": "AI 服务",
+    "backup": "备份恢复",
+    "theme": "平台主题",
+    "comingSoon": "即将推出"
   },
   "launcher": {
     "title": "选择一个系统",
@@ -748,7 +827,7 @@
     "allSystems": "全部系统"
   },
   "topBar": {
-    "designer": "设计器",
+    "designer": "系统设计",
     "settings": "平台设置",
     "home": "首页"
   }

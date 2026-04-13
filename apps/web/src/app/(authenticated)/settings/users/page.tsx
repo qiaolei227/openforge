@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Pencil, Ban, CheckCircle, Trash2 } from 'lucide-react';
 
 interface UserOrg {
   id: string;
@@ -19,6 +19,8 @@ interface UserRole {
   role: { id: string; code: string; name: string };
 }
 
+type Identity = 'user' | 'designer' | 'admin';
+
 interface User {
   id: string;
   username: string;
@@ -26,6 +28,7 @@ interface User {
   email: string | null;
   phone: string | null;
   status: 'active' | 'disabled';
+  identity: Identity;
   createdAt: string;
   updatedAt: string;
   userOrgs: UserOrg[];
@@ -114,6 +117,7 @@ export default function UsersPage() {
   const [formPhone, setFormPhone] = useState('');
   const [formOrgId, setFormOrgId] = useState('');
   const [formRoleIds, setFormRoleIds] = useState<string[]>([]);
+  const [formIdentity, setFormIdentity] = useState<Identity>('user');
   const [formError, setFormError] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
 
@@ -203,6 +207,7 @@ export default function UsersPage() {
     setFormPhone('');
     setFormOrgId(allOrgs.length > 0 ? allOrgs[0].id : '');
     setFormRoleIds([]);
+    setFormIdentity('user');
     setFormError('');
   };
 
@@ -216,6 +221,7 @@ export default function UsersPage() {
     setFormPhone(user.phone || '');
     setFormOrgId('');
     setFormRoleIds((user.userRoles ?? []).map((ur) => ur.roleId));
+    setFormIdentity(user.identity ?? 'user');
     setFormError('');
   };
 
@@ -240,6 +246,7 @@ export default function UsersPage() {
           email: formEmail || undefined,
           phone: formPhone || undefined,
           orgId: formOrgId,
+          identity: formIdentity,
         });
         userId = data.id;
       } else if (dialogMode === 'edit' && editingUser) {
@@ -247,6 +254,7 @@ export default function UsersPage() {
           displayName: formDisplayName,
           email: formEmail || undefined,
           phone: formPhone || undefined,
+          identity: formIdentity,
         });
         userId = editingUser.id;
       } else {
@@ -256,7 +264,13 @@ export default function UsersPage() {
       // user record is created/updated but left with wrong roles. Treat a
       // failure here as the whole save failing so the dialog stays open and
       // the operator can see the inline error.
-      await apiClient.put(`/users/${userId}/roles`, { roleIds: formRoleIds });
+      // Only bind roles for regular users; admin/designer don't need roles
+      if (formIdentity === 'user') {
+        await apiClient.put(`/users/${userId}/roles`, { roleIds: formRoleIds });
+      } else {
+        // Clear any existing roles when identity is admin/designer
+        await apiClient.put(`/users/${userId}/roles`, { roleIds: [] });
+      }
       showToast(
         dialogMode === 'create' ? tUser('createSuccess') : tUser('updateSuccess'),
         'success',
@@ -408,7 +422,11 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td className="p-3">
-                    {(user.userRoles ?? []).length > 0 ? (
+                    {user.identity === 'admin' || user.identity === 'designer' ? (
+                      <span className="text-xs text-muted-foreground italic">
+                        {tUser('rolesNotNeeded')}
+                      </span>
+                    ) : (user.userRoles ?? []).length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {(user.userRoles ?? []).map((ur) => (
                           <span
@@ -439,22 +457,24 @@ export default function UsersPage() {
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-1">
-                      <button onClick={() => openEdit(user)} className={btnGhost}>
-                        {tCommon('edit')}
+                      <button onClick={() => openEdit(user)} className={btnGhost} title={tCommon('edit')}>
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() =>
                           setConfirmAction({ type: 'toggle-status', user })
                         }
                         className={btnGhost}
+                        title={user.status === 'active' ? tCommon('disable') : tCommon('enable')}
                       >
-                        {user.status === 'active' ? tCommon('disable') : tCommon('enable')}
+                        {user.status === 'active' ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                       </button>
                       <button
                         onClick={() => setConfirmAction({ type: 'delete', user })}
                         className={`${btnGhost} text-destructive hover:text-destructive`}
+                        title={tCommon('delete')}
                       >
-                        {tCommon('delete')}
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </td>
@@ -558,6 +578,25 @@ export default function UsersPage() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{tUser('identity')}</label>
+                <select
+                  className={inputClass}
+                  value={formIdentity}
+                  onChange={(e) => {
+                    const newIdentity = e.target.value as Identity;
+                    setFormIdentity(newIdentity);
+                    if (newIdentity !== 'user') {
+                      setFormRoleIds([]);
+                    }
+                  }}
+                >
+                  <option value="user">{tUser('identityUser')}</option>
+                  <option value="designer">{tUser('identityDesigner')}</option>
+                  <option value="admin">{tUser('identityAdmin')}</option>
+                </select>
+              </div>
+
               {dialogMode === 'create' && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{tUser('org')}</label>
@@ -581,36 +620,47 @@ export default function UsersPage() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{tUser('roles')}</label>
-                {allRoles.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">{tUser('noRolesAvailable')}</p>
-                ) : (
-                  <div className="border border-input rounded-md max-h-36 overflow-y-auto p-2 space-y-1.5 bg-background">
-                    {allRoles.map((role) => {
-                      const checked = formRoleIds.includes(role.id);
-                      return (
-                        <label key={role.id} className="flex items-center gap-2 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setFormRoleIds((ids) => [...ids, role.id]);
-                              } else {
-                                setFormRoleIds((ids) => ids.filter((id) => id !== role.id));
-                              }
-                            }}
-                            className="h-4 w-4 accent-primary rounded"
-                          />
-                          <span className="text-sm">{role.name}</span>
-                          <span className="text-xs text-muted-foreground font-mono">({role.code})</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              {formIdentity === 'user' ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{tUser('roles')}</label>
+                  {allRoles.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">{tUser('noRolesAvailable')}</p>
+                  ) : (
+                    <div className="border border-input rounded-md max-h-36 overflow-y-auto p-2 space-y-1.5 bg-background">
+                      {allRoles.map((role) => {
+                        const checked = formRoleIds.includes(role.id);
+                        return (
+                          <label key={role.id} className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFormRoleIds((ids) => [...ids, role.id]);
+                                } else {
+                                  setFormRoleIds((ids) => ids.filter((id) => id !== role.id));
+                                }
+                              }}
+                              className="h-4 w-4 accent-primary rounded"
+                            />
+                            <span className="text-sm">{role.name}</span>
+                            <span className="text-xs text-muted-foreground font-mono">({role.code})</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{tUser('roles')}</label>
+                  <p className="text-xs text-muted-foreground">
+                    {formIdentity === 'admin'
+                      ? tUser('rolesNotNeededAdmin')
+                      : tUser('rolesNotNeededDesigner')}
+                  </p>
+                </div>
+              )}
 
               {formError && (
                 <p className="text-sm text-destructive">{formError}</p>

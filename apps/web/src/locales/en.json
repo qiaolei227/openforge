@@ -20,7 +20,9 @@
     "loginButton": "Login",
     "loggingIn": "Logging in...",
     "loginFailed": "Login failed",
-    "rememberUsername": "Remember username"
+    "rememberUsername": "Remember username",
+    "usernameRequired": "Please enter username",
+    "passwordRequired": "Please enter password"
   },
   "setup": {
     "title": "System Setup",
@@ -97,7 +99,7 @@
     "name": "Organization Name",
     "namePlaceholder": "Enter organization name",
     "code": "Organization Code",
-    "codePlaceholder": "Start with a letter, only letters/digits/underscores",
+    "codePlaceholder": "Enter organization code",
     "codeReadonly": "Code cannot be changed after creation",
     "searchPlaceholder": "Search name or code...",
     "createSuccess": "Organization created successfully",
@@ -140,10 +142,17 @@
     "confirmDelete": "Are you sure you want to delete user \"{name}\" ({username})? This action cannot be undone.",
     "confirmDisable": "Are you sure you want to disable user \"{name}\"? The user will not be able to log in.",
     "confirmEnable": "Are you sure you want to enable user \"{name}\"?",
+    "identity": "Identity",
+    "identityUser": "User",
+    "identityDesigner": "Designer",
+    "identityAdmin": "Admin",
     "roles": "Roles",
     "rolesPlaceholder": "Select roles",
     "noRolesAvailable": "No roles available",
-    "roleBindFailed": "Failed to bind roles"
+    "roleBindFailed": "Failed to bind roles",
+    "rolesNotNeeded": "Roles are not required for this identity",
+    "rolesNotNeededAdmin": "Admin has full access to everything, no roles needed",
+    "rolesNotNeededDesigner": "Designer automatically has full access to systems they created"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -705,12 +714,33 @@
   },
   "roles": {
     "title": "Roles",
+    "subtitle": "Manage system roles and their permission settings",
     "new": "New Role",
     "edit": "Edit Role",
     "code": "Code",
     "name": "Name",
     "description": "Description",
     "userCount": "Users",
+    "userCountValue": "{count}",
+    "usersBindCount": "{count} users bound to this role",
+    "search": "Search role code or name…",
+    "authorize": "Authorize",
+    "deleteTitle": "Delete Role",
+    "deleteConfirmText": "This action cannot be undone. Please type the role code {code} to confirm deletion.",
+    "deleteHasUsers": "This role is currently bound to {count} users and deletion will be refused. Please unbind all users first.",
+    "deleteConfirmPlaceholder": "Type: {code}",
+    "confirmDelete": "Confirm Delete",
+    "fetchFailed": "Failed to load roles",
+    "deleteFailed": "Delete failed",
+    "notFound": "Role not found or has been deleted",
+    "namePlaceholder": "e.g. Sales Manager",
+    "codePlaceholder": "snake_case, e.g. sales_manager",
+    "codeReadonly": "Code cannot be changed after creation",
+    "codePattern": "Code can only contain lowercase letters, digits and underscores, must start with a letter",
+    "codeAutoGenHint": "Auto-generated from name, can be edited manually; cannot be changed after creation",
+    "descriptionPlaceholder": "Optional, briefly describe the role responsibilities",
+    "menuPermissions": "Menu Permissions",
+    "fieldPermissions": "Field Permissions",
     "createSuccess": "Role created",
     "updateSuccess": "Saved",
     "deleteSuccess": "Deleted"
@@ -723,7 +753,10 @@
     "newLink": "New External Link",
     "newDivider": "New Divider",
     "saveSuccess": "Saved",
-    "unsavedChanges": "You have unsaved changes"
+    "unsavedChanges": "You have unsaved changes",
+    "description": "Manage navigation menu structure for {name}",
+    "deleteSuccess": "Menu deleted",
+    "confirmDelete": "Are you sure you want to delete menu \"{name}\"? This action cannot be undone."
   },
   "fieldPermissions": {
     "title": "Field Permissions",
@@ -731,7 +764,53 @@
     "readonly": "Read-only",
     "hidden": "Hidden",
     "selectRole": "Select Role",
-    "selectModel": "Select Model"
+    "selectModel": "Select Model",
+    "selectModelPlaceholder": "— Select a model —",
+    "selectRolePlaceholder": "— Select a role —",
+    "fieldCount": "{count} user fields",
+    "emptySelectModel": "Select a model first to configure field permissions",
+    "emptySelectRole": "Select a role first to configure field permissions",
+    "emptyFields": "This model has no user fields",
+    "fieldName": "Field Name",
+    "columnName": "Column",
+    "type": "Type",
+    "fetchModelsFailed": "Failed to load models",
+    "fetchPermsFailed": "Failed to load field permissions",
+    "saveFailed": "Save failed",
+    "legend": "Click a radio button to save immediately. Editable is the default (no restriction), Read-only makes the field non-editable, Hidden completely hides the field."
+  },
+  "menuPermissions": {
+    "description": "Configure which menu items are visible for this role",
+    "saving": "Saving…",
+    "save": "Save Permissions",
+    "menuItem": "Menu Item",
+    "type": "Type",
+    "visible": "Visible",
+    "empty": "No menus configured",
+    "divider": "— Divider —",
+    "saved": "Menu permissions saved",
+    "saveFailed": "Save failed",
+    "fetchFailed": "Failed to load menu permissions",
+    "unsaved": "You have unsaved changes — click \"Save Permissions\" to submit",
+    "typeGroup": "Group",
+    "typeModel": "Model",
+    "typePage": "Page",
+    "typeLink": "Link",
+    "typeDivider": "Divider"
+  },
+  "settingsNav": {
+    "groupUsersPermissions": "Users & Permissions",
+    "groupPlatformConfig": "Platform Config",
+    "groupAdvanced": "Advanced (Coming Soon)",
+    "users": "Users",
+    "roles": "Roles",
+    "orgs": "Organizations",
+    "config": "Platform Settings",
+    "audit": "Audit Log",
+    "aiServices": "AI Services",
+    "backup": "Backup & Restore",
+    "theme": "Platform Theme",
+    "comingSoon": "Coming soon"
   },
   "launcher": {
     "title": "Choose a system",
@@ -748,7 +827,7 @@
     "allSystems": "All systems"
   },
   "topBar": {
-    "designer": "Designer",
+    "designer": "System Design",
     "settings": "Platform Settings",
     "home": "Home"
   }
