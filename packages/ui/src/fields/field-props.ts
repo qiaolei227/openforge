@@ -1,4 +1,4 @@
-import type { Field } from '@openforge/shared';
+import type { Field, FieldType } from '@openforge/shared';
 
 export interface FieldComponentProps {
   field: Field;
@@ -20,3 +20,10 @@ export type SystemQueryFn = (
   table: 'users' | 'orgs',
   params: { keyword?: string; page?: number; pageSize?: number },
 ) => Promise<{ data: Record<string, any>[]; total: number }>;
+
+/** Column definition for the reference picker table */
+export interface PickerColumn {
+  key: string;           // columnName
+  label: string;         // display name
+  fieldType: FieldType;  // for formatting
+}

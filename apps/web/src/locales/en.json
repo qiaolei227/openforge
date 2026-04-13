@@ -661,6 +661,7 @@
     "MODEL_NOT_FOUND": "Model not found",
     "FIELD_COLUMN_NAME_EXISTS": "Field code already exists",
     "FIELD_IS_SYSTEM": "System field cannot be modified",
+    "FIELD_TYPE_NOT_ALLOWED_IN_ENTITY": "This field type is not allowed in entity fields",
     "FIELD_TYPE_CHANGE_UNSAFE": "Field type change is unsafe",
     "FIELD_IN_RECYCLE_BIN": "Field is already in recycle bin",
     "FIELD_NOT_IN_RECYCLE_BIN": "Field is not in recycle bin",
@@ -751,6 +752,7 @@
     "emptyTitle": "No accessible systems",
     "emptyDesc": "Contact your administrator to assign roles and menu permissions",
     "tabs": {
+      "dashboard": "Dashboard",
       "close": "Close",
       "closeOthers": "Close Others",
       "closeRight": "Close to the Right"
@@ -895,11 +897,12 @@
     "draft": "Draft",
     "submitted": "Submitted",
     "approved": "Approved",
-    "pending_revision": "Pending Revision"
+    "reaudit": "Pending Reaudit"
   },
   "actions": {
     "title": "Actions",
     "addCustom": "Add Custom Action",
+    "addChild": "Add Child",
     "edit": "Edit Action",
     "code": "Code",
     "name": "Name",
@@ -925,6 +928,17 @@
     "both": "Both",
     "confirmDelete": "Delete action \"{name}\"?",
     "systemNotDeletable": "System actions cannot be deleted",
-    "scriptDisabled": "Script engine coming in P4"
+    "scriptDisabled": "Script engine coming in P4",
+    "codeFormatHint": "Only lowercase letters, numbers, and underscores; must start with a letter"
+  },
+  "referencePicker": {
+    "title": "Select {modelName}",
+    "search": "Search...",
+    "confirm": "Confirm",
+    "confirmCount": "Confirm ({count})",
+    "cancel": "Cancel",
+    "empty": "No records found",
+    "total": "{total} total",
+    "loading": "Loading..."
   }
 }

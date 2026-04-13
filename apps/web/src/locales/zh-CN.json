@@ -661,6 +661,7 @@
     "MODEL_NOT_FOUND": "模型不存在",
     "FIELD_COLUMN_NAME_EXISTS": "字段编码已存在",
     "FIELD_IS_SYSTEM": "系统字段不可操作",
+    "FIELD_TYPE_NOT_ALLOWED_IN_ENTITY": "实体字段不支持此字段类型",
     "FIELD_TYPE_CHANGE_UNSAFE": "字段类型变更不安全",
     "FIELD_IN_RECYCLE_BIN": "字段已在回收站中",
     "FIELD_NOT_IN_RECYCLE_BIN": "字段不在回收站中",
@@ -751,6 +752,7 @@
     "emptyTitle": "暂无可访问的系统",
     "emptyDesc": "请联系管理员分配角色和菜单权限",
     "tabs": {
+      "dashboard": "工作台",
       "close": "关闭",
       "closeOthers": "关闭其他",
       "closeRight": "关闭右侧"
@@ -895,11 +897,12 @@
     "draft": "草稿",
     "submitted": "已提交",
     "approved": "已通过",
-    "pending_revision": "待修改"
+    "reaudit": "待复审"
   },
   "actions": {
     "title": "操作",
     "addCustom": "添加自定义操作",
+    "addChild": "添加子项",
     "edit": "编辑操作",
     "code": "编码",
     "name": "名称",
@@ -925,6 +928,17 @@
     "both": "全部",
     "confirmDelete": "确定删除操作「{name}」？",
     "systemNotDeletable": "系统操作不可删除",
-    "scriptDisabled": "脚本引擎将在 P4 阶段上线"
+    "scriptDisabled": "脚本引擎将在 P4 阶段上线",
+    "codeFormatHint": "仅支持小写字母、数字和下划线，且以字母开头"
+  },
+  "referencePicker": {
+    "title": "选择{modelName}",
+    "search": "搜索...",
+    "confirm": "确定",
+    "confirmCount": "确定（已选 {count}）",
+    "cancel": "取消",
+    "empty": "暂无数据",
+    "total": "共 {total} 条",
+    "loading": "加载中..."
   }
 }
