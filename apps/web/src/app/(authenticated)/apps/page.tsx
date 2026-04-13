@@ -254,7 +254,7 @@ export default function AppsPage() {
 
       {/* Search Bar + Create */}
       <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative max-w-sm">
           <input
             className={inputClass}
             placeholder={tApps('search')}
@@ -265,6 +265,7 @@ export default function AppsPage() {
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
           )}
         </div>
+        <div className="flex-1" />
         <button onClick={openCreate} className={btnPrimary}>
           <Plus className="w-4 h-4 mr-1" />
           {tApps('create')}

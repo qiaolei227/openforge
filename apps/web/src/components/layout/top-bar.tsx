@@ -1,70 +1,123 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { Settings, Paintbrush } from 'lucide-react';
+import { Settings, Paintbrush, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useArea } from '@/hooks/use-area';
-import { useCurrentApp } from '@/hooks/use-current-app';
 import { SystemSwitcher } from './system-switcher';
 import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
+import { useAuthStore } from '@/stores/auth-store';
+import { useAiStore } from '@/stores/ai-store';
+import { UserMenu } from '../user-menu';
+import { MenuDrawerTrigger } from '@/components/workspace/menu-drawer-trigger';
+import { MenuDrawer } from '@/components/workspace/menu-drawer';
 import { cn } from '@/lib/utils';
+import { useDesignerBreadcrumbStore } from '@/stores/designer-breadcrumb-store';
+import { ChevronRight } from 'lucide-react';
 
 export function TopBar() {
   const area = useArea();
   const t = useTranslations('topBar');
-  const { appCode } = useCurrentApp();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const canAccessDesigner = useCanAccessDesigner();
+  const canAccessSettings = useAuthStore((s) => s.user?.identity === 'admin');
+  const aiStore = useAiStore();
 
   const isDesigner = area === 'designer';
   const isSettings = area === 'settings';
+  const breadcrumbItems = useDesignerBreadcrumbStore((s) => s.items);
 
   return (
-    <header className="h-12 border-b border-border flex items-center px-4 gap-4 shrink-0">
-      {/* Brand / Home link — always visible, always goes to launcher */}
+    <header className="h-12 border-b border-border flex items-center px-4 shrink-0">
+      {/* ─── Left: Brand ─── */}
       <Link
         href="/launcher"
-        className="font-semibold text-base flex items-center gap-2 shrink-0"
+        className="font-semibold text-sm flex items-center gap-2 shrink-0 mr-4"
         title={t('home')}
       >
-        <img src="/logo.svg" alt="OpenForge" width={20} height={20} className="shrink-0" />
-        <span className="hidden sm:inline">OpenForge</span>
+        <img src="/logo.svg" alt="" width={20} height={20} className="shrink-0" />
+        <span className="hidden sm:inline text-primary">OpenForge</span>
       </Link>
 
-      {/* Center — system switcher (workspace/designer) or area label */}
+      {/* ─── Center: System switcher or area label ─── */}
       <div className="flex-1 min-w-0">
         {isSettings && (
-          <span className="text-sm font-medium text-muted-foreground">{t('settings')}</span>
+          <span className="text-sm font-semibold">{t('settings')}</span>
         )}
-        {(area === 'workspace' || area === 'designer') && <SystemSwitcher />}
+        {isDesigner && (
+          <nav className="flex items-center gap-1.5 text-sm">
+            <Link href="/apps" className="text-muted-foreground hover:text-foreground transition-colors">
+              {t('designer')}
+            </Link>
+            {breadcrumbItems.map((item, idx) => (
+              <span key={idx} className="flex items-center gap-1.5">
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                {item.href ? (
+                  <Link href={item.href} className="text-muted-foreground hover:text-foreground transition-colors">
+                    {item.label}
+                  </Link>
+                ) : (
+                  <span className="text-foreground font-medium">{item.label}</span>
+                )}
+              </span>
+            ))}
+          </nav>
+        )}
+        {area === 'workspace' && (
+          <>
+            <SystemSwitcher />
+            <MenuDrawerTrigger onClick={() => setDrawerOpen(true)} />
+          </>
+        )}
       </div>
 
-      {/* Right-side navigation — always show both designer + settings for admin */}
-      <div className="flex items-center gap-1 shrink-0">
+      {/* ─── Right: clean layout ─── */}
+      <div className="flex items-center gap-0.5 shrink-0">
+        {/* Navigation icons */}
         {canAccessDesigner && (
           <Link
             href="/apps"
             className={cn(
               'inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors',
-              isDesigner && 'bg-accent',
+              isDesigner && 'bg-accent text-accent-foreground',
             )}
             title={t('designer')}
           >
             <Paintbrush className="w-4 h-4" />
           </Link>
         )}
-        {canAccessDesigner && (
+        {canAccessSettings && (
           <Link
             href="/settings"
             className={cn(
               'inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors',
-              isSettings && 'bg-accent',
+              isSettings && 'bg-accent text-accent-foreground',
             )}
             title={t('settings')}
           >
             <Settings className="w-4 h-4" />
           </Link>
         )}
+
+        {/* AI assistant */}
+        <button
+          onClick={() => aiStore.toggle()}
+          className={cn(
+            'inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-accent transition-colors',
+            aiStore.isOpen && 'bg-accent text-accent-foreground',
+          )}
+          title="AI 助手"
+        >
+          <Sparkles className="w-4 h-4" />
+        </button>
+
+        {/* User avatar + name dropdown */}
+        <UserMenu />
       </div>
+      {area === 'workspace' && (
+        <MenuDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+      )}
     </header>
   );
 }

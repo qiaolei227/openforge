@@ -23,6 +23,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { useAiStore } from '@/stores/ai-store';
+import { useDesignerBreadcrumbStore } from '@/stores/designer-breadcrumb-store';
 
 /** Color palette matching enum-field.tsx */
 const DICT_ITEM_COLORS = [
@@ -115,6 +116,10 @@ export default function AppDetailPage() {
   const tCommon = useTranslations('common');
   const tErrors = useTranslations('errorCodes');
 
+  // --- breadcrumb ---
+  const setBreadcrumb = useDesignerBreadcrumbStore((s) => s.set);
+  const clearBreadcrumb = useDesignerBreadcrumbStore((s) => s.clear);
+
   // --- app info state ---
   const [app, setApp] = useState<AppItem | null>(null);
   const [appLoading, setAppLoading] = useState(true);
@@ -202,6 +207,12 @@ export default function AppDetailPage() {
   useEffect(() => {
     fetchApp();
   }, [fetchApp]);
+
+  // Sync breadcrumb in TopBar
+  useEffect(() => {
+    if (app) setBreadcrumb([{ label: app.name }]);
+    return () => clearBreadcrumb();
+  }, [app?.name, setBreadcrumb, clearBreadcrumb]);
 
   // --- debounce keyword ---
   useEffect(() => {

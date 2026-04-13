@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { FIELD_TYPES, type LayoutConfig, type Field as SharedField, type SysEntity } from '@openforge/shared';
 import { generateDefaultFormLayout, generateDefaultListLayout } from '@openforge/render-engine';
-import { Breadcrumb } from '@/components/breadcrumb';
+import { useDesignerBreadcrumbStore } from '@/stores/designer-breadcrumb-store';
 import { fieldTypeBadgeClass } from './designer/field-type-styles';
 import { ModelActionsTab } from './components/model-actions-tab';
 import { CreateViewDialog } from './designer/create-view-dialog';
@@ -367,6 +367,17 @@ export default function ModelDetailPage() {
   }, []);
   const [systemFieldsOpen, setSystemFieldsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Sync breadcrumb in TopBar
+  const setBreadcrumb = useDesignerBreadcrumbStore((s) => s.set);
+  const clearBreadcrumb = useDesignerBreadcrumbStore((s) => s.clear);
+  useEffect(() => {
+    setBreadcrumb([
+      { label: app?.name || '...', href: `/apps/${appId}` },
+      { label: model?.name || '...' },
+    ]);
+    return () => clearBreadcrumb();
+  }, [app?.name, model?.name, appId, setBreadcrumb, clearBreadcrumb]);
   const [fieldKeyword, setFieldKeyword] = useState('');
   const [subTableKeyword, setSubTableKeyword] = useState('');
   const [viewKeyword, setViewKeyword] = useState('');
@@ -1242,7 +1253,7 @@ export default function ModelDetailPage() {
   /* ------------------------------------------------------------------ */
 
   return (
-    <div className="-m-6">
+    <div>
       {/* Toast */}
       {toast && (
         <div
@@ -1255,20 +1266,6 @@ export default function ModelDetailPage() {
           {toast.message}
         </div>
       )}
-
-      {/* Breadcrumb — full-width strip at the top */}
-      <div className="px-6 py-2 border-b bg-muted/30">
-        <Breadcrumb
-          items={[
-            { label: tApps('title'), href: '/apps' },
-            { label: app?.name || '...', href: `/apps/${appId}` },
-            { label: model?.name || '...' },
-          ]}
-        />
-      </div>
-
-      {/* Padded content below breadcrumb */}
-      <div className="p-6">
 
       {/* Model Header */}
       {loading ? (
@@ -2889,7 +2886,6 @@ export default function ModelDetailPage() {
         </div>
       )}
 
-    </div>
     </div>
   );
 }
