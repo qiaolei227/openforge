@@ -16,21 +16,29 @@ enum OrgStatus {
   disabled
 }
 
+enum UserIdentity {
+  user
+  designer
+  admin
+}
+
 model SysUser {
-  id           String     @id @default(uuid()) @db.Uuid
-  username     String     @unique @db.VarChar(50)
-  passwordHash String     @map("password_hash") @db.VarChar(255)
-  displayName  String     @map("display_name") @db.VarChar(100)
-  email        String?    @db.VarChar(255)
-  phone        String?    @db.VarChar(20)
-  avatar       String?    @db.VarChar(500)
-  status       UserStatus @default(active)
-  isAdmin      Boolean    @default(false) @map("is_admin")
+  id           String       @id @default(uuid()) @db.Uuid
+  username     String       @unique @db.VarChar(50)
+  passwordHash String       @map("password_hash") @db.VarChar(255)
+  displayName  String       @map("display_name") @db.VarChar(100)
+  email        String?      @db.VarChar(255)
+  phone        String?      @db.VarChar(20)
+  avatar       String?      @db.VarChar(500)
+  status       UserStatus   @default(active)
+  identity     UserIdentity @default(user)
+  isAdmin      Boolean      @default(false) @map("is_admin")
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
 
-  userOrgs  SysUserOrg[]
-  userRoles SysUserRole[]
+  userOrgs    SysUserOrg[]
+  userRoles   SysUserRole[]
+  createdApps SysApp[]     @relation("AppCreator")
 
   @@map("sys_user")
 }
@@ -87,12 +95,14 @@ model SysApp {
   version     String?  @db.VarChar(20)
   themeColor  String?  @map("theme_color") @db.VarChar(20)
   sortOrder   Int      @default(0) @map("sort_order")
+  createdBy   String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  models SysModel[]
-  dicts  SysDict[]
-  menus  SysMenu[] @relation("AppMenus")
+  creator SysUser?   @relation("AppCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  models  SysModel[]
+  dicts   SysDict[]
+  menus   SysMenu[]  @relation("AppMenus")
 
   @@map("sys_app")
 }
