@@ -21,6 +21,9 @@ export function isVirtualFieldType(type: string): boolean {
   return (VIRTUAL_FIELD_TYPES as readonly string[]).includes(type);
 }
 
+/** Field types not allowed on entity (sub-table) fields */
+export const ENTITY_FORBIDDEN_FIELD_TYPES: readonly string[] = ['MULTI_REFERENCE'];
+
 export const ENTITY_TYPES = ['one_to_one', 'one_to_many'] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
@@ -31,11 +34,11 @@ export const SYSTEM_FIELDS = [
   'created_by', 'updated_by', 'created_at', 'updated_at',
 ] as const;
 
-export const DATA_STATUS = ['draft', 'submitted', 'approved', 'pending_revision'] as const;
+export const DATA_STATUS = ['draft', 'submitted', 'approved', 'reaudit'] as const;
 export type DataStatus = (typeof DATA_STATUS)[number];
 
 export const DATA_STATUS_FIELDS = [
-  'data_status', 'submitted_by', 'submitted_at',
+  'data_status', 'submitted_by', 'submitted_at', 'approved_by', 'approved_at',
 ] as const;
 
 export const ACTION_CATEGORIES = ['system', 'custom'] as const;

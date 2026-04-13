@@ -43,6 +43,7 @@ export interface FieldOption {
   // Reference options
   targetModelId?: string;
   targetDisplayField?: string;
+  targetDisplayFields?: string[];   // Custom columns for picker dialog
   // Multi-Reference options
   relTableName?: string;        // Name of the junction table
   reverseFieldId?: string;      // ID of the reverse MULTI_REFERENCE field in target model
