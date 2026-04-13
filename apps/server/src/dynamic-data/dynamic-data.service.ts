@@ -96,7 +96,7 @@ export class DynamicDataService {
     const params: any[] = [id];
     let sql = `SELECT * FROM biz."${model.tableName}" WHERE "id" = $1::uuid`;
 
-    if (model.dataScope === 'private') {
+    if (model.dataScope === 'private' || model.dataScope === 'distributed') {
       params.push(orgId);
       sql += ` AND "org_id" = $2::uuid`;
     }
@@ -184,15 +184,31 @@ export class DynamicDataService {
     // Build column/value lists
     const userColumns = Object.keys(cleanData);
     const userValues = Object.values(cleanData);
-    const isPrivate = model.dataScope === 'private';
+    const needsOrgId = model.dataScope === 'private' || model.dataScope === 'distributed';
+    const isDistributed = model.dataScope === 'distributed';
     const params: any[] = [];
-    params.push(isPrivate ? orgId : null); // $1 = org_id
+    params.push(needsOrgId ? orgId : null); // $1 = org_id
     params.push(userId); // $2 = created_by
     params.push(userId); // $3 = updated_by
+
+    // Distributed models: pre-generate UUID so master_id can reference the same value
+    let idExpr = 'gen_random_uuid()';
+    let masterIdColumnPart = '';
+    let masterIdValuePart = '';
+    let paramOffset = 4; // user columns start at $4 by default
+    if (isDistributed) {
+      const recordId = crypto.randomUUID();
+      params.push(recordId); // $4 = pre-generated id
+      idExpr = '$4::uuid';
+      masterIdColumnPart = ', "master_id"';
+      masterIdValuePart = ', $4::uuid';
+      paramOffset = 5;
+    }
+
     userValues.forEach((v) => params.push(v));
 
     const userColumnsSql = userColumns.map((c) => `"${c}"`).join(', ');
-    const userPlaceholders = userColumns.map((_, i) => `$${i + 4}`).join(', ');
+    const userPlaceholders = userColumns.map((_, i) => `$${i + paramOffset}`).join(', ');
     const columnsPart = userColumns.length > 0 ? `, ${userColumnsSql}` : '';
     const valuesPart = userColumns.length > 0 ? `, ${userPlaceholders}` : '';
 
@@ -201,9 +217,9 @@ export class DynamicDataService {
 
     const sql = `
       INSERT INTO biz."${model.tableName}"
-        ("id", "org_id", "is_archived", "version", "created_by", "updated_by", "created_at", "updated_at"${dataStatusColumnPart}${columnsPart})
+        ("id", "org_id", "is_archived", "version", "created_by", "updated_by", "created_at", "updated_at"${dataStatusColumnPart}${masterIdColumnPart}${columnsPart})
       VALUES
-        (gen_random_uuid(), $1::uuid, false, 1, $2::uuid, $3::uuid, NOW(), NOW()${dataStatusValuePart}${valuesPart})
+        (${idExpr}, $1::uuid, false, 1, $2::uuid, $3::uuid, NOW(), NOW()${dataStatusValuePart}${masterIdValuePart}${valuesPart})
       RETURNING *
     `;
 
@@ -300,7 +316,7 @@ export class DynamicDataService {
     const versionParam = params.length;
     let whereClause = `"id" = $${idParam}::uuid AND "version" = $${versionParam}`;
 
-    if (model.dataScope === 'private') {
+    if (model.dataScope === 'private' || model.dataScope === 'distributed') {
       params.push(orgId);
       whereClause += ` AND "org_id" = $${params.length}::uuid`;
     }
@@ -319,7 +335,7 @@ export class DynamicDataService {
         // Determine cause: not found vs version conflict
         const existsParams: any[] = [id];
         let existsSql = `SELECT "version" FROM biz."${model.tableName}" WHERE "id" = $1::uuid`;
-        if (model.dataScope === 'private') {
+        if (model.dataScope === 'private' || model.dataScope === 'distributed') {
           existsParams.push(orgId);
           existsSql += ` AND "org_id" = $2::uuid`;
         }
@@ -375,7 +391,7 @@ export class DynamicDataService {
     // Check record exists
     const existsParams: any[] = [id];
     let existsSql = `SELECT "id" FROM biz."${model.tableName}" WHERE "id" = $1::uuid`;
-    if (model.dataScope === 'private') {
+    if (model.dataScope === 'private' || model.dataScope === 'distributed') {
       existsParams.push(orgId);
       existsSql += ` AND "org_id" = $2::uuid`;
     }
@@ -417,7 +433,7 @@ export class DynamicDataService {
     // Delete the record
     const deleteParams: any[] = [id];
     let deleteSql = `DELETE FROM biz."${model.tableName}" WHERE "id" = $1::uuid`;
-    if (model.dataScope === 'private') {
+    if (model.dataScope === 'private' || model.dataScope === 'distributed') {
       deleteParams.push(orgId);
       deleteSql += ` AND "org_id" = $2::uuid`;
     }
@@ -449,7 +465,7 @@ export class DynamicDataService {
     // every other org. Only private models are scoped by org_id.
     const params: any[] = [archived, user.userId, id];
     let sql = `UPDATE biz."${model.tableName}" SET "is_archived" = $1, "version" = "version" + 1, "updated_by" = $2::uuid, "updated_at" = NOW() WHERE "id" = $3::uuid`;
-    if (model.dataScope === 'private') {
+    if (model.dataScope === 'private' || model.dataScope === 'distributed') {
       params.push(user.orgId);
       sql += ` AND "org_id" = $4::uuid`;
     }

@@ -10,6 +10,8 @@ const SYSTEM_COLUMNS = [
   'data_status',
   'submitted_by',
   'submitted_at',
+  'approved_by',
+  'approved_at',
   'version',
   'created_by',
   'updated_by',
@@ -61,8 +63,8 @@ export class QueryBuilderService {
       ...fields.map((f) => f.columnName),
     ];
 
-    // org_id filter for private models
-    if (dataScope === 'private') {
+    // org_id filter for private and distributed models
+    if (dataScope === 'private' || dataScope === 'distributed') {
       params.push(orgId);
       conditions.push(`"org_id" = $${params.length}`);
     }
