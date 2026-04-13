@@ -939,6 +939,7 @@
     "cancel": "取消",
     "empty": "暂无数据",
     "total": "共 {total} 条",
-    "loading": "加载中..."
+    "loading": "加载中...",
+    "more": "更多（共 {total} 条）"
   }
 }

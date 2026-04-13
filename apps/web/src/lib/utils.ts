@@ -16,11 +16,26 @@ export function getApiErrorMessage(
   tErrors: (key: string) => string,
   fallback: string,
 ): string {
-  const errorCode = err?.response?.data?.errorCode;
+  const data = err?.response?.data;
+  const errorCode = data?.errorCode;
   if (errorCode) {
     try {
       const mapped = tErrors(errorCode);
-      // next-intl returns the key itself if not found in some configs
+      const base = mapped && mapped !== errorCode ? mapped : fallback;
+
+      // DATA_VALIDATION_FAILED: message contains JSON array of field errors
+      if (errorCode === 'DATA_VALIDATION_FAILED' && data?.message) {
+        try {
+          const fieldErrors = JSON.parse(data.message);
+          if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+            const details = fieldErrors.map((e: any) => e.message ?? e.field).join('; ');
+            return `${base}: ${details}`;
+          }
+        } catch {
+          // message is not JSON, fall through
+        }
+      }
+
       if (mapped && mapped !== errorCode) return mapped;
     } catch {
       // key not found, fall through

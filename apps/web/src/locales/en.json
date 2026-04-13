@@ -939,6 +939,7 @@
     "cancel": "Cancel",
     "empty": "No records found",
     "total": "{total} total",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "more": "More ({total} total)"
   }
 }

@@ -111,38 +111,29 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
     [rows, onChange],
   );
 
-  // ONE_TO_ONE mode: single record form
+  // ONE_TO_ONE mode: single record form — always present, no add/remove
   if (meta.isOneToOne) {
-    const record = rows[0] ?? null;
+    // Auto-initialize empty row if none exists
+    const record = rows[0] ?? (() => {
+      const emptyRow: Record<string, any> = {};
+      for (const f of visibleFields) {
+        emptyRow[f.columnName] = f.defaultValue ?? null;
+      }
+      // Defer the onChange to avoid updating state during render
+      setTimeout(() => onChange([emptyRow]), 0);
+      return emptyRow;
+    })();
+
     return (
-      <div className="rounded-lg border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h4 className="text-sm font-medium">{meta.entityName}</h4>
-          {isEditable && !record && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border bg-background px-3 py-1.5 text-xs hover:bg-accent"
-              onClick={handleAddRow}
-            >
-              <PlusIcon />
-              {t('subTable.create')}
-            </button>
-          )}
-          {isEditable && record && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border bg-background px-3 py-1.5 text-xs text-destructive hover:bg-destructive/10"
-              onClick={() => handleDeleteRows([0])}
-            >
-              <Trash2Icon />
-              {t('subTable.remove')}
-            </button>
-          )}
+      <div className="rounded-lg border bg-background">
+        <div className="border-b bg-muted/30 px-4 py-2.5">
+          <h3 className="text-sm font-medium text-foreground">{meta.entityName}</h3>
         </div>
-        {record && (
-          <div className="grid grid-cols-2 gap-4">
-            {visibleFields.map((field) => (
-              <div key={field.id}>
+        <div className="grid grid-cols-2 gap-4 p-4">
+          {visibleFields.map((field) => {
+            const fullWidth = field.fieldType === 'RICHTEXT' || field.fieldType === 'TEXT';
+            return (
+              <div key={field.id} className={fullWidth ? 'col-span-2' : ''}>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
                   {field.name}
                   {field.isRequired && <span className="ml-0.5 text-destructive">*</span>}
@@ -152,31 +143,43 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
                   value={record[field.columnName]}
                   onChange={(val) => handleCellChange(0, field.columnName, val)}
                   disabled={!isEditable}
-                  extraProps={buildFieldExtraProps?.(field, record ?? {})}
+                  extraProps={buildFieldExtraProps?.(field, record)}
                 />
               </div>
-            ))}
-          </div>
-        )}
-        {!record && (
-          <p className="text-sm text-muted-foreground">{t('subTable.empty')}</p>
-        )}
+            );
+          })}
+        </div>
       </div>
     );
   }
 
   // SubTable mode: inject entityContext for REFERENCE fields
   const buildCellExtraProps = useCallback(
-    (field: Field, row: Record<string, any>) => {
+    (field: Field, row: Record<string, any>, rowIndex: number) => {
       const base = buildFieldExtraProps?.(field, row) ?? {};
       if (field.fieldType === 'REFERENCE') {
-        const existingIds = rows
-          .map((r) => r[field.columnName])
-          .filter(Boolean) as string[];
         base.entityContext = {
-          existingIds,
-          onBatchAddRows: (newRows: Record<string, any>[]) => {
-            onChange([...rows, ...newRows]);
+          existingIds: [],
+          /**
+           * Receives ALL selected records as partial row data.
+           * Assigns sequentially starting from the current row:
+           * fills existing rows in order, appends new rows only
+           * when past the end.
+           */
+          onBatchAddRows: (mappedRows: Record<string, any>[]) => {
+            const updated = [...rows];
+            const newRows: Record<string, any>[] = [];
+
+            for (let i = 0; i < mappedRows.length; i++) {
+              const targetIdx = rowIndex + i;
+              if (targetIdx < updated.length) {
+                updated[targetIdx] = { ...updated[targetIdx], ...mappedRows[i] };
+              } else {
+                newRows.push(mappedRows[i]);
+              }
+            }
+
+            onChange([...updated, ...newRows]);
           },
         };
       }
@@ -298,7 +301,7 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
                       value={row[field.columnName]}
                       onChange={(val) => handleCellChange(rowIndex, field.columnName, val)}
                       disabled={!isEditable}
-                      extraProps={buildCellExtraProps(field, row)}
+                      extraProps={buildCellExtraProps(field, row, rowIndex)}
                     />
                   </td>
                 ))}

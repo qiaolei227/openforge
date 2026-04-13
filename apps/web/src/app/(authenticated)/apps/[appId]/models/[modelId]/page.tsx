@@ -324,8 +324,8 @@ function SortableSubTableRow({
       </td>
       <td className="p-3 text-muted-foreground">{fieldCountText}</td>
       <td className="p-3" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onDelete} className={`${btnGhost} text-destructive hover:text-destructive`}>
-          {deleteText}
+        <button onClick={onDelete} className={`${btnGhost} text-destructive hover:text-destructive`} title={deleteText}>
+          <Trash2 className="w-3.5 h-3.5" />
         </button>
       </td>
     </tr>
@@ -2028,15 +2028,17 @@ export default function ModelDetailPage() {
                                 }
                               }}
                               className={btnGhost}
+                              title={t('designer.setDefault')}
                             >
-                              {t('designer.setDefault')}
+                              <Star className="w-3.5 h-3.5" />
                             </button>
                           )}
                           <button
                             onClick={() => setDeleteViewTarget(view)}
                             className={`${btnGhost} text-destructive hover:text-destructive`}
+                            title={tCommon('delete')}
                           >
-                            {tCommon('delete')}
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </span>
                       </td>

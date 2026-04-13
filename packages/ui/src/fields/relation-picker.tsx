@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { FieldComponentProps, ApiQueryFn } from './field-props';
 import ReferencePickerDialog from './reference-picker-dialog';
 import { usePickerColumns } from './use-picker-columns';
@@ -65,6 +66,7 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
   const [dropdownData, setDropdownData] = useState<Record<string, any>[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [displayText, setDisplayText] = useState(displayValue ?? '');
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -74,10 +76,15 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
     setDisplayText(displayValue ?? '');
   }, [displayValue]);
 
-  // Outside click detection
+  // Outside click detection — check both wrapper and portal dropdown
+  const dropdownRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        wrapperRef.current && !wrapperRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setDropdownOpen(false);
       }
     }
@@ -85,28 +92,36 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Debounced search
+  // Compute dropdown position relative to viewport (for portal)
+  useEffect(() => {
+    if (dropdownOpen && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+  }, [dropdownOpen]);
+
+  const [dropdownTotal, setDropdownTotal] = useState(0);
+
+  // Debounced search — empty/space triggers a load-all query
   const doSearch = useCallback(
     async (kw: string) => {
-      if (!kw.trim() || !queryFn || !targetAppCode || !targetModelCode) {
+      if (!queryFn || !targetAppCode || !targetModelCode) {
         setDropdownData([]);
         setDropdownOpen(false);
         return;
       }
       try {
+        const keyword = kw.trim() || undefined; // empty → load all
         const result = await queryFn(
           { appCode: targetAppCode, modelCode: targetModelCode },
-          {
-            keyword: kw,
-            page: 1,
-            pageSize: 10,
-            includeArchived: false,
-          },
+          { keyword, page: 1, pageSize: 6, includeArchived: false },
         );
-        setDropdownData(result.data);
+        setDropdownData(result.data.slice(0, 5));
+        setDropdownTotal(result.total);
         setDropdownOpen(result.data.length > 0);
       } catch {
         setDropdownData([]);
+        setDropdownTotal(0);
         setDropdownOpen(false);
       }
     },
@@ -198,10 +213,14 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
         )}
       </div>
 
-      {/* Dropdown */}
-      {dropdownOpen && dropdownData.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
-          <div className="max-h-48 overflow-y-auto py-1">
+      {/* Dropdown — rendered via Portal to escape subtable overflow:auto */}
+      {dropdownOpen && dropdownData.length > 0 && dropdownPos && createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[100] rounded-md border bg-popover shadow-md"
+          style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+        >
+          <div className="py-1">
             {dropdownData.map((record) => (
               <button
                 key={record.id}
@@ -213,7 +232,17 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
               </button>
             ))}
           </div>
-        </div>
+          {dropdownTotal > 5 && (
+            <button
+              type="button"
+              className="w-full border-t px-3 py-1.5 text-center text-xs text-primary hover:bg-muted transition-colors"
+              onClick={() => { setDropdownOpen(false); setDialogOpen(true); }}
+            >
+              {t ? t('referencePicker.more', { total: dropdownTotal }) : `更多 (${dropdownTotal})`}
+            </button>
+          )}
+        </div>,
+        document.body,
       )}
 
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
@@ -236,19 +265,18 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
             setDisplayText(record[df] ?? record.id);
           } : undefined}
           onConfirmMultiple={pickerMode === 'multiple' ? (records) => {
+            if (!entityCtx?.onBatchAddRows || records.length === 0) return;
             const df = field.options?.targetDisplayField || 'name';
-            if (records.length > 0) {
-              onChange(records[0].id);
-              setDisplayText(records[0][df] ?? records[0].id);
-            }
-            if (records.length > 1 && entityCtx?.onBatchAddRows) {
-              const columnName = field.columnName;
-              const newRows = records.slice(1).map((r) => ({
-                [columnName]: r.id,
-                [`${columnName}__display`]: r[df] ?? r.id,
-              }));
-              entityCtx.onBatchAddRows(newRows);
-            }
+            const columnName = field.columnName;
+            // Map ALL records to row data — onBatchAddRows handles filling
+            // the current row (first) and appending new rows (rest) in one call.
+            const mapped = records.map((r) => ({
+              [columnName]: r.id,
+              [`${columnName}__display`]: r[df] ?? r.id,
+            }));
+            entityCtx.onBatchAddRows(mapped);
+            // Update local display for the current cell
+            setDisplayText(records[0][df] ?? records[0].id);
           } : undefined}
           t={t ?? ((k: string) => k)}
         />

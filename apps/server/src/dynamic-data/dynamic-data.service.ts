@@ -676,10 +676,11 @@ export class DynamicDataService {
     }
 
     // Use fieldService.findByModelId to get fields with dict choices resolved at runtime
+    // Exclude system fields and entity fields (entity validation happens in ChildrenService)
     const fields = await this.fieldService.findByModelId(model.id);
-    const nonSystemFields = fields.filter((f: any) => !f.isSystem);
+    const modelFields = fields.filter((f: any) => !f.isSystem && !f.entityId);
 
-    return { ...model, fields: nonSystemFields };
+    return { ...model, fields: modelFields };
   }
 
   /**
@@ -725,6 +726,7 @@ export class DynamicDataService {
     data: Record<string, any>,
     fields: Array<{
       id: string;
+      name: string;
       columnName: string;
       fieldType: string;
       isRequired: boolean;
@@ -751,7 +753,7 @@ export class DynamicDataService {
         if (value === null || value === undefined || value === '') {
           errors.push({
             field: field.columnName,
-            message: `Field "${field.columnName}" is required`,
+            message: `"${field.name}" is required`,
           });
           continue;
         }
@@ -766,7 +768,7 @@ export class DynamicDataService {
           if (typeof value !== 'number' || !Number.isInteger(value)) {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must be an integer`,
+              message: `"${field.name}" must be an integer`,
             });
           }
           break;
@@ -775,7 +777,7 @@ export class DynamicDataService {
           if (typeof value !== 'number') {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must be a number`,
+              message: `"${field.name}" must be a number`,
             });
           }
           break;
@@ -784,7 +786,7 @@ export class DynamicDataService {
           if (typeof value !== 'boolean') {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must be a boolean`,
+              message: `"${field.name}" must be a boolean`,
             });
           }
           break;
@@ -793,7 +795,7 @@ export class DynamicDataService {
           if (typeof value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value)) {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must be a valid time (HH:MM or HH:MM:SS)`,
+              message: `"${field.name}" must be a valid time (HH:MM or HH:MM:SS)`,
             });
           }
           break;
@@ -805,7 +807,7 @@ export class DynamicDataService {
           if (choices.length > 0 && !choices.includes(value)) {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must be one of: ${choices.join(', ')}`,
+              message: `"${field.name}" must be one of: ${choices.join(', ')}`,
             });
           }
           break;
@@ -815,7 +817,7 @@ export class DynamicDataService {
           if (!Array.isArray(value)) {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must be an array`,
+              message: `"${field.name}" must be an array`,
             });
             break;
           }
@@ -823,7 +825,7 @@ export class DynamicDataService {
           if (new Set(value).size !== value.length) {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must not contain duplicate values`,
+              message: `"${field.name}" must not contain duplicate values`,
             });
             break;
           }
@@ -835,7 +837,7 @@ export class DynamicDataService {
             if (invalid.length > 0) {
               errors.push({
                 field: field.columnName,
-                message: `Field "${field.columnName}" contains invalid values: ${invalid.join(', ')}`,
+                message: `"${field.name}" contains invalid values: ${invalid.join(', ')}`,
               });
             }
           }
@@ -847,7 +849,7 @@ export class DynamicDataService {
           if (typeof value !== 'string') {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must be a UUID string`,
+              message: `"${field.name}" must be a UUID string`,
             });
             break;
           }
@@ -858,7 +860,7 @@ export class DynamicDataService {
           if (!userExists) {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" references a non-existent user`,
+              message: `"${field.name}" references a non-existent user`,
             });
           }
           break;
@@ -869,7 +871,7 @@ export class DynamicDataService {
           if (typeof value !== 'string') {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must be a UUID string`,
+              message: `"${field.name}" must be a UUID string`,
             });
             break;
           }
@@ -880,7 +882,7 @@ export class DynamicDataService {
           if (!orgExists) {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" references a non-existent organization`,
+              message: `"${field.name}" references a non-existent organization`,
             });
           }
           break;
@@ -891,7 +893,7 @@ export class DynamicDataService {
           if (!Array.isArray(value)) {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" must be an array of file IDs`,
+              message: `"${field.name}" must be an array of file IDs`,
             });
             break;
           }
@@ -899,7 +901,7 @@ export class DynamicDataService {
           if (value.length > maxCount) {
             errors.push({
               field: field.columnName,
-              message: `Field "${field.columnName}" exceeds max file count (${maxCount})`,
+              message: `"${field.name}" exceeds max file count (${maxCount})`,
             });
           }
           break;
@@ -923,7 +925,7 @@ export class DynamicDataService {
         if (uniqueResult[0]?.exists) {
           errors.push({
             field: field.columnName,
-            message: `Field "${field.columnName}" value must be unique`,
+            message: `"${field.name}" value must be unique`,
           });
         }
       }
