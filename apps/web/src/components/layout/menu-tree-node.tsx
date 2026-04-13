@@ -257,7 +257,7 @@ export function MenuTreeNode({ node, depth = 0, compact }: Props) {
 
   const openListTab = useTabStore((s) => s.openListTab);
 
-  /** Open a list tab alongside URL navigation for model-type menu items */
+  /** Open a tab alongside URL navigation for model-type menu items */
   const handleClick = useCallback(() => {
     if (node.type === 'model' && node.targetAppCode && node.targetModelCode) {
       openListTab({
@@ -265,6 +265,7 @@ export function MenuTreeNode({ node, depth = 0, compact }: Props) {
         modelCode: node.targetModelCode,
         modelName: node.name,
         icon: node.icon ?? undefined,
+        viewType: node.targetViewType ?? undefined,
       });
     }
   }, [node, openListTab]);

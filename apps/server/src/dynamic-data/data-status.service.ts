@@ -3,15 +3,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
 
-type StatusAction = 'submit' | 'withdraw' | 'approve' | 'reject' | 'unapprove' | 'revise';
+type StatusAction = 'submit' | 'withdraw' | 'approve' | 'unapprove';
 
-const TRANSITIONS: Record<StatusAction, { from: string; to: string }> = {
-  submit:    { from: 'draft',            to: 'submitted' },
-  withdraw:  { from: 'submitted',        to: 'draft' },
-  approve:   { from: 'submitted',        to: 'approved' },
-  reject:    { from: 'submitted',        to: 'pending_revision' },
-  unapprove: { from: 'approved',         to: 'draft' },
-  revise:    { from: 'pending_revision', to: 'draft' },
+const TRANSITIONS: Record<StatusAction, { from: string[]; to: string }> = {
+  submit:    { from: ['draft', 'reaudit'], to: 'submitted' },
+  withdraw:  { from: ['submitted'],        to: 'draft' },
+  approve:   { from: ['submitted'],        to: 'approved' },
+  unapprove: { from: ['approved'],         to: 'reaudit' },
 };
 
 @Injectable()
@@ -39,11 +37,11 @@ export class DataStatusService {
       }
 
       const record = rows[0];
-      if (record.data_status !== rule.from) {
+      if (!rule.from.includes(record.data_status)) {
         throw new BusinessException(
           409,
           ErrorCodes.DATA_STATUS_INVALID_TRANSITION,
-          `Cannot ${action}: current status is ${record.data_status}, expected ${rule.from}`,
+          `Cannot ${action}: current status is ${record.data_status}, expected one of ${rule.from.join(', ')}`,
         );
       }
 
@@ -54,6 +52,20 @@ export class DataStatusService {
       if (action === 'submit') {
         await tx.$executeRawUnsafe(
           `UPDATE biz."${tableName}" SET "data_status" = $1, "submitted_by" = $2::uuid, "submitted_at" = NOW(), "updated_by" = $2::uuid, "updated_at" = NOW(), "version" = "version" + 1 WHERE "id" = $3::uuid`,
+          rule.to,
+          userId,
+          recordId,
+        );
+      } else if (action === 'approve') {
+        await tx.$executeRawUnsafe(
+          `UPDATE biz."${tableName}" SET "data_status" = $1, "approved_by" = $2::uuid, "approved_at" = NOW(), "updated_by" = $2::uuid, "updated_at" = NOW(), "version" = "version" + 1 WHERE "id" = $3::uuid`,
+          rule.to,
+          userId,
+          recordId,
+        );
+      } else if (action === 'unapprove') {
+        await tx.$executeRawUnsafe(
+          `UPDATE biz."${tableName}" SET "data_status" = $1, "approved_by" = NULL, "approved_at" = NULL, "updated_by" = $2::uuid, "updated_at" = NOW(), "version" = "version" + 1 WHERE "id" = $3::uuid`,
           rule.to,
           userId,
           recordId,

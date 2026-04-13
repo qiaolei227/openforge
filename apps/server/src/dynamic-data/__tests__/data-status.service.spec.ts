@@ -80,35 +80,7 @@ describe('DataStatusService', () => {
       );
     });
 
-    it('should reject to pending_revision', async () => {
-      tx.$queryRawUnsafe.mockResolvedValue([{ data_status: 'submitted', created_by: userId }]);
-      tx.$executeRawUnsafe.mockResolvedValue(1);
-
-      await service.transition(tableName, recordId, 'reject', userId);
-
-      expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
-        expect.stringContaining('"data_status" = $1'),
-        'pending_revision',
-        userId,
-        recordId,
-      );
-    });
-
-    it('should revise pending_revision back to draft', async () => {
-      tx.$queryRawUnsafe.mockResolvedValue([{ data_status: 'pending_revision', created_by: userId }]);
-      tx.$executeRawUnsafe.mockResolvedValue(1);
-
-      await service.transition(tableName, recordId, 'revise', userId);
-
-      expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
-        expect.stringContaining('"data_status" = $1'),
-        'draft',
-        userId,
-        recordId,
-      );
-    });
-
-    it('should unapprove back to draft', async () => {
+    it('should unapprove back to reaudit', async () => {
       tx.$queryRawUnsafe.mockResolvedValue([{ data_status: 'approved', created_by: userId }]);
       tx.$executeRawUnsafe.mockResolvedValue(1);
 
@@ -116,7 +88,7 @@ describe('DataStatusService', () => {
 
       expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
         expect.stringContaining('"data_status" = $1'),
-        'draft',
+        'reaudit',
         userId,
         recordId,
       );

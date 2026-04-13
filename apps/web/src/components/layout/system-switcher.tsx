@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ChevronDown, Loader2, LayoutGrid } from 'lucide-react';
 import { AppIcon } from '@/lib/app-icon';
+import { useTabStore } from '@/stores/tab-store';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -47,7 +48,16 @@ export function SystemSwitcher() {
           {apps.map((app) => (
             <DropdownMenuItem
               key={app.id}
-              onClick={() => router.push(`/workspace/${app.code}`)}
+              onClick={() => {
+                const store = useTabStore.getState();
+                const lastTab = store.getActiveTabForApp(app.code);
+                if (lastTab) {
+                  store.setActiveTab(lastTab.id);
+                  router.push(`/workspace/${lastTab.appCode}/${lastTab.modelCode}`);
+                } else {
+                  router.push(`/workspace/${app.code}`);
+                }
+              }}
               className={cn(
                 'flex items-center gap-2',
                 app.code === appCode && 'bg-accent',

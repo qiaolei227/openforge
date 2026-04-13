@@ -341,6 +341,11 @@ export function RecordPage({
   const handleAction = useCallback(
     async (actionCode: string, _records: Record<string, any>[]) => {
       switch (actionCode) {
+        case 'create': {
+          const { openCreateTab } = useTabStore.getState();
+          openCreateTab({ appCode, modelCode, modelName });
+          break;
+        }
         case 'edit':
           // Already in edit mode or mode is managed by data_status
           break;
@@ -376,10 +381,8 @@ export function RecordPage({
           break;
         case 'submit':
         case 'approve':
-        case 'reject':
         case 'withdraw':
         case 'unapprove':
-        case 'revise':
           try {
             await apiClient.put(
               `/apps/${appCode}/models/${modelCode}/data/${recordId}/status`,

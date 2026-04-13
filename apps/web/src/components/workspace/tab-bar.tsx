@@ -1,8 +1,10 @@
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { useTabStore, type Tab } from '@/stores/tab-store';
-import { ChevronLeft, ChevronRight, X, List, FileText, FilePlus } from 'lucide-react';
+import { useCurrentApp } from '@/hooks/use-current-app';
+import { ChevronLeft, ChevronRight, X, List, FileText, FilePlus, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 
@@ -20,15 +22,27 @@ interface ContextMenuState {
 
 export function TabBar() {
   const t = useTranslations('workspace.tabs');
-  const tabs = useTabStore((s) => s.tabs);
-  const activeTabId = useTabStore((s) => s.activeTabId);
+  const router = useRouter();
+  const pathname = usePathname();
+  const { appCode } = useCurrentApp();
+
+  const allTabs = useTabStore((s) => s.tabs);
+  const activeTab = useTabStore((s) => s.getActiveTabForApp(appCode ?? ''));
+  const activeTabId = activeTab?.id ?? null;
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const closeTab = useTabStore((s) => s.closeTab);
   const closeOtherTabs = useTabStore((s) => s.closeOtherTabs);
   const closeRightTabs = useTabStore((s) => s.closeRightTabs);
 
+  // Only show tabs belonging to the current system
+  const tabs = allTabs.filter((tab) => tab.appCode === appCode);
+
+  // Dashboard tab is active when on /workspace/{appCode} exactly (no model)
+  const isDashboardActive = !!appCode && pathname === `/workspace/${appCode}`;
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeTabRef = useRef<HTMLButtonElement>(null);
+  const dashboardRef = useRef<HTMLButtonElement>(null);
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -57,10 +71,12 @@ export function TabBar() {
 
   // Auto-scroll active tab into view
   useEffect(() => {
-    const tab = activeTabRef.current;
-    if (!tab) return;
-    tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [activeTabId]);
+    if (isDashboardActive) {
+      dashboardRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } else {
+      activeTabRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [activeTabId, isDashboardActive]);
 
   const scrollLeft = () => {
     scrollRef.current?.scrollBy({ left: -120, behavior: 'smooth' });
@@ -70,6 +86,40 @@ export function TabBar() {
     scrollRef.current?.scrollBy({ left: 120, behavior: 'smooth' });
   };
 
+  /** Activate a tab and navigate to its model page */
+  const handleActivate = useCallback(
+    (tab: Tab) => {
+      setActiveTab(tab.id);
+      router.push(`/workspace/${tab.appCode}/${tab.modelCode}`);
+    },
+    [setActiveTab, router],
+  );
+
+  /** After a close operation, navigate to the new active tab or dashboard */
+  const navigateAfterClose = useCallback(() => {
+    const next = useTabStore.getState().getActiveTabForApp(appCode!);
+    if (next) {
+      router.push(`/workspace/${next.appCode}/${next.modelCode}`);
+    } else {
+      router.push(`/workspace/${appCode}`);
+    }
+  }, [appCode, router]);
+
+  const handleCloseTab = useCallback(
+    (tabId: string) => { closeTab(tabId); navigateAfterClose(); },
+    [closeTab, navigateAfterClose],
+  );
+
+  const handleCloseOthers = useCallback(
+    (tabId: string) => { closeOtherTabs(tabId); navigateAfterClose(); },
+    [closeOtherTabs, navigateAfterClose],
+  );
+
+  const handleCloseRight = useCallback(
+    (tabId: string) => { closeRightTabs(tabId); navigateAfterClose(); },
+    [closeRightTabs, navigateAfterClose],
+  );
+
   const handleContextMenu = (e: React.MouseEvent, tabId: string) => {
     e.preventDefault();
     setContextMenu({ tabId, x: e.clientX, y: e.clientY });
@@ -78,13 +128,11 @@ export function TabBar() {
   const handleMiddleClick = (e: React.MouseEvent, tabId: string) => {
     if (e.button === 1) {
       e.preventDefault();
-      closeTab(tabId);
+      handleCloseTab(tabId);
     }
   };
 
   const closeContextMenu = () => setContextMenu(null);
-
-  if (tabs.length === 0) return null;
 
   return (
     <div className="relative flex items-stretch h-9 border-b border-border bg-background shrink-0">
@@ -106,8 +154,31 @@ export function TabBar() {
         className="flex-1 flex items-stretch overflow-x-auto scrollbar-none"
         style={{ scrollbarWidth: 'none' }}
       >
+        {/* Fixed dashboard tab — always first, not closable */}
+        <div
+          className={cn(
+            'relative flex items-center gap-1.5 px-3 h-full shrink-0 cursor-pointer select-none border-r border-border',
+            'text-sm transition-colors',
+            isDashboardActive
+              ? 'bg-background text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          )}
+          onClick={() => router.push(`/workspace/${appCode}`)}
+        >
+          <button
+            ref={isDashboardActive ? dashboardRef : undefined}
+            type="button"
+            tabIndex={-1}
+            aria-hidden
+            className="absolute inset-0 pointer-events-none"
+          />
+          <LayoutDashboard className="w-3.5 h-3.5 shrink-0" />
+          <span className="whitespace-nowrap">{t('dashboard')}</span>
+        </div>
+
+        {/* Dynamic model tabs */}
         {tabs.map((tab) => {
-          const isActive = tab.id === activeTabId;
+          const isActive = !isDashboardActive && tab.id === activeTabId;
           const Icon = TAB_ICONS[tab.type];
           return (
             <TabItem
@@ -116,8 +187,8 @@ export function TabBar() {
               isActive={isActive}
               Icon={Icon}
               ref={isActive ? activeTabRef : undefined}
-              onActivate={() => setActiveTab(tab.id)}
-              onClose={() => closeTab(tab.id)}
+              onActivate={() => handleActivate(tab)}
+              onClose={() => handleCloseTab(tab.id)}
               onContextMenu={(e) => handleContextMenu(e, tab.id)}
               onAuxClick={(e) => handleMiddleClick(e, tab.id)}
             />
@@ -155,21 +226,21 @@ export function TabBar() {
             <button
               type="button"
               className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors"
-              onClick={() => closeTab(contextMenu.tabId)}
+              onClick={() => handleCloseTab(contextMenu.tabId)}
             >
               {t('close')}
             </button>
             <button
               type="button"
               className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors"
-              onClick={() => closeOtherTabs(contextMenu.tabId)}
+              onClick={() => handleCloseOthers(contextMenu.tabId)}
             >
               {t('closeOthers')}
             </button>
             <button
               type="button"
               className="w-full px-3 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors"
-              onClick={() => closeRightTabs(contextMenu.tabId)}
+              onClick={() => handleCloseRight(contextMenu.tabId)}
             >
               {t('closeRight')}
             </button>
