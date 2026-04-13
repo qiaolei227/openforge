@@ -31,3 +31,4 @@ export function getFieldComponent(fieldType: FieldType) {
 
 export { SubTableField } from './sub-table-field';
 export type { SubTableProps, ChildrenMeta } from './sub-table-types';
+export { usePickerColumns } from './use-picker-columns';
