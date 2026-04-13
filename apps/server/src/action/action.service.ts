@@ -13,12 +13,12 @@ const BASE_SYSTEM_ACTIONS = [
 ];
 
 const DATA_STATUS_ACTIONS = [
-  { code: 'submit',    name: '提交',     icon: 'send',         sortOrder: 2, visibility: { dataStatus: ['draft'] } },
-  { code: 'approve',   name: '审核',     icon: 'check-circle', sortOrder: 3, visibility: { dataStatus: ['submitted'] } },
-  { code: 'reject',    name: '驳回',     icon: 'x-circle',     sortOrder: 4, visibility: { dataStatus: ['submitted'] } },
-  { code: 'withdraw',  name: '撤回',     icon: 'undo-2',       sortOrder: 5, visibility: { dataStatus: ['submitted'] } },
-  { code: 'unapprove', name: '反审核',   icon: 'rotate-ccw',   sortOrder: 6, visibility: { dataStatus: ['approved'] } },
-  { code: 'revise',    name: '重新编辑', icon: 'file-edit',    sortOrder: 6, visibility: { dataStatus: ['pending_revision'] } },
+  { code: 'submit',    name: '提交',     icon: 'send',         sortOrder: 2, displayType: 'button', visibility: { dataStatus: ['draft'] } },
+  { code: 'approve',   name: '审核',     icon: 'check-circle', sortOrder: 3, displayType: 'button', visibility: { dataStatus: ['submitted'] } },
+  { code: 'reject',    name: '驳回',     icon: 'x-circle',     sortOrder: 4, displayType: 'button', visibility: { dataStatus: ['submitted'] } },
+  { code: 'withdraw',  name: '撤回',     icon: 'undo-2',       sortOrder: 5, displayType: 'button', visibility: { dataStatus: ['submitted'] } },
+  { code: 'unapprove', name: '反审核',   icon: 'rotate-ccw',   sortOrder: 6, displayType: 'button', visibility: { dataStatus: ['approved'] } },
+  { code: 'revise',    name: '重新编辑', icon: 'file-edit',    sortOrder: 6, displayType: 'button', visibility: { dataStatus: ['pending_revision'] } },
 ];
 
 @Injectable()
