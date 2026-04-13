@@ -6,17 +6,25 @@ import {
   Delete,
   Param,
   Body,
+  Request,
+  Inject,
 } from '@nestjs/common';
 import { DynamicDataService } from './dynamic-data.service';
+import { DataStatusService } from './data-status.service';
 import { QueryDto } from './dto/query.dto';
 import { BatchDto } from './dto/batch.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequestUser } from '../common/interfaces/request-context';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import { BusinessException } from '../common/exceptions/business.exception';
+import { ErrorCodes } from '../common/exceptions/error-codes';
 
 @Controller('apps/:appCode/models/:modelCode/data')
 export class DynamicDataController {
-  constructor(private dynamicDataService: DynamicDataService) {}
+  constructor(
+    @Inject(DynamicDataService) private dynamicDataService: DynamicDataService,
+    @Inject(DataStatusService) private dataStatusService: DataStatusService,
+  ) {}
 
   @Post('query')
   @RequirePermission(
@@ -129,6 +137,31 @@ export class DynamicDataController {
       id,
       archived,
       user,
+    );
+    return { success: true };
+  }
+
+  @Put(':id/status')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'edit',
+  )
+  async transitionStatus(
+    @Param('appCode') appCode: string,
+    @Param('modelCode') modelCode: string,
+    @Param('id') id: string,
+    @Body() body: { action: string },
+    @Request() req: any,
+  ) {
+    const model = await this.dynamicDataService.getModelByAppAndCode(appCode, modelCode);
+    if (!model.enableDataStatus) {
+      throw new BusinessException(400, ErrorCodes.DATA_STATUS_NOT_ENABLED, 'Data status not enabled for this model');
+    }
+    await this.dataStatusService.transition(
+      model.tableName,
+      id,
+      body.action as any,
+      req.user.userId,
     );
     return { success: true };
   }

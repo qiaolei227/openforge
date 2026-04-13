@@ -196,11 +196,14 @@ export class DynamicDataService {
     const columnsPart = userColumns.length > 0 ? `, ${userColumnsSql}` : '';
     const valuesPart = userColumns.length > 0 ? `, ${userPlaceholders}` : '';
 
+    const dataStatusColumnPart = model.enableDataStatus ? `, "data_status"` : '';
+    const dataStatusValuePart = model.enableDataStatus ? `, 'draft'` : '';
+
     const sql = `
       INSERT INTO biz."${model.tableName}"
-        ("id", "org_id", "is_archived", "version", "created_by", "updated_by", "created_at", "updated_at"${columnsPart})
+        ("id", "org_id", "is_archived", "version", "created_by", "updated_by", "created_at", "updated_at"${dataStatusColumnPart}${columnsPart})
       VALUES
-        (gen_random_uuid(), $1::uuid, false, 1, $2::uuid, $3::uuid, NOW(), NOW()${valuesPart})
+        (gen_random_uuid(), $1::uuid, false, 1, $2::uuid, $3::uuid, NOW(), NOW()${dataStatusValuePart}${valuesPart})
       RETURNING *
     `;
 
@@ -251,6 +254,9 @@ export class DynamicDataService {
     orgId: string,
   ) {
     const model = await this.getModelByAppAndCode(appCode, modelCode);
+
+    // Guard: only draft records can be edited when enableDataStatus is on
+    await this.guardDataStatus(model.tableName, id, model.enableDataStatus);
 
     // Extract __children and __relations before processing
     const childrenPayload = data.__children as Record<string, any[]> | undefined;
@@ -362,6 +368,9 @@ export class DynamicDataService {
     orgId: string,
   ) {
     const model = await this.getModelByAppAndCode(appCode, modelCode);
+
+    // Guard: only draft records can be deleted when enableDataStatus is on
+    await this.guardDataStatus(model.tableName, id, model.enableDataStatus);
 
     // Check record exists
     const existsParams: any[] = [id];
@@ -616,7 +625,7 @@ export class DynamicDataService {
   /**
    * Fetch model by (appCode, modelCode) and include active non-system fields.
    */
-  private async getModelByAppAndCode(appCode: string, modelCode: string) {
+  async getModelByAppAndCode(appCode: string, modelCode: string) {
     const model = await this.prisma.sysModel.findFirst({
       where: {
         code: modelCode,
@@ -637,6 +646,29 @@ export class DynamicDataService {
     const nonSystemFields = fields.filter((f: any) => !f.isSystem);
 
     return { ...model, fields: nonSystemFields };
+  }
+
+  /**
+   * Guard edit/delete: if enableDataStatus is true, only draft records can be
+   * modified. Throws 409 DATA_STATUS_NOT_EDITABLE for any other status.
+   */
+  private async guardDataStatus(
+    tableName: string,
+    recordId: string,
+    enableDataStatus: boolean,
+  ): Promise<void> {
+    if (!enableDataStatus) return;
+    const rows = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT "data_status" FROM biz."${tableName}" WHERE "id" = $1::uuid`,
+      recordId,
+    );
+    if (rows.length > 0 && rows[0].data_status !== 'draft') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.DATA_STATUS_NOT_EDITABLE,
+        `Record is ${rows[0].data_status}, only draft records can be edited or deleted`,
+      );
+    }
   }
 
   /**
