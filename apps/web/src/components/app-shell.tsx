@@ -1,20 +1,17 @@
 'use client';
 
 import { useEffect } from 'react';
-import { AreaProvider } from './layout/area-context';
+import { AreaProvider, useAreaContext } from './layout/area-context';
 import { TopBar } from './layout/top-bar';
 import { DynamicSidebarNav } from './layout/dynamic-sidebar-nav';
-import { UserMenu } from './user-menu';
-import { LocaleSwitcher } from './locale-switcher';
-import { ThemeSwitcher } from './theme-switcher';
 import { AiSidebar } from './ai-sidebar';
 import { useAiStore } from '@/stores/ai-store';
-import { Sparkles } from 'lucide-react';
+import { TabBar } from '@/components/workspace/tab-bar';
 
 const AI_OPEN_KEY = 'openforge_ai_open';
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
-  const aiStore = useAiStore();
+  const { area } = useAreaContext();
 
   /* Restore AI panel open state from localStorage */
   useEffect(() => {
@@ -27,29 +24,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   return (
     <>
       <div className="flex flex-col h-screen">
-        {/* Top bar with area-aware context + right-side controls */}
-        <div className="flex items-center shrink-0">
-          <div className="flex-1 min-w-0">
-            <TopBar />
-          </div>
-          <div className="flex items-center gap-1 px-4 h-12 border-b border-border shrink-0">
-            <ThemeSwitcher />
-            <LocaleSwitcher />
-            <UserMenu />
-            <button
-              onClick={() => aiStore.toggle()}
-              className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground hover:opacity-90 transition-opacity ml-1"
-              title="AI 助手"
-            >
-              <Sparkles className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Sidebar + main content */}
+        <TopBar />
         <div className="flex flex-1 min-h-0">
           <DynamicSidebarNav />
-          <main className="flex-1 overflow-auto p-6">{children}</main>
+          <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {area === 'workspace' && <TabBar />}
+            <div className="flex-1 overflow-auto p-6">{children}</div>
+          </main>
         </div>
       </div>
       <AiSidebar />
