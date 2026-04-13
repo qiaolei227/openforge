@@ -44,7 +44,6 @@ import { Breadcrumb } from '@/components/breadcrumb';
 import { fieldTypeBadgeClass } from './designer/field-type-styles';
 import { CreateViewDialog } from './designer/create-view-dialog';
 import { PreviewMode } from './designer/preview-mode';
-import { ModelFieldPermissionsTab } from './components/model-field-permissions-tab';
 import { Badge } from '@/components/ui/badge';
 import {
   Sheet,
@@ -250,8 +249,8 @@ function SortableFieldRow({
         )}
       </td>
       <td className="p-3" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onDelete} className={`${btnGhost} text-destructive hover:text-destructive`}>
-          {tCommon('delete')}
+        <button onClick={onDelete} className={`${btnGhost} text-destructive hover:text-destructive`} title={tCommon('delete')}>
+          <Trash2 className="w-3.5 h-3.5" />
         </button>
       </td>
     </tr>
@@ -352,8 +351,8 @@ export default function ModelDetailPage() {
 
   /* ---------- UI state ---------- */
   const searchParams = useSearchParams();
-  type TabType = 'fields' | 'subtables' | 'views' | 'distribution-policy' | 'field-permissions';
-  const validTabs: TabType[] = ['fields', 'subtables', 'views', 'distribution-policy', 'field-permissions'];
+  type TabType = 'fields' | 'subtables' | 'views' | 'distribution-policy';
+  const validTabs: TabType[] = ['fields', 'subtables', 'views', 'distribution-policy'];
   const initialTab = validTabs.includes(searchParams.get('tab') as TabType)
     ? (searchParams.get('tab') as TabType)
     : 'fields';
@@ -1355,19 +1354,6 @@ export default function ModelDetailPage() {
                 )}
               </button>
             )}
-            <button
-              onClick={() => setActiveTab('field-permissions')}
-              className={`pb-2 text-sm transition-colors relative ${
-                activeTab === 'field-permissions'
-                  ? 'text-foreground font-medium'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tModels('tabs.fieldPermissions')}
-              {activeTab === 'field-permissions' && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
-              )}
-            </button>
           </div>
         </div>
 
@@ -1660,8 +1646,9 @@ export default function ModelDetailPage() {
                             <button
                               onClick={() => setConfirmAction({ field })}
                               className={`${btnGhost} text-destructive hover:text-destructive`}
+                              title={tCommon('delete')}
                             >
-                              {tCommon('delete')}
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </td>
                         </tr>
@@ -2257,12 +2244,6 @@ export default function ModelDetailPage() {
         </div>
       )}
 
-      {/* Field permissions tab content */}
-      {activeTab === 'field-permissions' && (
-        <div className="mt-4">
-          <ModelFieldPermissionsTab modelId={modelId} fields={rootFields} />
-        </div>
-      )}
 
       {/* Field editor drawer */}
       <Sheet open={drawerOpen} onOpenChange={(open) => { if (!open) handleDrawerClose(); }}>
