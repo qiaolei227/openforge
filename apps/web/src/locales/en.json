@@ -835,5 +835,11 @@
     "designer": "System Design",
     "settings": "Platform Settings",
     "home": "Home"
+  },
+  "dataStatus": {
+    "draft": "Draft",
+    "submitted": "Submitted",
+    "approved": "Approved",
+    "pending_revision": "Pending Revision"
   }
 }

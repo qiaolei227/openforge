@@ -835,5 +835,11 @@
     "designer": "系统设计",
     "settings": "平台设置",
     "home": "首页"
+  },
+  "dataStatus": {
+    "draft": "草稿",
+    "submitted": "已提交",
+    "approved": "已通过",
+    "pending_revision": "待修改"
   }
 }
