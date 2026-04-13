@@ -68,6 +68,7 @@ export class DdlManagerService implements OnModuleInit {
     }>,
     dataScope: string,
     isTree = false,
+    enableDataStatus = false,
   ): Promise<void> {
     this.validateName(tableName);
 
@@ -84,6 +85,13 @@ export class DdlManagerService implements OnModuleInit {
       ...(dataScope === 'distributed' ? ['"master_id" UUID NOT NULL'] : []),
       ...(isTree ? ['"parent_id" UUID'] : []),
       '"is_archived" BOOLEAN NOT NULL DEFAULT false',
+      ...(enableDataStatus
+        ? [
+            `"data_status" VARCHAR(20) NOT NULL DEFAULT 'draft'`,
+            '"submitted_by" UUID',
+            '"submitted_at" TIMESTAMPTZ',
+          ]
+        : []),
       '"version" INT NOT NULL DEFAULT 1',
       '"created_by" UUID NOT NULL',
       '"updated_by" UUID NOT NULL',
@@ -306,6 +314,36 @@ export class DdlManagerService implements OnModuleInit {
     const indexName = `idx_${tableName}_${columnName}`;
     const sql = `CREATE INDEX IF NOT EXISTS "${indexName}" ON biz."${tableName}"("${columnName}")`;
     await this.prisma.$executeRawUnsafe(sql);
+  }
+
+  /** Add data_status system columns to an existing table */
+  async addDataStatusColumns(tableName: string): Promise<void> {
+    this.validateName(tableName);
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" ADD COLUMN IF NOT EXISTS "data_status" VARCHAR(20) NOT NULL DEFAULT 'draft'`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" ADD COLUMN IF NOT EXISTS "submitted_by" UUID`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" ADD COLUMN IF NOT EXISTS "submitted_at" TIMESTAMPTZ`,
+    );
+    this.logger.log(`Added data_status columns to biz.${tableName}`);
+  }
+
+  /** Remove data_status system columns from a table */
+  async removeDataStatusColumns(tableName: string): Promise<void> {
+    this.validateName(tableName);
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" DROP COLUMN IF EXISTS "data_status"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" DROP COLUMN IF EXISTS "submitted_by"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" DROP COLUMN IF EXISTS "submitted_at"`,
+    );
+    this.logger.log(`Removed data_status columns from biz.${tableName}`);
   }
 
   /** Check if a table has any data */
