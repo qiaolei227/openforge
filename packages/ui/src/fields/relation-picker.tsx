@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FieldComponentProps, ApiQueryFn } from './field-props';
-import RelationPickerDialog from './relation-picker-dialog';
+import ReferencePickerDialog from './reference-picker-dialog';
+import { usePickerColumns } from './use-picker-columns';
 
 export interface RelationPickerExtraProps {
   queryFn: ApiQueryFn;
@@ -10,6 +11,13 @@ export interface RelationPickerExtraProps {
   targetModelCode: string;
   targetModelName: string;
   displayValue?: string;
+  fetchSchema?: (appCode: string, modelCode: string) => Promise<any>;
+  t?: (key: string, values?: Record<string, any>) => string;
+  /** Entity context for subtable multi-select (injected by buildFieldExtraProps) */
+  entityContext?: {
+    existingIds: string[];
+    onBatchAddRows?: (rows: Record<string, any>[]) => void;
+  };
 }
 
 const INPUT_BASE =
@@ -38,9 +46,19 @@ function ExternalLinkIcon() {
 }
 
 export default function RelationPicker(props: FieldComponentProps & Partial<RelationPickerExtraProps>) {
-  const { field, value, onChange, disabled, error, mode, queryFn, targetAppCode, targetModelCode, targetModelName, displayValue } = props;
+  const { field, value, onChange, disabled, error, mode, queryFn, targetAppCode, targetModelCode, targetModelName, displayValue, fetchSchema, t } = props;
 
   const displayField = field.options?.targetDisplayField || 'id';
+
+  const { columns } = usePickerColumns(
+    field,
+    targetAppCode ?? '',
+    targetModelCode ?? '',
+    fetchSchema ?? (async () => ({ fields: [], views: [] })),
+  );
+
+  const entityCtx = (props as any).entityContext;
+  const pickerMode = entityCtx ? 'multiple' : 'single';
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -115,11 +133,6 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
     setDisplayText('');
     setSearchKeyword('');
     setDropdownOpen(false);
-  }
-
-  function handleDialogSelect(record: Record<string, any>) {
-    onChange(record.id);
-    setDisplayText(record[displayField] ?? String(record.id));
   }
 
   // View mode
@@ -207,15 +220,37 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
 
       {/* Picker dialog */}
       {queryFn && targetAppCode && targetModelCode && (
-        <RelationPickerDialog
+        <ReferencePickerDialog
           open={dialogOpen}
-          onClose={() => setDialogOpen(false)}
-          onSelect={handleDialogSelect}
-          appCode={targetAppCode}
-          modelCode={targetModelCode}
-          displayField={displayField}
-          title={targetModelName ?? ''}
+          onOpenChange={setDialogOpen}
+          mode={pickerMode}
           queryFn={queryFn}
+          targetAppCode={targetAppCode}
+          targetModelCode={targetModelCode}
+          targetModelName={targetModelName ?? ''}
+          columns={columns}
+          excludeIds={entityCtx?.existingIds ?? []}
+          onConfirmSingle={pickerMode === 'single' ? (record) => {
+            const df = field.options?.targetDisplayField || 'name';
+            onChange(record.id);
+            setDisplayText(record[df] ?? record.id);
+          } : undefined}
+          onConfirmMultiple={pickerMode === 'multiple' ? (records) => {
+            const df = field.options?.targetDisplayField || 'name';
+            if (records.length > 0) {
+              onChange(records[0].id);
+              setDisplayText(records[0][df] ?? records[0].id);
+            }
+            if (records.length > 1 && entityCtx?.onBatchAddRows) {
+              const columnName = field.columnName;
+              const newRows = records.slice(1).map((r) => ({
+                [columnName]: r.id,
+                [`${columnName}__display`]: r[df] ?? r.id,
+              }));
+              entityCtx.onBatchAddRows(newRows);
+            }
+          } : undefined}
+          t={t ?? ((k: string) => k)}
         />
       )}
     </div>
