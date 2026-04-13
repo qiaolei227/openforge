@@ -10,12 +10,9 @@ import type { Field } from '@openforge/shared';
 /*  Flatten helpers                                                     */
 /* ------------------------------------------------------------------ */
 
-function isGroup(node: FilterCondition | FilterGroup): node is FilterGroup {
-  return 'conditions' in node;
-}
+import { isFilterGroup, removeAtPath } from '@/lib/filter-utils';
 
 interface FlatCondition {
-  /** Dot-separated path like "0.1" identifying the node in the tree */
   path: number[];
   condition: FilterCondition;
 }
@@ -27,7 +24,7 @@ function flattenConditions(
   const result: FlatCondition[] = [];
   group.conditions.forEach((node, idx) => {
     const path = [...pathPrefix, idx];
-    if (isGroup(node)) {
+    if (isFilterGroup(node)) {
       result.push(...flattenConditions(node, path));
     } else {
       if (node.field) {
@@ -36,17 +33,6 @@ function flattenConditions(
     }
   });
   return result;
-}
-
-/** Immutably remove a node at a given path */
-function removeAtPath(group: FilterGroup, path: number[]): FilterGroup {
-  if (path.length === 1) {
-    return { ...group, conditions: group.conditions.filter((_, i) => i !== path[0]) };
-  }
-  const [head, ...tail] = path;
-  const newConditions = [...group.conditions];
-  newConditions[head] = removeAtPath(newConditions[head] as FilterGroup, tail);
-  return { ...group, conditions: newConditions };
 }
 
 /* ------------------------------------------------------------------ */

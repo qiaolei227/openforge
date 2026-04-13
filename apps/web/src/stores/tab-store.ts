@@ -119,9 +119,11 @@ export const useTabStore = create<TabStore>((set, get) => ({
   },
 
   setDirty(tabId, dirty) {
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, dirty } : t)),
-    }));
+    set((s) => {
+      const tab = s.tabs.find((t) => t.id === tabId);
+      if (!tab || tab.dirty === dirty) return s;
+      return { tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, dirty } : t)) };
+    });
   },
 
   updateListState(tabId, state) {
@@ -133,9 +135,11 @@ export const useTabStore = create<TabStore>((set, get) => ({
   },
 
   updateTitle(tabId, title) {
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title } : t)),
-    }));
+    set((s) => {
+      const tab = s.tabs.find((t) => t.id === tabId);
+      if (!tab || tab.title === title) return s;
+      return { tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title } : t)) };
+    });
   },
 
   getActiveTab() {

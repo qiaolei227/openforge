@@ -92,9 +92,7 @@ export interface FilterPanelProps {
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-function isGroup(node: FilterCondition | FilterGroup): node is FilterGroup {
-  return 'conditions' in node;
-}
+import { isFilterGroup, updateAtPath, removeAtPath, pushAtPath } from '@/lib/filter-utils';
 
 function makeCondition(): FilterCondition {
   return { field: '', op: 'eq' };
@@ -102,54 +100,6 @@ function makeCondition(): FilterCondition {
 
 function makeGroup(): FilterGroup {
   return { op: 'and', conditions: [makeCondition()] };
-}
-
-/** Immutably update a condition/group at a given path (array of indices) */
-function updateAtPath(
-  group: FilterGroup,
-  path: number[],
-  updater: (node: FilterCondition | FilterGroup) => FilterCondition | FilterGroup,
-): FilterGroup {
-  if (path.length === 0) {
-    const updated = updater(group);
-    return updated as FilterGroup;
-  }
-  const [head, ...tail] = path;
-  const newConditions = [...group.conditions];
-  const child = newConditions[head];
-  if (tail.length === 0) {
-    newConditions[head] = updater(child);
-  } else {
-    newConditions[head] = updateAtPath(child as FilterGroup, tail, updater);
-  }
-  return { ...group, conditions: newConditions };
-}
-
-/** Immutably remove a node at a given path */
-function removeAtPath(group: FilterGroup, path: number[]): FilterGroup {
-  if (path.length === 1) {
-    const newConditions = group.conditions.filter((_, i) => i !== path[0]);
-    return { ...group, conditions: newConditions };
-  }
-  const [head, ...tail] = path;
-  const newConditions = [...group.conditions];
-  newConditions[head] = removeAtPath(newConditions[head] as FilterGroup, tail);
-  return { ...group, conditions: newConditions };
-}
-
-/** Immutably push a new node to a group at a given path */
-function pushAtPath(
-  group: FilterGroup,
-  path: number[],
-  node: FilterCondition | FilterGroup,
-): FilterGroup {
-  if (path.length === 0) {
-    return { ...group, conditions: [...group.conditions, node] };
-  }
-  const [head, ...tail] = path;
-  const newConditions = [...group.conditions];
-  newConditions[head] = pushAtPath(newConditions[head] as FilterGroup, tail, node);
-  return { ...group, conditions: newConditions };
 }
 
 /* ------------------------------------------------------------------ */
@@ -481,7 +431,7 @@ function FilterGroupEditor({
       <div className="flex flex-col gap-1.5">
         {group.conditions.map((node, idx) => {
           const childPath = [...path, idx];
-          if (isGroup(node)) {
+          if (isFilterGroup(node)) {
             return (
               <FilterGroupEditor
                 key={idx}

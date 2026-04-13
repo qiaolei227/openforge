@@ -90,7 +90,7 @@ export class ActionService {
     });
   }
 
-  async create(modelId: string, dto: any) {
+  async create(modelId: string, dto: import('./dto/create-action.dto').CreateActionDto) {
     return this.prisma.sysAction.create({
       data: {
         modelId,
@@ -109,7 +109,7 @@ export class ActionService {
     });
   }
 
-  async update(id: string, dto: any) {
+  async update(id: string, dto: import('./dto/create-action.dto').UpdateActionDto) {
     const action = await this.prisma.sysAction.findUnique({ where: { id } });
     if (!action) throw new BusinessException(404, ErrorCodes.ACTION_NOT_FOUND, 'Action not found');
 
