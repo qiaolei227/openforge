@@ -6,26 +6,52 @@ import type { RequestUser } from '../common/interfaces/request-context';
 export class AccessibleAppsService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
-  async listForUser(user: Pick<RequestUser, 'userId' | 'isAdmin'>) {
-    const apps = user.isAdmin
-      ? await this.prisma.sysApp.findMany({
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-        })
-      : await this.prisma.sysApp.findMany({
-          where: {
-            menus: {
-              some: {
-                roleMenus: {
-                  some: {
-                    permissions: { has: 'view' },
-                    role: { userRoles: { some: { userId: user.userId } } },
+  async listForUser(user: Pick<RequestUser, 'userId' | 'isAdmin' | 'identity'>) {
+    let apps;
+
+    if (user.isAdmin) {
+      apps = await this.prisma.sysApp.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      });
+    } else if (user.identity === 'designer') {
+      // Designer sees: apps they created + apps they have menu VIEW permission for
+      apps = await this.prisma.sysApp.findMany({
+        where: {
+          OR: [
+            { createdBy: user.userId },
+            {
+              menus: {
+                some: {
+                  roleMenus: {
+                    some: {
+                      permissions: { has: 'view' },
+                      role: { userRoles: { some: { userId: user.userId } } },
+                    },
                   },
                 },
               },
             },
+          ],
+        },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      });
+    } else {
+      apps = await this.prisma.sysApp.findMany({
+        where: {
+          menus: {
+            some: {
+              roleMenus: {
+                some: {
+                  permissions: { has: 'view' },
+                  role: { userRoles: { some: { userId: user.userId } } },
+                },
+              },
+            },
           },
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-        });
+        },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      });
+    }
 
     return apps.map((a: any) => ({
       id: a.id,

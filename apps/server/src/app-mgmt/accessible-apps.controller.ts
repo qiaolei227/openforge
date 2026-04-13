@@ -17,6 +17,7 @@ export class AccessibleAppsController {
     return this.service.listForUser({
       userId: user.userId,
       isAdmin: user.isAdmin,
+      identity: user.identity,
     });
   }
 }

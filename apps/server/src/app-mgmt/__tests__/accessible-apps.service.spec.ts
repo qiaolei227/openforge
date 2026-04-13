@@ -18,7 +18,7 @@ describe('AccessibleAppsService', () => {
       prisma.sysApp.findMany.mockResolvedValue([
         { id: 'a1', code: 'sales', name: '销售系统', icon: 'ShoppingCart', themeColor: null, sortOrder: 0, description: null },
       ]);
-      const result = await service.listForUser({ userId: 'u1', isAdmin: true });
+      const result = await service.listForUser({ userId: 'u1', isAdmin: true, identity: 'admin' });
       expect(prisma.sysApp.findMany).toHaveBeenCalledWith({
         orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
       });
@@ -29,7 +29,7 @@ describe('AccessibleAppsService', () => {
       prisma.sysApp.findMany.mockResolvedValue([
         { id: 'a1', code: 'sales', name: '销售系统', icon: null, themeColor: '#ef4444', sortOrder: 0, description: null },
       ]);
-      const result = await service.listForUser({ userId: 'u1', isAdmin: false });
+      const result = await service.listForUser({ userId: 'u1', isAdmin: false, identity: 'user' });
       expect(prisma.sysApp.findMany).toHaveBeenCalledWith({
         where: {
           menus: {
@@ -50,8 +50,25 @@ describe('AccessibleAppsService', () => {
 
     it('returns empty array when user has no permissions', async () => {
       prisma.sysApp.findMany.mockResolvedValue([]);
-      const result = await service.listForUser({ userId: 'u1', isAdmin: false });
+      const result = await service.listForUser({ userId: 'u1', isAdmin: false, identity: 'user' });
       expect(result).toEqual([]);
+    });
+
+    it('returns designer-created apps even without role permissions', async () => {
+      prisma.sysApp.findMany.mockResolvedValue([
+        { id: 'a1', code: 'sales', name: '销售系统', icon: null, themeColor: null, sortOrder: 0, description: null },
+      ]);
+      const result = await service.listForUser({ userId: 'u1', isAdmin: false, identity: 'designer' });
+      expect(prisma.sysApp.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              { createdBy: 'u1' },
+            ]),
+          }),
+        }),
+      );
+      expect(result).toHaveLength(1);
     });
   });
 });
