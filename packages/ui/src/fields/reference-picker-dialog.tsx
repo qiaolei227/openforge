@@ -310,7 +310,7 @@ export default function ReferencePickerDialog({
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <h3 className="text-sm font-semibold text-foreground">
-            {t('referencePicker.title', { name: targetModelName })}
+            {t('referencePicker.title', { modelName: targetModelName })}
           </h3>
           <button
             type="button"
@@ -452,7 +452,7 @@ export default function ReferencePickerDialog({
           {/* Left: total + pagination */}
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground">
-              {t('referencePicker.total', { count: total })}
+              {t('referencePicker.total', { total })}
             </span>
             <div className="flex items-center gap-1">
               <button

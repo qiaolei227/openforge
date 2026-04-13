@@ -168,6 +168,7 @@ function Toolbar({ editor }: ToolbarProps) {
 /* ── RichTextField ── */
 export default function RichTextField({ field: _field, value, onChange, disabled, error, mode }: FieldComponentProps) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit,
       Link.configure({ openOnClick: false }),

@@ -149,16 +149,23 @@ export function usePickerColumns(
         }
       }
 
-      // --- Tier 3: single targetDisplayField fallback ---
-      const fallbackColName = field.options?.targetDisplayField ?? 'name';
-      const fallbackField = fieldByColumnName.get(fallbackColName);
-      setColumns([
-        {
+      // --- Tier 3: all non-system fields from target model ---
+      const allCols: PickerColumn[] = schema.fields
+        .filter((f) => !f.isSystem && !f.deletedAt)
+        .map((f) => ({ key: f.columnName, label: f.name, fieldType: f.fieldType }));
+
+      if (allCols.length > 0) {
+        setColumns(allCols);
+      } else {
+        // Absolute fallback: single displayField
+        const fallbackColName = field.options?.targetDisplayField ?? 'name';
+        const fallbackField = fieldByColumnName.get(fallbackColName);
+        setColumns([{
           key: fallbackColName,
           label: fallbackField?.name ?? fallbackColName,
           fieldType: fallbackField?.fieldType ?? 'STRING',
-        },
-      ]);
+        }]);
+      }
       setLoading(false);
     }
 

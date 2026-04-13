@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
@@ -12,8 +12,8 @@ export class FieldService {
   private readonly logger = new Logger(FieldService.name);
 
   constructor(
-    private prisma: PrismaService,
-    private ddlManager: DdlManagerService,
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(DdlManagerService) private ddlManager: DdlManagerService,
   ) {}
 
   /**
@@ -178,6 +178,15 @@ export class FieldService {
         409,
         ErrorCodes.FIELD_COLUMN_NAME_EXISTS,
         `Column name '${dto.columnName}' already exists in this model`,
+      );
+    }
+
+    // Entity fields cannot use MULTI_REFERENCE
+    if (dto.entityId && dto.fieldType === 'MULTI_REFERENCE') {
+      throw new BusinessException(
+        400,
+        ErrorCodes.FIELD_TYPE_NOT_ALLOWED_IN_ENTITY,
+        'MULTI_REFERENCE is not allowed on entity (sub-table) fields',
       );
     }
 
