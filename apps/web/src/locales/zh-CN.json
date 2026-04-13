@@ -710,7 +710,12 @@
     "title": "工作台",
     "loading": "加载中…",
     "emptyTitle": "暂无可访问的系统",
-    "emptyDesc": "请联系管理员分配角色和菜单权限"
+    "emptyDesc": "请联系管理员分配角色和菜单权限",
+    "tabs": {
+      "close": "关闭",
+      "closeOthers": "关闭其他",
+      "closeRight": "关闭右侧"
+    }
   },
   "roles": {
     "title": "角色管理",

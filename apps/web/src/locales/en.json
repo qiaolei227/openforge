@@ -710,7 +710,12 @@
     "title": "Workspace",
     "loading": "Loading…",
     "emptyTitle": "No accessible systems",
-    "emptyDesc": "Contact your administrator to assign roles and menu permissions"
+    "emptyDesc": "Contact your administrator to assign roles and menu permissions",
+    "tabs": {
+      "close": "Close",
+      "closeOthers": "Close Others",
+      "closeRight": "Close to the Right"
+    }
   },
   "roles": {
     "title": "Roles",
