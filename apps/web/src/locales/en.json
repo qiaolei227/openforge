@@ -704,7 +704,43 @@
     "MENU_CROSS_APP": "Menus cannot reference models from other systems — create the menu inside the model's owning system",
     "MENU_TARGET_INCONSISTENT": "Published view does not match selected model/type",
     "MODEL_HAS_MENU_REF": "This model is referenced by one or more menus; remove them first",
-    "VIEW_HAS_MENU_REF": "This view is referenced by one or more menus; remove them first"
+    "VIEW_HAS_MENU_REF": "This view is referenced by one or more menus; remove them first",
+    "DATA_STATUS_INVALID_TRANSITION": "Current status does not allow this action",
+    "DATA_STATUS_NOT_SUBMITTER": "Only the submitter can withdraw",
+    "DATA_STATUS_NOT_ENABLED": "Data status not enabled for this model",
+    "DATA_STATUS_NOT_EDITABLE": "Only draft records can be edited or deleted",
+    "ACTION_NOT_FOUND": "Action not found",
+    "ACTION_SYSTEM_NOT_DELETABLE": "System actions cannot be deleted"
+  },
+  "filter": {
+    "title": "Filter",
+    "addCondition": "Add condition",
+    "addGroup": "Add group",
+    "apply": "Apply",
+    "reset": "Reset",
+    "activeFilters": "Active filters",
+    "clearAll": "Clear all",
+    "valuePlaceholder": "Enter value",
+    "dataStatus": "Data Status",
+    "archived": "Archived",
+    "createdBy": "Created By",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At",
+    "ops": {
+      "eq": "equals",
+      "ne": "not equal",
+      "gt": "greater than",
+      "gte": ">=",
+      "lt": "less than",
+      "lte": "<=",
+      "like": "contains",
+      "in": "is one of",
+      "not_in": "is not one of",
+      "is_null": "is empty",
+      "is_not_null": "is not empty",
+      "contains_any": "contains any of",
+      "contains_all": "contains all of"
+    }
   },
   "workspace": {
     "title": "Workspace",
@@ -715,7 +751,13 @@
       "close": "Close",
       "closeOthers": "Close Others",
       "closeRight": "Close to the Right"
-    }
+    },
+    "refresh": "Refresh",
+    "selectedCount": "{count} selected",
+    "unsavedChanges": "You have unsaved changes. Save before closing?",
+    "save": "Save",
+    "discard": "Discard",
+    "cancel": "Cancel"
   },
   "roles": {
     "title": "Roles",

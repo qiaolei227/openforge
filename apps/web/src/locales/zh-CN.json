@@ -704,7 +704,43 @@
     "MENU_CROSS_APP": "菜单不能引用其他系统的模型——请把菜单建在该模型所属的系统内",
     "MENU_TARGET_INCONSISTENT": "菜单发布的视图与所选模型/类型不一致",
     "MODEL_HAS_MENU_REF": "此模型正在被菜单引用，请先移除菜单",
-    "VIEW_HAS_MENU_REF": "此视图正在被菜单引用，请先移除菜单"
+    "VIEW_HAS_MENU_REF": "此视图正在被菜单引用，请先移除菜单",
+    "DATA_STATUS_INVALID_TRANSITION": "当前状态不允许此操作",
+    "DATA_STATUS_NOT_SUBMITTER": "只有提交人可以撤回",
+    "DATA_STATUS_NOT_ENABLED": "此模型未启用数据状态",
+    "DATA_STATUS_NOT_EDITABLE": "只有草稿状态的数据可以编辑或删除",
+    "ACTION_NOT_FOUND": "操作不存在",
+    "ACTION_SYSTEM_NOT_DELETABLE": "系统操作不可删除"
+  },
+  "filter": {
+    "title": "筛选",
+    "addCondition": "添加条件",
+    "addGroup": "添加条件组",
+    "apply": "应用",
+    "reset": "重置",
+    "activeFilters": "筛选条件",
+    "clearAll": "清除全部",
+    "valuePlaceholder": "输入值",
+    "dataStatus": "数据状态",
+    "archived": "已归档",
+    "createdBy": "创建人",
+    "createdAt": "创建时间",
+    "updatedAt": "更新时间",
+    "ops": {
+      "eq": "等于",
+      "ne": "不等于",
+      "gt": "大于",
+      "gte": "大于等于",
+      "lt": "小于",
+      "lte": "小于等于",
+      "like": "包含",
+      "in": "属于",
+      "not_in": "不属于",
+      "is_null": "为空",
+      "is_not_null": "不为空",
+      "contains_any": "包含任一",
+      "contains_all": "包含全部"
+    }
   },
   "workspace": {
     "title": "工作台",
@@ -715,7 +751,13 @@
       "close": "关闭",
       "closeOthers": "关闭其他",
       "closeRight": "关闭右侧"
-    }
+    },
+    "refresh": "刷新",
+    "selectedCount": "已选 {count} 项",
+    "unsavedChanges": "有未保存的修改，是否保存？",
+    "save": "保存",
+    "discard": "不保存",
+    "cancel": "取消"
   },
   "roles": {
     "title": "角色管理",
