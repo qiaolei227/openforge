@@ -32,3 +32,5 @@ export function getFieldComponent(fieldType: FieldType) {
 export { SubTableField } from './sub-table-field';
 export type { SubTableProps, ChildrenMeta } from './sub-table-types';
 export { usePickerColumns } from './use-picker-columns';
+export { default as ReferencePickerDialog } from './reference-picker-dialog';
+export type { ReferencePickerDialogProps } from './reference-picker-dialog';
