@@ -47,21 +47,32 @@ export function TopBar() {
         )}
         {isDesigner && (
           <nav className="flex items-center gap-1.5 text-sm">
-            <Link href="/apps" className="font-semibold hover:text-foreground/80 transition-colors">
+            <Link
+              href="/apps"
+              className={cn(
+                'font-semibold transition-colors',
+                breadcrumbItems.length > 0
+                  ? 'text-muted-foreground hover:text-foreground'
+                  : 'text-foreground',
+              )}
+            >
               {t('designer')}
             </Link>
-            {breadcrumbItems.map((item, idx) => (
-              <span key={idx} className="flex items-center gap-1.5">
-                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                {item.href ? (
-                  <Link href={item.href} className="text-muted-foreground hover:text-foreground transition-colors">
-                    {item.label}
-                  </Link>
-                ) : (
-                  <span className="font-medium">{item.label}</span>
-                )}
-              </span>
-            ))}
+            {breadcrumbItems.map((item, idx) => {
+              const isLast = idx === breadcrumbItems.length - 1;
+              return (
+                <span key={idx} className="flex items-center gap-1.5">
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />
+                  {item.href ? (
+                    <Link href={item.href} className="text-muted-foreground hover:text-foreground transition-colors">
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <span className="font-semibold text-primary">{item.label}</span>
+                  )}
+                </span>
+              );
+            })}
           </nav>
         )}
         {area === 'workspace' && (
