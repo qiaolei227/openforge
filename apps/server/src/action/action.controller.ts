@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Inject } from '@nestjs/common';
 import { ActionService } from './action.service';
 import { CreateActionDto, UpdateActionDto } from './dto/create-action.dto';
-import { RequirePermission } from '../common/decorators/permission.decorator';
+import { RequirePermission } from '../common/decorators/require-permission.decorator';
 
 @Controller('models/:modelId/actions')
 export class ActionController {

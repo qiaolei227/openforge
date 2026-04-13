@@ -4,6 +4,7 @@ import { ModelService } from '../model.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventBusService } from '../../event-bus/event-bus.service';
 import { DdlManagerService } from '../ddl-manager.service';
+import { ActionService } from '../../action/action.service';
 import { BusinessException } from '../../common/exceptions/business.exception';
 
 describe('ModelService', () => {
@@ -38,6 +39,10 @@ describe('ModelService', () => {
     };
 
     const eventBus = { emit: vi.fn() };
+    const actionService = {
+      generateSystemActions: vi.fn(),
+      syncDataStatusActions: vi.fn(),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -45,6 +50,7 @@ describe('ModelService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: EventBusService, useValue: eventBus },
         { provide: DdlManagerService, useValue: ddlManager },
+        { provide: ActionService, useValue: actionService },
       ],
     }).compile();
 

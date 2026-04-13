@@ -7,6 +7,7 @@ import { ErrorCodes } from '../common/exceptions/error-codes';
 import { CreateModelDto } from './dto/create-model.dto';
 import { UpdateModelDto } from './dto/update-model.dto';
 import { DdlManagerService } from './ddl-manager.service';
+import { ActionService } from '../action/action.service';
 
 export interface ModelQueryParams {
   appId?: string;
@@ -44,6 +45,7 @@ export class ModelService {
     @Inject(PrismaService) private prisma: PrismaService,
     @Inject(EventBusService) private eventBus: EventBusService,
     @Inject(DdlManagerService) private ddlManager: DdlManagerService,
+    @Inject(ActionService) private actionService: ActionService,
   ) {}
 
   async findAll(params: ModelQueryParams = {}) {
@@ -187,8 +189,15 @@ export class ModelService {
   }
 
   async update(id: string, dto: UpdateModelDto) {
-    await this.findById(id);
+    const existing = await this.findById(id);
     // Note: dataScope is intentionally not in UpdateModelDto — it's immutable once created
+
+    // Handle enableDataStatus toggle — must run DDL + action sync before metadata update
+    if (dto.enableDataStatus !== undefined && dto.enableDataStatus !== existing.enableDataStatus) {
+      await this.toggleDataStatus(id, dto.enableDataStatus);
+      await this.actionService.syncDataStatusActions(id, dto.enableDataStatus);
+    }
+
     return this.prisma.sysModel.update({
       where: { id },
       data: {

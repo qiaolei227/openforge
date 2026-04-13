@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
+import { ModelCreatedEvent } from '../event-bus/events';
 
 const BASE_SYSTEM_ACTIONS = [
   { code: 'create',    name: '新建',     icon: 'plus',            sortOrder: 0 },
@@ -23,6 +25,11 @@ const DATA_STATUS_ACTIONS = [
 @Injectable()
 export class ActionService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+
+  @OnEvent('model.created')
+  async handleModelCreated(event: ModelCreatedEvent): Promise<void> {
+    await this.generateSystemActions(event.data.id);
+  }
 
   async generateSystemActions(modelId: string): Promise<void> {
     const model = await this.prisma.sysModel.findUnique({ where: { id: modelId } });

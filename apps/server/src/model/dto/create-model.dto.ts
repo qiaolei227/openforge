@@ -27,4 +27,8 @@ export class CreateModelDto {
   @IsOptional()
   @IsBoolean()
   isTree?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  enableDataStatus?: boolean;
 }
