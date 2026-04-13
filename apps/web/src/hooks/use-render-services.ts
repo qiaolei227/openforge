@@ -23,6 +23,7 @@ export interface RenderServices {
   queryFn: ApiQueryFn;
   systemQueryFn: SystemQueryFn;
   uploadFn: (file: File) => Promise<{ id: string; originalName: string; url: string }>;
+  fetchSchema: (appCode: string, modelCode: string) => Promise<{ fields: any[]; views?: any[] }>;
   relationMeta: RelationMeta;
   /** Fields that have a target model reference (REFERENCE/MULTI_REFERENCE) — for callers that need to iterate them. */
   referenceFields: Field[];
@@ -79,6 +80,14 @@ export function useRenderServices(
     return result;
   }, []);
 
+  const fetchSchema = useCallback(
+    async (appCode: string, modelCode: string) => {
+      const { data } = await apiClient.get(`/apps/${appCode}/models/${modelCode}/data/schema`);
+      return data;
+    },
+    [],
+  );
+
   /* ---------- Stateful: resolve target model metadata for REFERENCE fields ---------- */
 
   const [relationMeta, setRelationMeta] = useState<RelationMeta>({});
@@ -99,8 +108,18 @@ export function useRenderServices(
     return collected;
   }, [fields, entities]);
 
+  // Build a stable key from the set of (columnName → targetModelId) so the
+  // effect only re-runs when the actual targets change, not on every render.
+  const referenceKey = useMemo(() => {
+    if (referenceFields.length === 0) return '';
+    const pairs = referenceFields
+      .map((f) => `${f.columnName}:${f.options?.targetModelId}`)
+      .sort();
+    return pairs.join(',');
+  }, [referenceFields]);
+
   useEffect(() => {
-    if (referenceFields.length === 0) return;
+    if (!referenceKey) return;
     let cancelled = false;
 
     // Dedupe targetModelIds: multiple fields may point at the same model.
@@ -139,12 +158,13 @@ export function useRenderServices(
     return () => {
       cancelled = true;
     };
-  }, [referenceFields]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [referenceKey]);
 
   /* ---------- Stable services object for RenderProvider ---------- */
 
   return useMemo(
-    () => ({ queryFn, systemQueryFn, uploadFn, relationMeta, referenceFields }),
-    [queryFn, systemQueryFn, uploadFn, relationMeta, referenceFields],
+    () => ({ queryFn, systemQueryFn, uploadFn, fetchSchema, relationMeta, referenceFields }),
+    [queryFn, systemQueryFn, uploadFn, fetchSchema, relationMeta, referenceFields],
   );
 }

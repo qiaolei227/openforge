@@ -25,6 +25,7 @@ export function buildFieldExtraProps(
       extraProps.targetModelName = meta.name;
     }
     extraProps.displayValue = data[`${columnName}__display`];
+    if (services.fetchSchema) extraProps.fetchSchema = services.fetchSchema;
   }
 
   if (field.fieldType === 'MULTI_REFERENCE' && services.queryFn) {
@@ -38,6 +39,7 @@ export function buildFieldExtraProps(
     extraProps.targetDisplayField = field.options?.targetDisplayField ?? 'name';
     const m2mData = data[`${columnName}__m2m`];
     if (m2mData) extraProps.value = m2mData;
+    if (services.fetchSchema) extraProps.fetchSchema = services.fetchSchema;
   }
 
   if ((field.fieldType === 'USER' || field.fieldType === 'ORGANIZATION') && services.systemQueryFn) {
@@ -49,6 +51,10 @@ export function buildFieldExtraProps(
     extraProps.uploadFn = services.uploadFn;
     const filesData = services.fileData?.[`${columnName}__files`];
     if (filesData) extraProps.files = filesData;
+  }
+
+  if (services.t) {
+    extraProps.t = services.t;
   }
 
   return extraProps;

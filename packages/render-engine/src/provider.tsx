@@ -83,8 +83,9 @@ export function RenderProvider({
       ...services,
       childrenData: effectiveChildrenData,
       onChildrenChange: effectiveOnChildrenChange,
+      t,
     }),
-    [services, effectiveChildrenData, effectiveOnChildrenChange],
+    [services, effectiveChildrenData, effectiveOnChildrenChange, t],
   );
 
   return (

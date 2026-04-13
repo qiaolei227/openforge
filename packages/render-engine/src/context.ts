@@ -29,6 +29,8 @@ export interface ServiceContextValue {
   relationMeta?: Record<string, { appCode: string; modelCode: string; name: string }>;
   childrenData?: Record<string, Record<string, any>[]>;
   onChildrenChange?: (entityCode: string, rows: Record<string, any>[]) => void;
+  fetchSchema?: (appCode: string, modelCode: string) => Promise<{ fields: any[]; views?: any[] }>;
+  t?: (key: string, values?: Record<string, any>) => string;
 }
 
 const noop = () => {};
