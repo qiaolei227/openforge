@@ -5,12 +5,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
-import { Loader2, Blocks, Plus, Database, ArrowLeft, MoreVertical, Columns3, Eye, BookOpen, Trash2, Pencil } from 'lucide-react';
+import { Loader2, Plus, Database, ArrowLeft, MoreVertical, Columns3, Eye, BookOpen, Trash2, Pencil } from 'lucide-react';
+import { AppIcon } from '@/lib/app-icon';
+import { MenuTab, type MenuCreateType } from './menus/menu-tab';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -134,6 +137,7 @@ export default function AppDetailPage() {
   const [formCode, setFormCode] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formDataScope, setFormDataScope] = useState<'private' | 'shared' | 'distributed'>('private');
+  const [formEnableDataStatus, setFormEnableDataStatus] = useState(false);
   const [formError, setFormError] = useState('');
   const [codeError, setCodeError] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
@@ -144,7 +148,9 @@ export default function AppDetailPage() {
   const [deleteError, setDeleteError] = useState('');
 
   // --- active tab ---
-  const [activeTab, setActiveTab] = useState<'models' | 'dicts'>('models');
+  const [activeTab, setActiveTab] = useState<'models' | 'dicts' | 'menus'>('models');
+  const tMenus = useTranslations('menus');
+  const [menuCreateType, setMenuCreateType] = useState<MenuCreateType | null>(null);
 
   // --- dict state ---
   const [dicts, setDicts] = useState<DictData[]>([]);
@@ -252,6 +258,7 @@ export default function AppDetailPage() {
     setFormCode(model.code);
     setFormDescription(model.description || '');
     setFormDataScope(model.dataScope);
+    setFormEnableDataStatus(!!(model as any).enableDataStatus);
     setFormError('');
     setCodeError('');
   };
@@ -289,12 +296,14 @@ export default function AppDetailPage() {
           code: formCode,
           description: formDescription || undefined,
           dataScope: formDataScope,
+          enableDataStatus: formEnableDataStatus,
         });
         showToast(tModels('createSuccess'), 'success');
       } else if (dialogMode === 'edit' && editingModel) {
         await apiClient.put(`/models/${editingModel.id}`, {
           name: formName,
           description: formDescription || undefined,
+          enableDataStatus: formEnableDataStatus,
         });
         showToast(tModels('updateSuccess'), 'success');
       }
@@ -543,7 +552,7 @@ export default function AppDetailPage() {
         <div className="border rounded-lg p-5 mb-6">
           <div className="flex items-start gap-4">
             <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary shrink-0">
-              <Blocks className="w-6 h-6" />
+              <AppIcon iconName={app.icon} className="w-6 h-6" />
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-semibold mb-1">{app.name}</h2>
@@ -595,18 +604,56 @@ export default function AppDetailPage() {
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('menus')}
+              className={`pb-2 text-sm transition-colors relative ${
+                activeTab === 'menus'
+                  ? 'text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tMenus('title')}
+              {activeTab === 'menus' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
+              )}
+            </button>
           </div>
         </div>
-        {activeTab === 'models' ? (
+        {activeTab === 'models' && (
           <button onClick={openCreate} className={btnPrimary}>
             <Plus className="w-4 h-4 mr-1" />
             {tModels('create')}
           </button>
-        ) : (
+        )}
+        {activeTab === 'dicts' && (
           <button onClick={openDictCreate} className={btnPrimary}>
             <Plus className="w-4 h-4 mr-1" />
             {tDicts('create')}
           </button>
+        )}
+        {activeTab === 'menus' && (
+          <DropdownMenu>
+            <DropdownMenuTrigger className={btnPrimary}>
+              <Plus className="w-4 h-4 mr-1" />
+              {tMenus('new')}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => setMenuCreateType('group')}>
+                  {tMenus('newGroup')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMenuCreateType('model')}>
+                  {tMenus('newModel')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMenuCreateType('link')}>
+                  {tMenus('newLink')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMenuCreateType('divider')}>
+                  {tMenus('newDivider')}
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
 
@@ -877,6 +924,16 @@ export default function AppDetailPage() {
         </>
       )}
 
+      {/* Menus Tab Content */}
+      {activeTab === 'menus' && (
+        <MenuTab
+          appId={appId}
+          showToast={showToast}
+          createType={menuCreateType}
+          onCreateClose={() => setMenuCreateType(null)}
+        />
+      )}
+
       {/* Create / Edit Dialog */}
       {dialogMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -951,6 +1008,21 @@ export default function AppDetailPage() {
                   <p className="text-xs text-muted-foreground">{tModels('dataScopeImmutable')}</p>
                 )}
               </div>
+
+              {/* Enable Data Status */}
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="enableDataStatus"
+                  checked={formEnableDataStatus}
+                  onChange={(e) => setFormEnableDataStatus(e.target.checked)}
+                  className="h-4 w-4 rounded border-input"
+                />
+                <label htmlFor="enableDataStatus" className="text-sm font-medium cursor-pointer">
+                  {tModels('enableDataStatus')}
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">{tModels('enableDataStatusHint')}</p>
 
               {formError && (
                 <p className="text-sm text-destructive">{formError}</p>

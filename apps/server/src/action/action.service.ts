@@ -6,11 +6,10 @@ import { ErrorCodes } from '../common/exceptions/error-codes';
 import { ModelCreatedEvent } from '../event-bus/events';
 
 const BASE_SYSTEM_ACTIONS = [
-  { code: 'create',    name: '新建',     icon: 'plus',            sortOrder: 0 },
-  { code: 'edit',      name: '编辑',     icon: 'pencil',          sortOrder: 1 },
-  { code: 'delete',    name: '删除',     icon: 'trash-2',         sortOrder: 8 },
-  { code: 'archive',   name: '归档',     icon: 'archive',         sortOrder: 7 },
-  { code: 'unarchive', name: '取消归档', icon: 'archive-restore', sortOrder: 7 },
+  { code: 'create',    name: '新建',     icon: 'plus',            sortOrder: 0, displayType: 'button' },
+  { code: 'delete',    name: '删除',     icon: 'trash-2',         sortOrder: 8, displayType: 'button' },
+  { code: 'archive',   name: '归档',     icon: 'archive',         sortOrder: 7, displayType: 'split' },
+  { code: 'unarchive', name: '取消归档', icon: 'archive-restore', sortOrder: 7, displayType: 'button' },
 ];
 
 const DATA_STATUS_ACTIONS = [
@@ -28,8 +27,13 @@ export class ActionService implements OnModuleInit {
 
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
-  /** Backfill system actions for models that don't have any yet */
+  /** Backfill/repair system actions for all models on startup */
   async onModuleInit() {
+    // Remove stale 'edit' system action (no longer a system action)
+    await this.prisma.sysAction.deleteMany({
+      where: { code: 'edit', category: 'system' },
+    });
+
     const modelsWithoutActions = await this.prisma.sysModel.findMany({
       where: { actions: { none: {} } },
       select: { id: true },
@@ -52,26 +56,51 @@ export class ActionService implements OnModuleInit {
     const model = await this.prisma.sysModel.findUnique({ where: { id: modelId } });
     if (!model) throw new BusinessException(404, ErrorCodes.MODEL_NOT_FOUND, 'Model not found');
 
-    const actions = [...BASE_SYSTEM_ACTIONS];
+    const allActions = [...BASE_SYSTEM_ACTIONS];
     if (model.enableDataStatus) {
-      actions.push(...DATA_STATUS_ACTIONS);
+      allActions.push(...DATA_STATUS_ACTIONS);
     }
 
+    // Create top-level actions first (exclude unarchive — it's a child of archive)
+    const topLevel = allActions.filter((a) => a.code !== 'unarchive');
     await this.prisma.sysAction.createMany({
-      data: actions.map((a) => ({
+      data: topLevel.map((a) => ({
         modelId,
         code: a.code,
         name: a.name,
         icon: a.icon,
         category: 'system',
         actionType: 'builtin',
-        displayType: 'button',
+        displayType: a.displayType || 'button',
         position: 'both',
         sortOrder: a.sortOrder,
         visibility: (a as any).visibility || null,
       })),
       skipDuplicates: true,
     });
+
+    // Link unarchive as child of archive (split button)
+    const archiveAction = await this.prisma.sysAction.findFirst({
+      where: { modelId, code: 'archive' },
+    });
+    if (archiveAction) {
+      await this.prisma.sysAction.upsert({
+        where: { modelId_code: { modelId, code: 'unarchive' } },
+        create: {
+          modelId,
+          code: 'unarchive',
+          name: '取消归档',
+          icon: 'archive-restore',
+          category: 'system',
+          actionType: 'builtin',
+          displayType: 'button',
+          position: 'both',
+          sortOrder: 7,
+          parentId: archiveAction.id,
+        },
+        update: { parentId: archiveAction.id },
+      });
+    }
   }
 
   async syncDataStatusActions(modelId: string, enableDataStatus: boolean): Promise<void> {
