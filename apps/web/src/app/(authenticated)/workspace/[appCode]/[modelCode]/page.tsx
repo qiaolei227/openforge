@@ -15,6 +15,7 @@ interface ModelSchema {
   code: string;
   tableName: string;
   isTree?: boolean;
+  enableDataStatus?: boolean;
   app: { id: string; code: string; name: string };
   fields: Field[];
 }
@@ -29,8 +30,7 @@ interface ModelSchema {
  * schema via GET /api/apps/:appCode/models/:modelCode/data/schema (also gated by
  * menu:model:* view) and delegates fully to the shared RecordBrowser component.
  *
- * Drawer-based UX (FormDrawer) is accepted as P2.1 tech debt — polish to
- * page-based forms is deferred.
+ * Records open in tabs (detail/create) via useTabStore — no more Drawer.
  */
 export default function WorkspaceModelPage() {
   const { appCode, modelCode } = useParams<{
@@ -81,9 +81,11 @@ export default function WorkspaceModelPage() {
         code: schema.code,
         tableName: schema.tableName,
         isTree: schema.isTree,
+        enableDataStatus: schema.enableDataStatus,
         app: { code: schema.app.code },
       }}
       fields={schema.fields}
+      tabId={`workspace-${appCode}-${modelCode}`}
     />
   );
 }

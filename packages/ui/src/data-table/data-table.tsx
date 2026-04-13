@@ -90,6 +90,14 @@ export interface DataTableProps {
   t: (key: string, values?: Record<string, any>) => string;
   /** When provided, overrides auto-generated column order/width/label from fields */
   layoutColumns?: LayoutColumnConfig[];
+  /** When true, the built-in DataTableToolbar is hidden (caller renders its own toolbar) */
+  hideToolbar?: boolean;
+  /** Called whenever the set of selected row IDs changes */
+  onSelectionChange?: (selectedIds: string[], selectedRecords: Record<string, any>[]) => void;
+  /** Called on row double-click (distinct from single-click) */
+  onRowDoubleClick?: (record: Record<string, any>) => void;
+  /** Extra columns prepended after checkbox + row number (e.g. data_status) */
+  extraColumns?: ColumnDef<Record<string, any>>[];
 }
 
 export function DataTable({
@@ -112,6 +120,10 @@ export function DataTable({
   renderCell,
   t,
   layoutColumns,
+  hideToolbar,
+  onSelectionChange,
+  onRowDoubleClick,
+  extraColumns,
 }: DataTableProps) {
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [sortField, setSortField] = useState<string | null>(null);
@@ -122,6 +134,15 @@ export function DataTable({
   useEffect(() => {
     setRowSelection({});
   }, [data]);
+
+  // Notify parent of selection changes
+  useEffect(() => {
+    if (onSelectionChange) {
+      const ids = Object.keys(rowSelection).filter((k) => rowSelection[k]);
+      const records = data.filter((r) => ids.includes(r.id));
+      onSelectionChange(ids, records);
+    }
+  }, [rowSelection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track searching state
   useEffect(() => {
@@ -221,6 +242,11 @@ export function DataTable({
       ),
     });
 
+    // Extra columns (e.g. data_status badge) — inserted after checkbox + row number
+    if (extraColumns) {
+      cols.push(...extraColumns);
+    }
+
     // Business field columns
     for (const field of visibleFields) {
       const lc = layoutColumnMap?.get(field.id);
@@ -270,19 +296,21 @@ export function DataTable({
 
   return (
     <div className="flex flex-col border rounded-lg overflow-hidden bg-background">
-      <DataTableToolbar
-        selectedCount={selectedIds.length}
-        searchValue={keyword}
-        onSearchChange={onKeywordChange}
-        searching={searching && keyword.length > 0}
-        includeArchived={includeArchived}
-        onArchiveToggle={onArchiveToggle}
-        onNew={onNew}
-        onBatchArchive={() => onBatchArchive(selectedIds)}
-        onBatchDelete={() => onBatchDelete(selectedIds)}
-        onClearSelection={() => setRowSelection({})}
-        t={t}
-      />
+      {!hideToolbar && (
+        <DataTableToolbar
+          selectedCount={selectedIds.length}
+          searchValue={keyword}
+          onSearchChange={onKeywordChange}
+          searching={searching && keyword.length > 0}
+          includeArchived={includeArchived}
+          onArchiveToggle={onArchiveToggle}
+          onNew={onNew}
+          onBatchArchive={() => onBatchArchive(selectedIds)}
+          onBatchDelete={() => onBatchDelete(selectedIds)}
+          onClearSelection={() => setRowSelection({})}
+          t={t}
+        />
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -338,6 +366,7 @@ export function DataTable({
                   row.original.is_archived ? 'opacity-60' : ''
                 } ${row.getIsSelected() ? 'bg-muted/30' : ''}`}
                 onClick={() => onRowClick(row.original)}
+                onDoubleClick={onRowDoubleClick ? () => onRowDoubleClick(row.original) : undefined}
               >
                 {row.getVisibleCells().map((cell) => (
                   <td

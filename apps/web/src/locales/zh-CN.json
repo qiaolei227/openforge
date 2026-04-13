@@ -426,6 +426,7 @@
     "edit": "编辑{name}",
     "confirmBatchDelete": "确定要删除所选的 {count} 条记录吗？",
     "confirmBatchArchive": "确定要归档所选的 {count} 条记录吗？",
+    "confirmBatchUnarchive": "确定要取消归档所选的 {count} 条记录吗？",
     "deleteHasReferences": "记录被「{model}」引用，无法删除。是否归档？",
     "archiveInstead": "归档",
     "createSuccess": "创建成功",

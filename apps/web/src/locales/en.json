@@ -426,6 +426,7 @@
     "edit": "Edit {name}",
     "confirmBatchDelete": "Are you sure you want to delete {count} records?",
     "confirmBatchArchive": "Are you sure you want to archive {count} records?",
+    "confirmBatchUnarchive": "Are you sure you want to unarchive {count} records?",
     "deleteHasReferences": "Record is referenced by \"{model}\". Archive instead?",
     "archiveInstead": "Archive",
     "createSuccess": "Created successfully",
