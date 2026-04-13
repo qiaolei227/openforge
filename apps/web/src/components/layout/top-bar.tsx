@@ -47,7 +47,7 @@ export function TopBar() {
         )}
         {isDesigner && (
           <nav className="flex items-center gap-1.5 text-sm">
-            <Link href="/apps" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/apps" className="font-semibold hover:text-foreground/80 transition-colors">
               {t('designer')}
             </Link>
             {breadcrumbItems.map((item, idx) => (
@@ -58,7 +58,7 @@ export function TopBar() {
                     {item.label}
                   </Link>
                 ) : (
-                  <span className="text-foreground font-medium">{item.label}</span>
+                  <span className="font-medium">{item.label}</span>
                 )}
               </span>
             ))}

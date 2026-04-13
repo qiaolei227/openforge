@@ -7,13 +7,12 @@ import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import { Loader2, Plus, Database, ArrowLeft, MoreVertical, Columns3, Eye, BookOpen, Trash2, Pencil } from 'lucide-react';
 import { AppIcon } from '@/lib/app-icon';
-import { MenuTab, type MenuCreateType } from './menus/menu-tab';
+import { MenuTab } from './menus/menu-tab';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -155,7 +154,6 @@ export default function AppDetailPage() {
   // --- active tab ---
   const [activeTab, setActiveTab] = useState<'models' | 'dicts' | 'menus'>('models');
   const tMenus = useTranslations('menus');
-  const [menuCreateType, setMenuCreateType] = useState<MenuCreateType | null>(null);
 
   // --- dict state ---
   const [dicts, setDicts] = useState<DictData[]>([]);
@@ -539,14 +537,6 @@ export default function AppDetailPage() {
         </div>
       )}
 
-      {/* Breadcrumb */}
-      <Breadcrumb
-        items={[
-          { label: tApps('title'), href: '/apps' },
-          { label: app?.name || '...' },
-        ]}
-      />
-
       {/* App Info Card */}
       {appLoading ? (
         <div className="border rounded-lg p-5 mb-6 animate-pulse">
@@ -642,30 +632,7 @@ export default function AppDetailPage() {
             {tDicts('create')}
           </button>
         )}
-        {activeTab === 'menus' && (
-          <DropdownMenu>
-            <DropdownMenuTrigger className={btnPrimary}>
-              <Plus className="w-4 h-4 mr-1" />
-              {tMenus('new')}
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => setMenuCreateType('group')}>
-                  {tMenus('newGroup')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setMenuCreateType('model')}>
-                  {tMenus('newModel')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setMenuCreateType('link')}>
-                  {tMenus('newLink')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setMenuCreateType('divider')}>
-                  {tMenus('newDivider')}
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        {/* Menus tab: WYSIWYG editor handles creation internally */}
       </div>
 
       {/* Models Tab Content */}
@@ -937,12 +904,7 @@ export default function AppDetailPage() {
 
       {/* Menus Tab Content */}
       {activeTab === 'menus' && (
-        <MenuTab
-          appId={appId}
-          showToast={showToast}
-          createType={menuCreateType}
-          onCreateClose={() => setMenuCreateType(null)}
-        />
+        <MenuTab appId={appId} />
       )}
 
       {/* Create / Edit Dialog */}
