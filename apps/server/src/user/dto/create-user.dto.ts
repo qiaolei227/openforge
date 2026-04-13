@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, MinLength, IsEmail, ValidateIf } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID, MinLength, IsEmail, ValidateIf, IsIn } from 'class-validator';
 
 export class CreateUserDto {
   @IsString()
@@ -25,4 +25,8 @@ export class CreateUserDto {
 
   @IsUUID()
   orgId!: string;
+
+  @IsOptional()
+  @IsIn(['user', 'designer', 'admin'])
+  identity?: string;
 }

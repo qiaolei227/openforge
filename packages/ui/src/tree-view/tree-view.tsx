@@ -38,7 +38,7 @@ interface TreeRowProps {
 
 function TreeRow({ node, depth, isExpanded, isLoading, columns, onToggle, onClick, isSelected, onSelect, showCheckbox }: TreeRowProps) {
   return (
-    <tr className="border-b last:border-b-0 hover:bg-muted/30 cursor-pointer" onClick={onClick}>
+    <tr className={`border-b last:border-b-0 hover:bg-muted/30${onClick ? ' cursor-pointer' : ''}`} onClick={onClick}>
       {showCheckbox && (
         <td className="w-10 px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
           <input type="checkbox" checked={isSelected} onChange={onSelect} className="h-4 w-4 rounded border-gray-300" />
@@ -122,7 +122,7 @@ export function TreeView({ nodes, columns, loading, expandedIds, onExpand, onCol
         </thead>
         <tbody>
           {visibleRows.map(({ node, depth }) => (
-            <TreeRow key={node.id} node={node} depth={depth} isExpanded={expandedIds.has(node.id)} isLoading={loadingIds.has(node.id)} columns={columns} onToggle={() => handleToggle(node)} onClick={() => onRowClick?.(node)} isSelected={selectedIds?.has(node.id) ?? false} onSelect={() => onSelect?.(node.id)} showCheckbox={showCheckbox} />
+            <TreeRow key={node.id} node={node} depth={depth} isExpanded={expandedIds.has(node.id)} isLoading={loadingIds.has(node.id)} columns={columns} onToggle={() => handleToggle(node)} onClick={onRowClick ? () => onRowClick(node) : undefined} isSelected={selectedIds?.has(node.id) ?? false} onSelect={() => onSelect?.(node.id)} showCheckbox={showCheckbox} />
           ))}
           {visibleRows.length === 0 && (
             <tr><td colSpan={columns.length + (showCheckbox ? 1 : 0)} className="px-4 py-8 text-center text-muted-foreground">{t('common.noData')}</td></tr>

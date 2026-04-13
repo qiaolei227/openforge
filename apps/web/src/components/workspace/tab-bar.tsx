@@ -302,7 +302,7 @@ function TabItem({
       <Icon className="w-3.5 h-3.5 shrink-0" />
 
       {/* Title */}
-      <span className="truncate flex-1 min-w-0">{tab.title}</span>
+      <span className="truncate flex-1 min-w-0" title={tab.title}>{tab.title}</span>
 
       {/* Dirty indicator */}
       {tab.dirty && (

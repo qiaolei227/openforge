@@ -244,6 +244,8 @@
     "dataScopeShared": "Shared",
     "dataScopeDistributed": "Distributed",
     "dataScopeImmutable": "Data scope is immutable after creation",
+    "isTree": "Tree Structure",
+    "isTreeHint": "Records support parent-child hierarchy (e.g. org charts, categories). Immutable after creation",
     "enableDataStatus": "Enable Data Status",
     "enableDataStatusHint": "Records will have draft → submitted → approved status workflow, suitable for document-type data",
     "distributionPolicy": "Distribution Policy",
@@ -891,7 +893,11 @@
     "createdBy": "Created by",
     "createdAt": "Created at",
     "updatedBy": "Updated by",
-    "updatedAt": "Updated at"
+    "updatedAt": "Updated at",
+    "submittedBy": "Submitted by",
+    "submittedAt": "Submitted at",
+    "approvedBy": "Approved by",
+    "approvedAt": "Approved at"
   },
   "dataStatus": {
     "draft": "Draft",

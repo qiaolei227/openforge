@@ -5,8 +5,8 @@ import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/components/theme-provider';
 
 export const metadata: Metadata = {
-  title: 'OpenForge Designer',
-  description: 'AI-Native Low-Code Platform Designer',
+  title: 'OpenForge',
+  description: 'AI-Native Low-Code Enterprise Platform',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

@@ -40,6 +40,7 @@ export function RoleFormDialog({ open, onClose, role, onSaved }: Props) {
   const router = useRouter();
   const tCommon = useTranslations('common');
   const tErrors = useTranslations('errorCodes');
+  const tRoles = useTranslations('roles');
 
   const isEdit = !!role;
 
@@ -113,19 +114,19 @@ export function RoleFormDialog({ open, onClose, role, onSaved }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md bg-card border rounded-lg p-6 shadow-lg">
         <h2 className="text-lg font-semibold mb-4">
-          {isEdit ? '编辑角色' : '新建角色'}
+          {isEdit ? tRoles('edit') : tRoles('new')}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Name */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
-              角色名称 <span className="text-destructive">*</span>
+              {tRoles('name')} <span className="text-destructive">*</span>
             </label>
             <input
               className={inputClass}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例如：销售经理"
+              placeholder={tRoles('namePlaceholder')}
               required
               autoFocus
             />
@@ -134,7 +135,7 @@ export function RoleFormDialog({ open, onClose, role, onSaved }: Props) {
           {/* Code */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
-              角色编码 <span className="text-destructive">*</span>
+              {tRoles('code')} <span className="text-destructive">*</span>
             </label>
             {isEdit ? (
               <>
@@ -144,7 +145,7 @@ export function RoleFormDialog({ open, onClose, role, onSaved }: Props) {
                   disabled
                   readOnly
                 />
-                <p className="text-xs text-muted-foreground">编码创建后不可修改</p>
+                <p className="text-xs text-muted-foreground">{tRoles('codeReadonly')}</p>
               </>
             ) : (
               <>
@@ -152,13 +153,13 @@ export function RoleFormDialog({ open, onClose, role, onSaved }: Props) {
                   className={inputClass}
                   value={code}
                   onChange={handleCodeChange}
-                  placeholder="snake_case，如：sales_manager"
+                  placeholder={tRoles('codePlaceholder')}
                   required
                   pattern="[a-z][a-z0-9_]*"
-                  title="编码只能包含小写字母、数字和下划线，且必须以字母开头"
+                  title={tRoles('codePattern')}
                 />
                 <p className="text-xs text-muted-foreground">
-                  自动根据名称生成，可手动修改；创建后不可更改
+                  {tRoles('codeAutoGenHint')}
                 </p>
               </>
             )}
@@ -166,12 +167,12 @@ export function RoleFormDialog({ open, onClose, role, onSaved }: Props) {
 
           {/* Description */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">描述</label>
+            <label className="text-sm font-medium">{tRoles('description')}</label>
             <textarea
               className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="可选，简短描述角色职责"
+              placeholder={tRoles('descriptionPlaceholder')}
               rows={3}
             />
           </div>

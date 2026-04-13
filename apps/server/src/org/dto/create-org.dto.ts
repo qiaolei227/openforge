@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, Matches } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
 
 export class CreateOrgDto {
   @IsString()
@@ -6,9 +6,7 @@ export class CreateOrgDto {
   name!: string;
 
   @IsString()
-  @Matches(/^[a-zA-Z][a-zA-Z0-9_]{1,49}$/, {
-    message: 'code must start with a letter, contain only letters/numbers/underscores, 2-50 chars',
-  })
+  @IsNotEmpty()
   code!: string;
 
   @IsOptional()

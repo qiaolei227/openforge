@@ -103,7 +103,7 @@ export function ViewPicker({ modelId, value, onChange }: Props) {
         required
       >
         <option value="">请选择视图</option>
-        <optgroup label="默认视图(兜底)">
+        <optgroup label="默认视图">
           {SUPPORTED_TYPES.map(({ type, defaultLabel }) => (
             <option key={`default:${type}`} value={`default:${type}`}>
               {defaultLabel}

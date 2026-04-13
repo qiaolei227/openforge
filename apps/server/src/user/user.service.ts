@@ -58,6 +58,7 @@ export class UserService {
           phone: true,
           avatar: true,
           status: true,
+          identity: true,
           createdAt: true,
           updatedAt: true,
           userOrgs: {
@@ -91,6 +92,7 @@ export class UserService {
         phone: true,
         avatar: true,
         status: true,
+        identity: true,
         createdAt: true,
         updatedAt: true,
         userOrgs: {
@@ -117,6 +119,7 @@ export class UserService {
         displayName: dto.displayName,
         email: dto.email,
         phone: dto.phone,
+        identity: (dto.identity ?? 'user') as 'user' | 'designer' | 'admin',
         userOrgs: {
           create: {
             orgId: dto.orgId,
@@ -131,6 +134,7 @@ export class UserService {
         email: true,
         phone: true,
         status: true,
+        identity: true,
         createdAt: true,
       },
     });
@@ -159,6 +163,7 @@ export class UserService {
         email: true,
         phone: true,
         status: true,
+        identity: true,
         updatedAt: true,
       },
     });

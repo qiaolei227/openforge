@@ -82,6 +82,16 @@ export class PermissionService {
   }
 
   /**
+   * Find an app by its code. Used by PermissionGuard to check designer ownership.
+   */
+  async findAppByCode(code: string) {
+    return this.prisma.sysApp.findUnique({
+      where: { code },
+      select: { id: true, createdBy: true },
+    });
+  }
+
+  /**
    * Form A: 检查用户是否拥有静态资源权限。
    * 查询 sys_role_permission 表（resource + actions 列）。
    */

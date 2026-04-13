@@ -5,6 +5,7 @@ import { AreaProvider, useAreaContext } from './layout/area-context';
 import { TopBar } from './layout/top-bar';
 import { DynamicSidebarNav } from './layout/dynamic-sidebar-nav';
 import { AiSidebar } from './ai-sidebar';
+import { GlobalToast } from './global-toast';
 import { useAiStore } from '@/stores/ai-store';
 import { TabBar } from '@/components/workspace/tab-bar';
 
@@ -34,6 +35,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <AiSidebar />
+      <GlobalToast />
     </>
   );
 }

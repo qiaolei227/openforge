@@ -263,7 +263,6 @@ model SysAction {
   position    String   @default("both") @db.VarChar(20)
   sortOrder   Int      @default(0) @map("sort_order")
   config      Json?    @db.JsonB
-  visibility  Json?    @db.JsonB
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

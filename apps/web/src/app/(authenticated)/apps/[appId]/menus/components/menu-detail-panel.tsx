@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Trash2, Save, Info } from 'lucide-react';
+import { Loader2, Save, Info } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
-import type { AdminMenuNode } from '../page';
+import { IconPicker } from '@/components/icon-picker';
+import type { AdminMenuNode } from '../menu-tab';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -27,10 +28,6 @@ const inputClass =
   'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed';
 const btnPrimary =
   'inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-4 py-2 bg-primary text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none';
-const btnDestructive =
-  'inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-3 py-2 bg-destructive text-white shadow-sm hover:bg-destructive/90 disabled:opacity-50 disabled:pointer-events-none';
-const btnOutline =
-  'inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-3 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:pointer-events-none';
 
 /* ------------------------------------------------------------------ */
 /*  Type labels                                                        */
@@ -60,15 +57,10 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('');
   const [visible, setVisible] = useState(true);
-  const [sortOrder, setSortOrder] = useState(0);
 
   // Submit state
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-
-  // Delete confirm
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   // Sync form when selected menu changes
   useEffect(() => {
@@ -76,9 +68,7 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
     setName(menu.name ?? '');
     setIcon(menu.icon ?? '');
     setVisible(menu.visible ?? true);
-    setSortOrder(menu.sortOrder ?? 0);
     setSaveError('');
-    setDeleteConfirm(false);
   }, [menu]);
 
   if (!menu) {
@@ -99,7 +89,6 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
     try {
       const payload: Record<string, unknown> = {
         visible,
-        sortOrder,
       };
 
       if (!isDivider) {
@@ -115,26 +104,11 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
         name: data.name ?? menu.name,
         icon: data.icon ?? menu.icon,
         visible: data.visible ?? menu.visible,
-        sortOrder: data.sortOrder ?? menu.sortOrder,
       });
     } catch (err: unknown) {
       setSaveError(getApiErrorMessage(err, tErrors, '保存失败'));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    try {
-      await apiClient.delete(`/menus/${menu.id}`);
-      showToast('菜单已删除', 'success');
-      onDeleted();
-    } catch (err: unknown) {
-      showToast(getApiErrorMessage(err, tErrors, '删除失败'), 'error');
-      setDeleteConfirm(false);
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -151,7 +125,7 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
 
       {/* Panel body */}
       <div className="flex-1 overflow-auto p-4">
-        <form onSubmit={handleSave} className="space-y-4">
+        <form id="menu-detail-form" onSubmit={handleSave} className="space-y-4">
           {/* code (read-only) */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -188,34 +162,15 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">
-                  图标{' '}
-                  <span className="text-xs text-muted-foreground">
-                    (Lucide 图标名，可选)
-                  </span>
-                </label>
-                <input
-                  className={inputClass}
-                  value={icon}
-                  onChange={(e) => setIcon(e.target.value)}
-                  placeholder="如：ShoppingCart、Users"
-                />
-              </div>
+              {/* Icon — only for top-level group (no parent) */}
+              {menu.type === 'group' && !menu.parentId && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">图标</label>
+                  <IconPicker value={icon} onChange={setIcon} />
+                </div>
+              )}
             </>
           )}
-
-          {/* sortOrder */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">排序值</label>
-            <input
-              className={inputClass}
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(Number(e.target.value))}
-              placeholder="数字越小越靠前"
-            />
-          </div>
 
           {/* visible toggle */}
           <div className="flex items-center gap-3">
@@ -269,7 +224,7 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
                       {menu.targetViewId}
                     </code>
                   ) : (
-                    <span className="text-muted-foreground italic">默认(兜底)</span>
+                    <span className="text-muted-foreground italic">默认</span>
                   )}
                 </span>
               </div>
@@ -294,59 +249,24 @@ export function MenuDetailPanel({ menu, onSaved, onDeleted, showToast }: Props) 
           {saveError && (
             <p className="text-sm text-destructive">{saveError}</p>
           )}
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 pt-2">
-            <button type="submit" disabled={saving} className={btnPrimary}>
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                  保存中...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-1" />
-                  保存
-                </>
-              )}
-            </button>
-
-            {!deleteConfirm ? (
-              <button
-                type="button"
-                onClick={() => setDeleteConfirm(true)}
-                className={btnDestructive}
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                删除
-              </button>
-            ) : (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className={btnDestructive}
-                >
-                  {deleting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    '确认删除'
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteConfirm(false)}
-                  disabled={deleting}
-                  className={btnOutline}
-                >
-                  取消
-                </button>
-              </div>
-            )}
-          </div>
         </form>
+      </div>
 
+      {/* Fixed footer */}
+      <div className="shrink-0 border-t border-border px-4 py-3 flex justify-end">
+        <button type="submit" form="menu-detail-form" disabled={saving} className={btnPrimary}>
+          {saving ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+              保存中...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4 mr-1" />
+              保存
+            </>
+          )}
+        </button>
       </div>
     </div>
   );

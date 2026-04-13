@@ -54,15 +54,41 @@ export class PermissionGuard implements CanActivate {
     let allowed: boolean;
 
     if (typeof perm.target === 'string') {
-      // Form A: static resource string → sys_role_permission
-      allowed = await this.permissionService.checkResource(user.userId, perm.target, perm.action);
+      // Identity-based check for platform resources
+      const identity = user.identity ?? 'user';
+      if (perm.target === 'sys:self') {
+        allowed = true; // Any authenticated user
+      } else if (perm.target === 'sys:designer' || perm.target === 'sys:menus') {
+        allowed = identity === 'designer' || identity === 'admin';
+      } else if (perm.target.startsWith('sys:') || perm.target.startsWith('platform:')) {
+        allowed = identity === 'admin';
+      } else {
+        // Fallback: check sys_role_permission for non-sys resources
+        allowed = await this.permissionService.checkResource(user.userId, perm.target, perm.action);
+      }
     } else {
       // Form B: function → resolve menuCode → sys_role_menu
       const menuCode = await perm.target(request as Request);
       if (!menuCode) {
         throw new BusinessException(403, ErrorCodes.FORBIDDEN, 'Forbidden');
       }
-      allowed = await this.permissionService.check(user.userId, menuCode, perm.action);
+
+      // Designer auto-gets full access to own systems' data
+      if (user.identity === 'designer' && menuCode.startsWith('menu:model:')) {
+        const appCode = menuCode.split(':')[2];
+        if (appCode) {
+          const app = await this.permissionService.findAppByCode(appCode);
+          if (app?.createdBy === user.userId) {
+            allowed = true;
+          } else {
+            allowed = await this.permissionService.check(user.userId, menuCode, perm.action);
+          }
+        } else {
+          allowed = await this.permissionService.check(user.userId, menuCode, perm.action);
+        }
+      } else {
+        allowed = await this.permissionService.check(user.userId, menuCode, perm.action);
+      }
     }
 
     if (!allowed) {

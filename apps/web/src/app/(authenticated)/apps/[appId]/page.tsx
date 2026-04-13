@@ -57,6 +57,7 @@ interface ModelItem {
   description: string | null;
   dataScope: 'private' | 'shared';
   isTree: boolean;
+  enableDataStatus: boolean;
   createdAt: string;
   updatedAt: string;
   _count?: { fields: number; views: number };
@@ -141,6 +142,7 @@ export default function AppDetailPage() {
   const [formCode, setFormCode] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formDataScope, setFormDataScope] = useState<'private' | 'shared' | 'distributed'>('private');
+  const [formIsTree, setFormIsTree] = useState(false);
   const [formEnableDataStatus, setFormEnableDataStatus] = useState(false);
   const [formError, setFormError] = useState('');
   const [codeError, setCodeError] = useState('');
@@ -256,6 +258,7 @@ export default function AppDetailPage() {
     setFormCode('');
     setFormDescription('');
     setFormDataScope('private');
+    setFormIsTree(false);
     setFormError('');
     setCodeError('');
   };
@@ -305,6 +308,7 @@ export default function AppDetailPage() {
           code: formCode,
           description: formDescription || undefined,
           dataScope: formDataScope,
+          isTree: formIsTree,
           enableDataStatus: formEnableDataStatus,
         });
         showToast(tModels('createSuccess'), 'success');
@@ -710,8 +714,13 @@ export default function AppDetailPage() {
                   onClick={() => router.push(`/apps/${appId}/models/${model.id}`)}
                   className="group relative border rounded-lg p-5 cursor-pointer transition-shadow hover:shadow-md dark:hover:shadow-lg dark:hover:shadow-black/20"
                 >
-                  {/* Data scope badge */}
-                  <div className="absolute top-3 right-12">
+                  {/* Badges: data scope + data status */}
+                  <div className="absolute top-3 right-12 flex items-center gap-1.5">
+                    {model.enableDataStatus && (
+                      <span className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 text-xs font-medium">
+                        {tModels('enableDataStatus')}
+                      </span>
+                    )}
                     {renderDataScopeBadge(model.dataScope)}
                   </div>
 
@@ -981,6 +990,25 @@ export default function AppDetailPage() {
                   <p className="text-xs text-muted-foreground">{tModels('dataScopeImmutable')}</p>
                 )}
               </div>
+
+              {/* Is Tree */}
+              {dialogMode === 'create' && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="isTree"
+                      checked={formIsTree}
+                      onChange={(e) => setFormIsTree(e.target.checked)}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <label htmlFor="isTree" className="text-sm font-medium cursor-pointer">
+                      {tModels('isTree')}
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground -mt-1">{tModels('isTreeHint')}</p>
+                </>
+              )}
 
               {/* Enable Data Status */}
               <div className="flex items-center gap-3">

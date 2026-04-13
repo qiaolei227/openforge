@@ -53,6 +53,16 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!username.trim()) {
+      setError(t('usernameRequired'));
+      return;
+    }
+    if (!password) {
+      setError(t('passwordRequired'));
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -105,7 +115,6 @@ export default function LoginPage() {
                   placeholder={t('usernamePlaceholder')}
                   autoComplete="username"
                   autoFocus
-                  required
                   className="bg-background"
                 />
               </div>
@@ -118,7 +127,6 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t('passwordPlaceholder')}
                   autoComplete="current-password"
-                  required
                   className="bg-background"
                 />
               </div>

@@ -5,6 +5,8 @@ import { Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
+import { IconPicker } from '@/components/icon-picker';
+import { TreeSelect } from '@openforge/ui';
 import { ViewPicker, type ViewSelection } from './view-picker';
 
 /* ------------------------------------------------------------------ */
@@ -24,11 +26,18 @@ interface ModelListResponse {
 
 type CreateType = 'group' | 'model' | 'link' | 'divider';
 
+interface GroupOption {
+  id: string;
+  parentId: string | null;
+  label: string;
+}
+
 interface Props {
   type: CreateType | null;
   open: boolean;
   onClose: () => void;
   appId: string;
+  groups: GroupOption[];
   onCreated: () => void;
   showToast: (message: string, type: 'success' | 'error') => void;
 }
@@ -66,6 +75,7 @@ export function CreateMenuDialog({
   open,
   onClose,
   appId,
+  groups,
   onCreated,
   showToast,
 }: Props) {
@@ -75,6 +85,7 @@ export function CreateMenuDialog({
   // Form fields
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('');
+  const [parentId, setParentId] = useState('');
   const [targetUrl, setTargetUrl] = useState('');
   // For model type: track model selection + view selection
   const [selectedModelId, setSelectedModelId] = useState('');
@@ -93,6 +104,7 @@ export function CreateMenuDialog({
     if (!open) return;
     setName('');
     setIcon('');
+    setParentId('');
     setTargetUrl('');
     setSelectedModelId('');
     setViewSelection(null);
@@ -128,6 +140,7 @@ export function CreateMenuDialog({
     try {
       // Build payload based on type
       const payload: Record<string, unknown> = { type, appId };
+      if (parentId) payload.parentId = parentId;
 
       if (type === 'divider') {
         // Divider has no visible name but backend requires it
@@ -185,10 +198,21 @@ export function CreateMenuDialog({
         <h2 className="text-lg font-semibold mb-4">{title}</h2>
 
         {type === 'divider' ? (
-          /* Divider: no form inputs, just confirm */
+          /* Divider: parent group + confirm */
           <div className="space-y-4">
+            {groups.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">所属分组</label>
+                <TreeSelect
+                  value={parentId || null}
+                  onChange={(val) => setParentId(val ?? '')}
+                  nodes={groups}
+                  placeholder="根级别"
+                />
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">
-              将在菜单列表末尾添加一条分割线，可在属性面板中调整位置。
+              将添加一条分割线。
             </p>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex gap-2 justify-end">
@@ -229,18 +253,26 @@ export function CreateMenuDialog({
               />
             </div>
 
-            {/* Icon */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                图标 <span className="text-xs text-muted-foreground">(Lucide 图标名，可选)</span>
-              </label>
-              <input
-                className={inputClass}
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                placeholder="如：ShoppingCart、Users、Settings"
-              />
-            </div>
+            {/* Icon — only for top-level group (no parent) */}
+            {type === 'group' && !parentId && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">图标</label>
+                <IconPicker value={icon} onChange={setIcon} />
+              </div>
+            )}
+
+            {/* Parent Group */}
+            {groups.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">所属分组</label>
+                <TreeSelect
+                  value={parentId || null}
+                  onChange={(val) => setParentId(val ?? '')}
+                  nodes={groups}
+                  placeholder="根级别"
+                />
+              </div>
+            )}
 
             {/* Model type: model selector + view picker */}
             {type === 'model' && (

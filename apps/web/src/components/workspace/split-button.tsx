@@ -91,20 +91,20 @@ export function SplitButton({
   items,
 }: SplitButtonProps) {
   const { open, setOpen, containerRef } = useDropdown();
+  const allChildrenDisabled = items.length > 0 && items.every((i) => i.disabled);
 
-  const baseClass = cn(
+  const baseVariant = cn(
     'inline-flex items-center text-sm font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
     variant === 'destructive'
       ? 'text-destructive border-destructive/30 hover:bg-destructive/10'
       : 'border-border hover:bg-accent hover:text-accent-foreground',
-    disabled && 'opacity-40 cursor-not-allowed pointer-events-none',
   );
 
   return (
     <div ref={containerRef} className="relative inline-flex">
       {/* Primary action */}
       <button
-        className={cn(baseClass, 'gap-1.5 rounded-l-md px-3 py-1.5 border-r-0')}
+        className={cn(baseVariant, 'gap-1.5 rounded-l-md px-3 py-1.5 border-r-0', disabled && 'opacity-40 cursor-not-allowed pointer-events-none')}
         onClick={onClick}
         disabled={disabled}
       >
@@ -112,11 +112,11 @@ export function SplitButton({
         {label}
       </button>
 
-      {/* Dropdown trigger */}
+      {/* Dropdown trigger — independent of primary disabled state */}
       <button
-        className={cn(baseClass, 'rounded-r-md px-1.5 py-1.5')}
+        className={cn(baseVariant, 'rounded-r-md px-1.5 py-1.5', allChildrenDisabled && 'opacity-40 cursor-not-allowed pointer-events-none')}
         onClick={() => setOpen((v) => !v)}
-        disabled={disabled}
+        disabled={allChildrenDisabled}
         aria-haspopup="true"
         aria-expanded={open}
       >

@@ -33,11 +33,7 @@ interface RoleListResponse {
   total: number;
 }
 
-const ACCESS_OPTIONS: { value: Access; label: string }[] = [
-  { value: 'editable', label: '可编辑' },
-  { value: 'readonly', label: '只读' },
-  { value: 'hidden', label: '隐藏' },
-];
+const ACCESS_KEYS: Access[] = ['editable', 'readonly', 'hidden'];
 
 const inputClass =
   'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring';
@@ -50,6 +46,9 @@ export function ModelFieldPermissionsTab({
   fields: Field[];
 }) {
   const tErrors = useTranslations('errorCodes');
+  const tCommon = useTranslations('common');
+  const tFP = useTranslations('fieldPermissions');
+  const tFields = useTranslations('fields');
 
   const [roles, setRoles] = useState<Role[]>([]);
   const [rolesLoading, setRolesLoading] = useState(true);
@@ -103,14 +102,14 @@ export function ModelFieldPermissionsTab({
         }
         setPermMap(map);
       } catch (err: unknown) {
-        showToast(getApiErrorMessage(err, tErrors, '加载字段权限失败'), 'error');
+        showToast(getApiErrorMessage(err, tErrors, tFP('fetchPermsFailed')), 'error');
       } finally {
         setPermsLoading(false);
       }
     };
 
     load();
-  }, [selectedRoleId, modelId, tErrors, showToast]);
+  }, [selectedRoleId, modelId, tErrors, tFP, showToast]);
 
   // Live-save: optimistic update + rollback on error
   const handleChange = async (fieldId: string, newAccess: Access) => {
@@ -135,10 +134,15 @@ export function ModelFieldPermissionsTab({
     } catch (err: unknown) {
       // Rollback
       setPermMap((prev) => ({ ...prev, [fieldId]: prevAccess }));
-      showToast(getApiErrorMessage(err, tErrors, '保存失败'), 'error');
+      showToast(getApiErrorMessage(err, tErrors, tFP('saveFailed')), 'error');
     } finally {
       setSavingField(null);
     }
+  };
+
+  const fieldTypeLabel = (type: string) => {
+    const key = `type${type}` as Parameters<typeof tFields>[0];
+    return tFields.has(key) ? tFields(key) : type;
   };
 
   const visibleFields = fields.filter((f) => !f.isSystem);
@@ -161,11 +165,11 @@ export function ModelFieldPermissionsTab({
       {/* Role Selector */}
       <div className="flex items-center gap-4 mb-6">
         <div className="flex-1 max-w-sm">
-          <label className="text-sm font-medium block mb-1.5">选择角色</label>
+          <label className="text-sm font-medium block mb-1.5">{tFP('selectRole')}</label>
           {rolesLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" />
-              加载中…
+              {tCommon('loading')}
             </div>
           ) : (
             <select
@@ -173,7 +177,7 @@ export function ModelFieldPermissionsTab({
               value={selectedRoleId}
               onChange={(e) => setSelectedRoleId(e.target.value)}
             >
-              <option value="">— 请选择角色 —</option>
+              <option value="">{tFP('selectRolePlaceholder')}</option>
               {roles.map((role) => (
                 <option key={role.id} value={role.id}>
                   {role.name}（{role.code}）
@@ -184,7 +188,7 @@ export function ModelFieldPermissionsTab({
         </div>
         {selectedRoleId && !permsLoading && (
           <p className="text-sm text-muted-foreground mt-5">
-            {visibleFields.length} 个用户字段
+            {tFP('fieldCount', { count: visibleFields.length })}
           </p>
         )}
       </div>
@@ -192,7 +196,7 @@ export function ModelFieldPermissionsTab({
       {/* Fields Table */}
       {!selectedRoleId ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          请先选择一个角色以配置字段权限
+          {tFP('emptySelectRole')}
         </div>
       ) : permsLoading ? (
         <div className="flex items-center justify-center h-32">
@@ -200,19 +204,19 @@ export function ModelFieldPermissionsTab({
         </div>
       ) : visibleFields.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          该模型暂无用户字段
+          {tFP('emptyFields')}
         </div>
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="p-3 text-left font-medium">字段名称</th>
-                <th className="p-3 text-left font-medium">列名</th>
-                <th className="p-3 text-left font-medium w-24">类型</th>
-                <th className="p-3 text-center font-medium w-28">可编辑</th>
-                <th className="p-3 text-center font-medium w-28">只读</th>
-                <th className="p-3 text-center font-medium w-28">隐藏</th>
+                <th className="p-3 text-left font-medium">{tFP('fieldName')}</th>
+                <th className="p-3 text-left font-medium">{tFP('columnName')}</th>
+                <th className="p-3 text-left font-medium w-24">{tFP('type')}</th>
+                {ACCESS_KEYS.map((key) => (
+                  <th key={key} className="p-3 text-center font-medium w-28">{tFP(key)}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -236,10 +240,10 @@ export function ModelFieldPermissionsTab({
                     </td>
                     <td className="p-3">
                       <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-xs">
-                        {field.fieldType}
+                        {fieldTypeLabel(field.fieldType)}
                       </span>
                     </td>
-                    {ACCESS_OPTIONS.map(({ value }) => (
+                    {ACCESS_KEYS.map((value) => (
                       <td key={value} className="p-3 text-center">
                         <input
                           type="radio"
@@ -263,7 +267,7 @@ export function ModelFieldPermissionsTab({
       {/* Legend */}
       {selectedRoleId && visibleFields.length > 0 && (
         <p className="text-xs text-muted-foreground mt-3">
-          点击单选按钮立即保存。<strong>可编辑</strong>为默认状态（无限制），<strong>只读</strong>使字段不可修改，<strong>隐藏</strong>完全隐藏该字段。
+          {tFP('legend')}
         </p>
       )}
     </div>

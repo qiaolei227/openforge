@@ -18,6 +18,7 @@ import {
 } from '@openforge/render-engine';
 import { useRenderServices } from '@/hooks/use-render-services';
 import { useTabStore } from '@/stores/tab-store';
+import { useToastStore } from '@/stores/toast-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useActions } from '@/hooks/use-actions';
 import { apiClient } from '@/lib/api-client';
@@ -137,6 +138,8 @@ export function RecordPage({
   /* ---------- System info state ---------- */
   const [createdByName, setCreatedByName] = useState('-');
   const [updatedByName, setUpdatedByName] = useState('-');
+  const [submittedByName, setSubmittedByName] = useState('');
+  const [approvedByName, setApprovedByName] = useState('');
 
   /* ---------- Toast ---------- */
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -192,22 +195,12 @@ export function RecordPage({
       const { __childrenMeta, ...regularData } = rec;
       setFormData(regularData);
 
-      // Load children rows if entities exist
+      // Load children rows from inline __childrenMeta.rows
       if (__childrenMeta && typeof __childrenMeta === 'object') {
         const childrenEntries: Record<string, Record<string, any>[]> = {};
-        await Promise.all(
-          Object.entries(__childrenMeta).map(async ([entityCode, meta]: [string, any]) => {
-            try {
-              const { data: rows } = await apiClient.get(
-                `/entities/${meta.entityId}/records?parentId=${recordId}`,
-              );
-              childrenEntries[entityCode] = Array.isArray(rows) ? rows : [];
-            } catch {
-              // Entity records query failed — possibly permission issue; start with empty
-              childrenEntries[entityCode] = [];
-            }
-          }),
-        );
+        for (const [entityCode, meta] of Object.entries(__childrenMeta) as [string, any][]) {
+          childrenEntries[entityCode] = Array.isArray(meta.rows) ? meta.rows : [];
+        }
         setChildrenData(childrenEntries);
       }
 
@@ -224,6 +217,8 @@ export function RecordPage({
       ]);
       setCreatedByName(createdBy);
       setUpdatedByName(updatedBy);
+      if (rec.submitted_by) resolveUserName(rec.submitted_by).then(setSubmittedByName);
+      if (rec.approved_by) resolveUserName(rec.approved_by).then(setApprovedByName);
     } catch (err: unknown) {
       showToast(getApiErrorMessage(err, tErrors, tCommon('fetchFailed')), 'error');
     } finally {
@@ -308,6 +303,14 @@ export function RecordPage({
         setRecord(updated);
         const { __childrenMeta, ...regularData } = updated;
         setFormData(regularData);
+        // Refresh children data from response
+        if (__childrenMeta && typeof __childrenMeta === 'object') {
+          const childrenEntries: Record<string, Record<string, any>[]> = {};
+          for (const [entityCode, meta] of Object.entries(__childrenMeta) as [string, any][]) {
+            childrenEntries[entityCode] = Array.isArray(meta.rows) ? meta.rows : [];
+          }
+          setChildrenData(childrenEntries);
+        }
         showToast(tDataTab('updateSuccess'), 'success');
         dirtyRef.current = false;
         setDirty(tabId, false);
@@ -344,6 +347,11 @@ export function RecordPage({
         case 'create': {
           const { openCreateTab } = useTabStore.getState();
           openCreateTab({ appCode, modelCode, modelName });
+          break;
+        }
+        case 'list': {
+          const { openListTab } = useTabStore.getState();
+          openListTab({ appCode, modelCode, modelName });
           break;
         }
         case 'edit':
@@ -411,7 +419,7 @@ export function RecordPage({
           await apiClient.delete(
             `/apps/${appCode}/models/${modelCode}/data/${recordId}`,
           );
-          showToast(tDataTab('deleteSuccess'), 'success');
+          useToastStore.getState().show(tDataTab('deleteSuccess'), 'success');
           closeTab(tabId);
         } catch (err: any) {
           const errorCode = getApiErrorCode(err);
@@ -551,7 +559,7 @@ export function RecordPage({
 
       {/* System info footer */}
       {!isCreate && record && (
-        <div className="flex items-center gap-6 px-6 py-3 border-t text-xs text-muted-foreground shrink-0">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-6 py-3 border-t text-xs text-muted-foreground shrink-0">
           <span className="inline-flex items-center gap-1">
             <UserIcon className="w-3 h-3" />
             {tRecord('createdBy')}: {createdByName}
@@ -568,6 +576,30 @@ export function RecordPage({
             <Clock className="w-3 h-3" />
             {tRecord('updatedAt')}: {formatDateTime(record.updated_at)}
           </span>
+          {record.submitted_by && (
+            <>
+              <span className="inline-flex items-center gap-1">
+                <UserIcon className="w-3 h-3" />
+                {tRecord('submittedBy')}: {submittedByName}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {tRecord('submittedAt')}: {formatDateTime(record.submitted_at)}
+              </span>
+            </>
+          )}
+          {record.approved_by && (
+            <>
+              <span className="inline-flex items-center gap-1">
+                <UserIcon className="w-3 h-3" />
+                {tRecord('approvedBy')}: {approvedByName}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {tRecord('approvedAt')}: {formatDateTime(record.approved_at)}
+              </span>
+            </>
+          )}
         </div>
       )}
 

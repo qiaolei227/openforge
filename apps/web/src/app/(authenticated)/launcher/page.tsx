@@ -73,7 +73,7 @@ function EmptyState({ isDesigner }: { isDesigner: boolean }) {
 }
 
 function AppCard({ app }: { app: AccessibleApp }) {
-  const accent = app.themeColor ?? '#3b82f6';
+  const accent = app.themeColor ?? '#e5760a';
   const Icon = getLucideIcon(app.icon);
 
   return (

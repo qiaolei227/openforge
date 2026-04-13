@@ -22,6 +22,15 @@ export class ActionController {
     return this.actionService.create(modelId, dto);
   }
 
+  @Put('sort')
+  @RequirePermission('designer:models', 'edit')
+  async sort(
+    @Body() items: Array<{ id: string; sortOrder: number }>,
+  ) {
+    await this.actionService.batchSort(items);
+    return { success: true };
+  }
+
   @Put(':actionId')
   @RequirePermission('designer:models', 'edit')
   async update(

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Loader2, Pencil } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { useTranslations } from 'next-intl';
 import { Breadcrumb } from '@/components/breadcrumb';
 import { MenuPermissionsTab } from '../components/menu-permissions-tab';
 import { FieldPermissionsTab } from '../components/field-permissions-tab';
@@ -23,6 +24,9 @@ type TabType = 'menu' | 'field';
 
 export default function RoleDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const tRoles = useTranslations('roles');
+  const tCommon = useTranslations('common');
+
   const [role, setRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('menu');
@@ -53,7 +57,7 @@ export default function RoleDetailPage() {
 
   if (!role) {
     return (
-      <div className="p-8 text-center text-muted-foreground">角色不存在或已被删除</div>
+      <div className="p-8 text-center text-muted-foreground">{tRoles('notFound')}</div>
     );
   }
 
@@ -62,7 +66,7 @@ export default function RoleDetailPage() {
       {/* Breadcrumb */}
       <Breadcrumb
         items={[
-          { label: '角色管理', href: '/settings/roles' },
+          { label: tRoles('title'), href: '/settings/roles' },
           { label: role.name },
         ]}
       />
@@ -80,7 +84,7 @@ export default function RoleDetailPage() {
             <p className="text-sm text-muted-foreground mt-1">{role.description}</p>
           )}
           <p className="text-xs text-muted-foreground mt-1">
-            {role.userCount} 名用户绑定此角色
+            {tRoles('usersBindCount', { count: role.userCount })}
           </p>
         </div>
         <button
@@ -88,7 +92,7 @@ export default function RoleDetailPage() {
           className="inline-flex items-center justify-center rounded-md text-sm font-medium h-9 px-3 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground"
         >
           <Pencil className="w-4 h-4 mr-1.5" />
-          编辑
+          {tCommon('edit')}
         </button>
       </div>
 
@@ -97,8 +101,8 @@ export default function RoleDetailPage() {
         <div className="flex items-center gap-6">
           {(
             [
-              { key: 'menu' as TabType, label: '菜单权限' },
-              { key: 'field' as TabType, label: '字段权限' },
+              { key: 'menu' as TabType, label: tRoles('menuPermissions') },
+              { key: 'field' as TabType, label: tRoles('fieldPermissions') },
             ] as const
           ).map((tab) => (
             <button

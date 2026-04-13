@@ -75,6 +75,11 @@ export class DynamicDataService {
       }
     }
 
+    // Batch-resolve display values for REFERENCE/USER/ORGANIZATION fields
+    if (data.length > 0) {
+      await this.batchResolveDisplayValues(data, model.fields);
+    }
+
     return {
       data,
       total: countResult[0]?.total ?? 0,
@@ -131,6 +136,27 @@ export class DynamicDataService {
       const childrenMeta: Record<string, any> = {};
       for (const entity of entities) {
         const fkColumnName = `${model.code}_id`;
+
+        // Fetch actual child rows for this entity
+        let rows: any[] = [];
+        try {
+          rows = await this.prisma.$queryRawUnsafe<any[]>(
+            `SELECT * FROM biz."${entity.tableName}" WHERE "${fkColumnName}" = $1::uuid ORDER BY "created_at" ASC`,
+            record.id,
+          );
+          // Resolve display values for entity REFERENCE fields
+          if (rows.length > 0) {
+            const entityRefFields = entity.fields.filter((f: any) =>
+              f.fieldType === 'REFERENCE' || f.fieldType === 'USER' || f.fieldType === 'ORGANIZATION'
+            );
+            if (entityRefFields.length > 0) {
+              await this.batchResolveDisplayValues(rows, entityRefFields);
+            }
+          }
+        } catch {
+          this.logger.warn(`Failed to load children for entity ${entity.code}`);
+        }
+
         childrenMeta[entity.code] = {
           entityId: entity.id,
           entityName: entity.name,
@@ -139,6 +165,7 @@ export class DynamicDataService {
           fkColumnName,
           isOneToOne: entity.entityType === 'one_to_one',
           targetFields: entity.fields,
+          rows,
         };
       }
       record.__childrenMeta = childrenMeta;
@@ -164,8 +191,8 @@ export class DynamicDataService {
     const relationsPayload = data.__relations as Record<string, { add?: string[]; remove?: string[] }> | undefined;
     delete data.__relations;
 
-    // Strip system fields from user data
-    const cleanData = this.stripSystemFields(data);
+    // Whitelist: only keep fields that exist on this model
+    const cleanData = this.stripToModelFields(data, model.fields, model.isTree);
 
     if (model.isTree && cleanData[TREE_SYSTEM_FIELD]) {
       await this.validateParentId(model.tableName, cleanData[TREE_SYSTEM_FIELD]);
@@ -290,8 +317,8 @@ export class DynamicDataService {
       );
     }
 
-    // Strip system fields
-    const cleanData = this.stripSystemFields(data);
+    // Whitelist: only keep fields that exist on this model
+    const cleanData = this.stripToModelFields(data, model.fields, model.isTree);
 
     if (model.isTree && cleanData[TREE_SYSTEM_FIELD] !== undefined && cleanData[TREE_SYSTEM_FIELD] !== null) {
       await this.validateParentId(model.tableName, cleanData[TREE_SYSTEM_FIELD], id);
@@ -697,7 +724,7 @@ export class DynamicDataService {
       `SELECT "data_status" FROM biz."${tableName}" WHERE "id" = $1::uuid`,
       recordId,
     );
-    if (rows.length > 0 && rows[0].data_status !== 'draft') {
+    if (rows.length > 0 && rows[0].data_status !== 'draft' && rows[0].data_status !== 'reaudit') {
       throw new BusinessException(
         409,
         ErrorCodes.DATA_STATUS_NOT_EDITABLE,
@@ -709,12 +736,21 @@ export class DynamicDataService {
   /**
    * Strip system fields from user-provided data.
    */
-  private stripSystemFields(data: Record<string, any>): Record<string, any> {
+  /**
+   * Whitelist-based data cleaning: only keep keys that exist as physical
+   * field columnNames on the model (plus tree parent_id if applicable).
+   * Everything else (system fields, virtual suffixes, unknown keys) is dropped.
+   */
+  private stripToModelFields(
+    data: Record<string, any>,
+    fields: Array<{ columnName: string }>,
+    isTree: boolean,
+  ): Record<string, any> {
+    const allowed = new Set(fields.map((f) => f.columnName));
+    if (isTree) allowed.add(TREE_SYSTEM_FIELD);
     const clean: Record<string, any> = {};
     for (const [key, value] of Object.entries(data)) {
-      if (SYSTEM_FIELDS_SET.has(key)) continue;
-      if (key === 'version') continue; // always strip version from data payload
-      clean[key] = value;
+      if (allowed.has(key)) clean[key] = value;
     }
     return clean;
   }
@@ -1002,6 +1038,105 @@ export class DynamicDataService {
   }
 
   /**
+   * Batch-resolve display values for a list of records (used by query).
+   * Groups FK values per target model to minimize DB round-trips.
+   */
+  private async batchResolveDisplayValues(
+    records: Record<string, any>[],
+    fields: Array<{ columnName: string; fieldType: string; options: any }>,
+  ) {
+    // REFERENCE fields — batch per target model
+    const refFields = fields.filter((f) => f.fieldType === 'REFERENCE');
+    for (const field of refFields) {
+      const opts = field.options as any;
+      const targetModelId = opts?.targetModelId;
+      const targetDisplayField = opts?.targetDisplayField || 'name';
+      if (!targetModelId) continue;
+
+      const fkValues = [...new Set(
+        records.map((r) => r[field.columnName]).filter(Boolean),
+      )];
+      if (fkValues.length === 0) continue;
+
+      const targetModel = await this.prisma.sysModel.findUnique({
+        where: { id: targetModelId },
+        select: { tableName: true },
+      });
+      if (!targetModel) continue;
+
+      try {
+        const displayRows = await this.prisma.$queryRawUnsafe<any[]>(
+          `SELECT "id", "${targetDisplayField}" FROM biz."${targetModel.tableName}" WHERE "id" = ANY($1::uuid[])`,
+          fkValues,
+        );
+        const displayMap = new Map(
+          displayRows.map((r: any) => [r.id, r[targetDisplayField]]),
+        );
+        for (const record of records) {
+          const fk = record[field.columnName];
+          if (fk && displayMap.has(fk)) {
+            record[`${field.columnName}__display`] = displayMap.get(fk);
+          }
+        }
+      } catch {
+        this.logger.warn(`Failed to batch-resolve display for ${field.columnName}`);
+      }
+    }
+
+    // USER fields — batch
+    const userFields = fields.filter((f) => f.fieldType === 'USER');
+    if (userFields.length > 0) {
+      const allUserIds = new Set<string>();
+      for (const field of userFields) {
+        for (const r of records) {
+          if (r[field.columnName]) allUserIds.add(r[field.columnName]);
+        }
+      }
+      if (allUserIds.size > 0) {
+        const users = await this.prisma.sysUser.findMany({
+          where: { id: { in: [...allUserIds] } },
+          select: { id: true, displayName: true },
+        });
+        const userMap = new Map(users.map((u) => [u.id, u.displayName]));
+        for (const field of userFields) {
+          for (const r of records) {
+            const uid = r[field.columnName];
+            if (uid && userMap.has(uid)) {
+              r[`${field.columnName}__display`] = userMap.get(uid);
+            }
+          }
+        }
+      }
+    }
+
+    // ORGANIZATION fields — batch
+    const orgFields = fields.filter((f) => f.fieldType === 'ORGANIZATION');
+    if (orgFields.length > 0) {
+      const allOrgIds = new Set<string>();
+      for (const field of orgFields) {
+        for (const r of records) {
+          if (r[field.columnName]) allOrgIds.add(r[field.columnName]);
+        }
+      }
+      if (allOrgIds.size > 0) {
+        const orgs = await this.prisma.sysOrganization.findMany({
+          where: { id: { in: [...allOrgIds] } },
+          select: { id: true, name: true },
+        });
+        const orgMap = new Map(orgs.map((o) => [o.id, o.name]));
+        for (const field of orgFields) {
+          for (const r of records) {
+            const oid = r[field.columnName];
+            if (oid && orgMap.has(oid)) {
+              r[`${field.columnName}__display`] = orgMap.get(oid);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Resolve display values for REFERENCE, USER, and ORGANIZATION fields.
    */
   private async resolveDisplayValues(
@@ -1023,9 +1158,9 @@ export class DynamicDataService {
 
       const options = field.options as any;
       const targetModelId = options?.targetModelId;
-      const targetDisplayField = options?.targetDisplayField;
+      const targetDisplayField = options?.targetDisplayField || 'name';
 
-      if (!targetModelId || !targetDisplayField) continue;
+      if (!targetModelId) continue;
 
       // Get target model's tableName
       const targetModel = await this.prisma.sysModel.findUnique({

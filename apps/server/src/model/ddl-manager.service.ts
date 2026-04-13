@@ -90,6 +90,8 @@ export class DdlManagerService implements OnModuleInit {
             `"data_status" VARCHAR(20) NOT NULL DEFAULT 'draft'`,
             '"submitted_by" UUID',
             '"submitted_at" TIMESTAMPTZ',
+            '"approved_by" UUID',
+            '"approved_at" TIMESTAMPTZ',
           ]
         : []),
       '"version" INT NOT NULL DEFAULT 1',
@@ -328,6 +330,12 @@ export class DdlManagerService implements OnModuleInit {
     await this.prisma.$executeRawUnsafe(
       `ALTER TABLE biz."${tableName}" ADD COLUMN IF NOT EXISTS "submitted_at" TIMESTAMPTZ`,
     );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" ADD COLUMN IF NOT EXISTS "approved_by" UUID`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" ADD COLUMN IF NOT EXISTS "approved_at" TIMESTAMPTZ`,
+    );
     this.logger.log(`Added data_status columns to biz.${tableName}`);
   }
 
@@ -342,6 +350,12 @@ export class DdlManagerService implements OnModuleInit {
     );
     await this.prisma.$executeRawUnsafe(
       `ALTER TABLE biz."${tableName}" DROP COLUMN IF EXISTS "submitted_at"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" DROP COLUMN IF EXISTS "approved_by"`,
+    );
+    await this.prisma.$executeRawUnsafe(
+      `ALTER TABLE biz."${tableName}" DROP COLUMN IF EXISTS "approved_at"`,
     );
     this.logger.log(`Removed data_status columns from biz.${tableName}`);
   }

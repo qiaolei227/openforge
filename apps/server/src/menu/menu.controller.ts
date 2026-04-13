@@ -25,7 +25,7 @@ export class MenuController {
     @Query('appCode') appCode?: string,
   ) {
     return this.menuService.buildTreeForUser(
-      { userId: user.userId, orgId: user.orgId, roles: user.roles, isAdmin: user.isAdmin },
+      user,
       appCode,
     );
   }

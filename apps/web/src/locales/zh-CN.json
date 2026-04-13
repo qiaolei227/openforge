@@ -244,6 +244,8 @@
     "dataScopeShared": "共享",
     "dataScopeDistributed": "分配",
     "dataScopeImmutable": "数据范围创建后不可修改",
+    "isTree": "树形结构",
+    "isTreeHint": "开启后记录支持父子层级关系，适用于组织架构、分类目录等场景，创建后不可修改",
     "enableDataStatus": "启用数据状态",
     "enableDataStatusHint": "开启后记录有草稿→已提交→已审核的状态流转，适用于单据类数据",
     "distributionPolicy": "分配策略",
@@ -891,7 +893,11 @@
     "createdBy": "创建人",
     "createdAt": "创建时间",
     "updatedBy": "更新人",
-    "updatedAt": "更新时间"
+    "updatedAt": "更新时间",
+    "submittedBy": "提交人",
+    "submittedAt": "提交时间",
+    "approvedBy": "审核人",
+    "approvedAt": "审核时间"
   },
   "dataStatus": {
     "draft": "草稿",

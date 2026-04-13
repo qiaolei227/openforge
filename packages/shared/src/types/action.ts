@@ -13,14 +13,7 @@ export interface SysAction {
   position: ActionPosition;
   sortOrder: number;
   config: Record<string, any> | null;
-  visibility: ActionVisibility | null;
   children?: SysAction[];
-}
-
-export interface ActionVisibility {
-  dataStatus?: string[];
-  roles?: string[];
-  expression?: string;
 }
 
 export interface CreateActionRequest {
@@ -33,7 +26,6 @@ export interface CreateActionRequest {
   position?: ActionPosition;
   sortOrder?: number;
   config?: Record<string, any>;
-  visibility?: ActionVisibility;
 }
 
 export interface UpdateActionRequest {
@@ -44,5 +36,4 @@ export interface UpdateActionRequest {
   position?: ActionPosition;
   sortOrder?: number;
   config?: Record<string, any>;
-  visibility?: ActionVisibility;
 }

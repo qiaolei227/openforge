@@ -15,9 +15,10 @@ export class CreateActionDto {
   @IsString()
   parentId?: string;
 
+  @IsOptional()
   @IsString()
   @IsIn(['builtin', 'openUrl', 'callApi', 'script'])
-  actionType!: string;
+  actionType?: string;
 
   @IsOptional()
   @IsString()
@@ -36,10 +37,6 @@ export class CreateActionDto {
   @IsOptional()
   @IsObject()
   config?: Record<string, any>;
-
-  @IsOptional()
-  @IsObject()
-  visibility?: Record<string, any>;
 }
 
 export class UpdateActionDto {
@@ -72,8 +69,4 @@ export class UpdateActionDto {
   @IsOptional()
   @IsObject()
   config?: Record<string, any>;
-
-  @IsOptional()
-  @IsObject()
-  visibility?: Record<string, any>;
 }

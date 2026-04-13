@@ -69,7 +69,7 @@ const DATA_STATUS_CHOICES = [
   { value: 'draft', label: 'draft' },
   { value: 'submitted', label: 'submitted' },
   { value: 'approved', label: 'approved' },
-  { value: 'pending_revision', label: 'pending_revision' },
+  { value: 'reaudit', label: 'reaudit' },
 ];
 
 /* ------------------------------------------------------------------ */

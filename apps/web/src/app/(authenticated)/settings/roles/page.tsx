@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Loader2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Loader2, Pencil, Shield } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -37,6 +37,7 @@ export default function RolesPage() {
   const router = useRouter();
   const tCommon = useTranslations('common');
   const tErrors = useTranslations('errorCodes');
+  const tRoles = useTranslations('roles');
 
   // --- list state ---
   const [roles, setRoles] = useState<Role[]>([]);
@@ -85,11 +86,11 @@ export default function RolesPage() {
       setRoles(data.items);
       setTotal(data.total);
     } catch (err: unknown) {
-      showToast(getApiErrorMessage(err, tErrors, '加载角色列表失败'), 'error');
+      showToast(getApiErrorMessage(err, tErrors, tRoles('fetchFailed')), 'error');
     } finally {
       setLoading(false);
     }
-  }, [debouncedKeyword, page, pageSize, showToast, tErrors]);
+  }, [debouncedKeyword, page, pageSize, showToast, tErrors, tRoles]);
 
   useEffect(() => {
     fetchRoles();
@@ -122,11 +123,11 @@ export default function RolesPage() {
     setDeleteSubmitting(true);
     try {
       await apiClient.delete(`/roles/${deleteTarget.id}`);
-      showToast('角色已删除', 'success');
+      showToast(tRoles('deleteSuccess'), 'success');
       setDeleteTarget(null);
       fetchRoles();
     } catch (err: unknown) {
-      showToast(getApiErrorMessage(err, tErrors, '删除失败'), 'error');
+      showToast(getApiErrorMessage(err, tErrors, tRoles('deleteFailed')), 'error');
     } finally {
       setDeleteSubmitting(false);
     }
@@ -150,12 +151,12 @@ export default function RolesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">角色管理</h1>
-          <p className="text-sm text-muted-foreground mt-1">管理系统角色及其权限配置</p>
+          <h1 className="text-2xl font-bold">{tRoles('title')}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{tRoles('subtitle')}</p>
         </div>
         <button onClick={openCreate} className={btnPrimary}>
           <Plus className="w-4 h-4 mr-1" />
-          新建角色
+          {tRoles('new')}
         </button>
       </div>
 
@@ -164,7 +165,7 @@ export default function RolesPage() {
         <div className="relative flex-1 max-w-sm">
           <input
             className={inputClass}
-            placeholder="搜索角色编码或名称…"
+            placeholder={tRoles('search')}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
@@ -180,10 +181,10 @@ export default function RolesPage() {
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="p-3 text-left font-medium w-12">#</th>
-              <th className="p-3 text-left font-medium">角色编码</th>
-              <th className="p-3 text-left font-medium">角色名称</th>
-              <th className="p-3 text-left font-medium">描述</th>
-              <th className="p-3 text-left font-medium w-24">用户数</th>
+              <th className="p-3 text-left font-medium">{tRoles('code')}</th>
+              <th className="p-3 text-left font-medium">{tRoles('name')}</th>
+              <th className="p-3 text-left font-medium">{tRoles('description')}</th>
+              <th className="p-3 text-left font-medium w-24">{tRoles('userCount')}</th>
               <th className="p-3 text-left font-medium w-32">{tCommon('createdAt')}</th>
               <th className="p-3 text-left font-medium w-28">{tCommon('actions')}</th>
             </tr>
@@ -205,8 +206,7 @@ export default function RolesPage() {
               roles.map((role, idx) => (
                 <tr
                   key={role.id}
-                  className="border-b hover:bg-muted/30 transition-colors cursor-pointer"
-                  onClick={() => router.push(`/settings/roles/${role.id}`)}
+                  className="border-b hover:bg-muted/30 transition-colors"
                 >
                   <td className="p-3 text-muted-foreground">{(page - 1) * pageSize + idx + 1}</td>
                   <td className="p-3">
@@ -216,25 +216,32 @@ export default function RolesPage() {
                   <td className="p-3 text-muted-foreground">{role.description || '-'}</td>
                   <td className="p-3">
                     <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs">
-                      {role.userCount} 人
+                      {tRoles('userCountValue', { count: role.userCount })}
                     </span>
                   </td>
                   <td className="p-3 text-muted-foreground">
-                    {new Date(role.createdAt).toLocaleDateString('zh-CN')}
+                    {new Date(role.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="p-3">
+                  <td className="p-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => router.push(`/settings/roles/${role.id}`)}
+                        className={btnGhost}
+                        title={tRoles('authorize')}
+                      >
+                        <Shield className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={(e) => openEdit(role, e)}
                         className={btnGhost}
-                        title="编辑"
+                        title={tCommon('edit')}
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={(e) => openDelete(role, e)}
                         className={`${btnGhost} text-destructive hover:text-destructive`}
-                        title="删除"
+                        title={tCommon('delete')}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -286,20 +293,22 @@ export default function RolesPage() {
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-sm bg-card border rounded-lg p-6 shadow-lg">
-            <h2 className="text-lg font-semibold mb-2 text-destructive">删除角色</h2>
+            <h2 className="text-lg font-semibold mb-2 text-destructive">{tRoles('deleteTitle')}</h2>
             <p className="text-sm text-muted-foreground mb-3">
-              此操作不可撤销。请输入角色编码{' '}
-              <code className="font-mono bg-muted px-1 rounded text-foreground">{deleteTarget.code}</code>{' '}
-              以确认删除。
+              {tRoles.rich('deleteConfirmText', {
+                code: () => (
+                  <code className="font-mono bg-muted px-1 rounded text-foreground">{deleteTarget.code}</code>
+                ),
+              })}
             </p>
             {deleteTarget.userCount > 0 && (
               <p className="text-sm text-destructive mb-3">
-                该角色当前绑定了 {deleteTarget.userCount} 名用户，删除将被拒绝。请先解绑所有用户。
+                {tRoles('deleteHasUsers', { count: deleteTarget.userCount })}
               </p>
             )}
             <input
               className={`${inputClass} mb-4`}
-              placeholder={`请输入: ${deleteTarget.code}`}
+              placeholder={tRoles('deleteConfirmPlaceholder', { code: deleteTarget.code })}
               value={deleteConfirmCode}
               onChange={(e) => setDeleteConfirmCode(e.target.value)}
               autoFocus
@@ -320,7 +329,7 @@ export default function RolesPage() {
                 {deleteSubmitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  '确认删除'
+                  tRoles('confirmDelete')
                 )}
               </button>
             </div>

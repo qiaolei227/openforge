@@ -66,7 +66,7 @@ export default function DateField({ field, value, onChange, disabled, error, mod
           ref={inputRef}
           type="date"
           className="flex-1 bg-transparent outline-none text-sm [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden [&::-webkit-clear-button]:hidden"
-          value={value ?? ''}
+          value={value ? String(value).slice(0, 10) : ''}
           onChange={(e) => onChange(e.target.value || null)}
           disabled={disabled}
         />

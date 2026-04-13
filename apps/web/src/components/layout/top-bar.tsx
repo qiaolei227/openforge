@@ -28,7 +28,7 @@ export function TopBar() {
   const isSettings = area === 'settings';
   const breadcrumbItems = useDesignerBreadcrumbStore((s) => s.items);
 
-  return (
+  return (<>
     <header className="h-12 border-b border-border flex items-center px-4 shrink-0">
       {/* ─── Left: Brand ─── */}
       <Link
@@ -76,10 +76,10 @@ export function TopBar() {
           </nav>
         )}
         {area === 'workspace' && (
-          <>
+          <div className="flex items-center gap-2">
             <SystemSwitcher />
             <MenuDrawerTrigger onClick={() => setDrawerOpen(true)} />
-          </>
+          </div>
         )}
       </div>
 
@@ -126,9 +126,10 @@ export function TopBar() {
         {/* User avatar + name dropdown */}
         <UserMenu />
       </div>
+    </header>
       {area === 'workspace' && (
         <MenuDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
       )}
-    </header>
+    </>
   );
 }

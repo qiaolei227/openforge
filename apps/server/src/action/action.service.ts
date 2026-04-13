@@ -6,19 +6,18 @@ import { ErrorCodes } from '../common/exceptions/error-codes';
 import { ModelCreatedEvent } from '../event-bus/events';
 
 const BASE_SYSTEM_ACTIONS = [
-  { code: 'create',    name: '新建',     icon: 'plus',            sortOrder: 0, displayType: 'button' },
-  { code: 'delete',    name: '删除',     icon: 'trash-2',         sortOrder: 8, displayType: 'button' },
-  { code: 'archive',   name: '归档',     icon: 'archive',         sortOrder: 7, displayType: 'split' },
-  { code: 'unarchive', name: '取消归档', icon: 'archive-restore', sortOrder: 7, displayType: 'button' },
+  { code: 'create',    name: '新建',     icon: 'plus',            sortOrder: 0, displayType: 'button', position: 'both' },
+  { code: 'list',      name: '列表',     icon: 'list',            sortOrder: 1, displayType: 'button', position: 'detail' },
+  { code: 'delete',    name: '删除',     icon: 'trash-2',         sortOrder: 8, displayType: 'button', position: 'both' },
+  { code: 'archive',   name: '归档',     icon: 'archive',         sortOrder: 7, displayType: 'split',  position: 'both' },
+  { code: 'unarchive', name: '取消归档', icon: 'archive-restore', sortOrder: 7, displayType: 'button', position: 'both' },
 ];
 
 const DATA_STATUS_ACTIONS = [
-  { code: 'submit',    name: '提交',     icon: 'send',         sortOrder: 2, displayType: 'button', visibility: { dataStatus: ['draft'] } },
-  { code: 'approve',   name: '审核',     icon: 'check-circle', sortOrder: 3, displayType: 'button', visibility: { dataStatus: ['submitted'] } },
-  { code: 'reject',    name: '驳回',     icon: 'x-circle',     sortOrder: 4, displayType: 'button', visibility: { dataStatus: ['submitted'] } },
-  { code: 'withdraw',  name: '撤回',     icon: 'undo-2',       sortOrder: 5, displayType: 'button', visibility: { dataStatus: ['submitted'] } },
-  { code: 'unapprove', name: '反审核',   icon: 'rotate-ccw',   sortOrder: 6, displayType: 'button', visibility: { dataStatus: ['approved'] } },
-  { code: 'revise',    name: '重新编辑', icon: 'file-edit',    sortOrder: 6, displayType: 'button', visibility: { dataStatus: ['pending_revision'] } },
+  { code: 'submit',    name: '提交',   icon: 'send',         sortOrder: 2, displayType: 'split',  position: 'both' },
+  { code: 'withdraw',  name: '撤销',   icon: 'undo-2',       sortOrder: 3, displayType: 'button', position: 'both' },
+  { code: 'approve',   name: '审核',   icon: 'check-circle', sortOrder: 4, displayType: 'split',  position: 'both' },
+  { code: 'unapprove', name: '反审核', icon: 'rotate-ccw',   sortOrder: 5, displayType: 'button', position: 'both' },
 ];
 
 @Injectable()
@@ -39,8 +38,10 @@ export class ActionService {
       allActions.push(...DATA_STATUS_ACTIONS);
     }
 
-    // Create top-level actions first (exclude unarchive — it's a child of archive)
-    const topLevel = allActions.filter((a) => a.code !== 'unarchive');
+    // Child actions that will be linked to their parents
+    const childCodes = ['unarchive', 'withdraw', 'unapprove'];
+    const topLevel = allActions.filter((a) => !childCodes.includes(a.code));
+
     await this.prisma.sysAction.createMany({
       data: topLevel.map((a) => ({
         modelId,
@@ -50,54 +51,98 @@ export class ActionService {
         category: 'system',
         actionType: 'builtin',
         displayType: a.displayType || 'button',
-        position: 'both',
+        position: (a as any).position || 'both',
         sortOrder: a.sortOrder,
-        visibility: (a as any).visibility || null,
       })),
       skipDuplicates: true,
     });
 
-    // Link unarchive as child of archive (split button)
-    const archiveAction = await this.prisma.sysAction.findFirst({
-      where: { modelId, code: 'archive' },
-    });
-    if (archiveAction) {
+    // Link child actions to their parent split buttons
+    const parentChildPairs: Array<{ parentCode: string; child: typeof allActions[0] }> = [
+      { parentCode: 'archive', child: allActions.find((a) => a.code === 'unarchive')! },
+    ];
+    if (model.enableDataStatus) {
+      parentChildPairs.push(
+        { parentCode: 'submit', child: allActions.find((a) => a.code === 'withdraw')! },
+        { parentCode: 'approve', child: allActions.find((a) => a.code === 'unapprove')! },
+      );
+    }
+
+    for (const { parentCode, child } of parentChildPairs) {
+      if (!child) continue;
+      const parent = await this.prisma.sysAction.findFirst({
+        where: { modelId, code: parentCode },
+      });
+      if (!parent) continue;
       await this.prisma.sysAction.upsert({
-        where: { modelId_code: { modelId, code: 'unarchive' } },
+        where: { modelId_code: { modelId, code: child.code } },
         create: {
           modelId,
-          code: 'unarchive',
-          name: '取消归档',
-          icon: 'archive-restore',
+          code: child.code,
+          name: child.name,
+          icon: child.icon,
           category: 'system',
           actionType: 'builtin',
           displayType: 'button',
           position: 'both',
-          sortOrder: 7,
-          parentId: archiveAction.id,
+          sortOrder: child.sortOrder,
+          parentId: parent.id,
         },
-        update: { parentId: archiveAction.id },
+        update: { parentId: parent.id },
       });
     }
   }
 
   async syncDataStatusActions(modelId: string, enableDataStatus: boolean): Promise<void> {
     if (enableDataStatus) {
-      await this.prisma.sysAction.createMany({
-        data: DATA_STATUS_ACTIONS.map((a) => ({
-          modelId,
-          code: a.code,
-          name: a.name,
-          icon: a.icon,
-          category: 'system',
-          actionType: 'builtin',
-          displayType: 'button',
-          position: 'both',
-          sortOrder: a.sortOrder,
-          visibility: a.visibility,
-        })),
-        skipDuplicates: true,
-      });
+      // Upsert top-level split parents (submit, approve)
+      const topLevel = DATA_STATUS_ACTIONS.filter((a) => !['withdraw', 'unapprove'].includes(a.code));
+      for (const a of topLevel) {
+        await this.prisma.sysAction.upsert({
+          where: { modelId_code: { modelId, code: a.code } },
+          create: {
+            modelId,
+            code: a.code,
+            name: a.name,
+            icon: a.icon,
+            category: 'system',
+            actionType: 'builtin',
+            displayType: a.displayType,
+            position: 'both',
+            sortOrder: a.sortOrder,
+          },
+          update: {},
+        });
+      }
+
+      // Link child actions to their parents
+      const pairs: Array<{ parentCode: string; childCode: string }> = [
+        { parentCode: 'submit', childCode: 'withdraw' },
+        { parentCode: 'approve', childCode: 'unapprove' },
+      ];
+      for (const { parentCode, childCode } of pairs) {
+        const parent = await this.prisma.sysAction.findFirst({
+          where: { modelId, code: parentCode },
+        });
+        const child = DATA_STATUS_ACTIONS.find((a) => a.code === childCode)!;
+        if (!parent || !child) continue;
+        await this.prisma.sysAction.upsert({
+          where: { modelId_code: { modelId, code: childCode } },
+          create: {
+            modelId,
+            code: child.code,
+            name: child.name,
+            icon: child.icon,
+            category: 'system',
+            actionType: 'builtin',
+            displayType: 'button',
+            position: 'both',
+            sortOrder: child.sortOrder,
+            parentId: parent.id,
+          },
+          update: { parentId: parent.id },
+        });
+      }
     } else {
       const codes = DATA_STATUS_ACTIONS.map((a) => a.code);
       await this.prisma.sysAction.deleteMany({
@@ -115,6 +160,16 @@ export class ActionService {
   }
 
   async create(modelId: string, dto: import('./dto/create-action.dto').CreateActionDto) {
+    // Default sortOrder: append to the end of siblings
+    let sortOrder = dto.sortOrder;
+    if (sortOrder == null) {
+      const maxRow = await this.prisma.sysAction.aggregate({
+        where: { modelId, parentId: dto.parentId ?? null },
+        _max: { sortOrder: true },
+      });
+      sortOrder = (maxRow._max.sortOrder ?? -1) + 1;
+    }
+
     return this.prisma.sysAction.create({
       data: {
         modelId,
@@ -123,12 +178,11 @@ export class ActionService {
         icon: dto.icon,
         parentId: dto.parentId,
         category: 'custom',
-        actionType: dto.actionType,
+        actionType: dto.actionType || 'builtin',
         displayType: dto.displayType || 'button',
         position: dto.position || 'both',
-        sortOrder: dto.sortOrder || 0,
+        sortOrder,
         config: dto.config,
-        visibility: dto.visibility,
       },
     });
   }
@@ -138,10 +192,21 @@ export class ActionService {
     if (!action) throw new BusinessException(404, ErrorCodes.ACTION_NOT_FOUND, 'Action not found');
 
     const data = action.category === 'system'
-      ? { name: dto.name, icon: dto.icon, sortOrder: dto.sortOrder, visibility: dto.visibility }
+      ? { name: dto.name, icon: dto.icon, sortOrder: dto.sortOrder }
       : dto;
 
     return this.prisma.sysAction.update({ where: { id }, data });
+  }
+
+  async batchSort(items: Array<{ id: string; sortOrder: number }>): Promise<void> {
+    await this.prisma.$transaction(
+      items.map((item) =>
+        this.prisma.sysAction.update({
+          where: { id: item.id },
+          data: { sortOrder: item.sortOrder },
+        }),
+      ),
+    );
   }
 
   async delete(id: string): Promise<void> {

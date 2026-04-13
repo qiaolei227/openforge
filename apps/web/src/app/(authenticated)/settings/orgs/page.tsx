@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
-import { Loader2 } from 'lucide-react';
-import { TreeView, TreeSelect, type TreeNode, type TreeColumn } from '@openforge/ui';
+import { Loader2, Pencil, Ban, CheckCircle, Trash2 } from 'lucide-react';
+import { TreeSelect } from '@openforge/ui';
 
 interface Org {
   id: string;
@@ -29,6 +29,10 @@ interface OrgListResponse {
   page: number;
   pageSize: number;
   counts: StatusCounts;
+}
+
+interface OrgTreeNode extends Org {
+  children: OrgTreeNode[];
 }
 
 type DialogMode = 'create' | 'edit' | null;
@@ -64,8 +68,7 @@ export default function OrgsPage() {
   const [loading, setLoading] = useState(false);
 
   // --- tree state ---
-  const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [treeData, setTreeData] = useState<OrgTreeNode[]>([]);
   const [treeLoading, setTreeLoading] = useState(false);
 
   // --- dialog state ---
@@ -129,111 +132,59 @@ export default function OrgsPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // --- tree loading ---
-  const loadTreeChildren = useCallback(async (parentId: string | null) => {
+  // --- tree loading (full tree, always expanded) ---
+  const fetchTree = useCallback(async () => {
     setTreeLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (parentId) params.set('parentId', parentId);
-      if (debouncedKeyword) params.set('keyword', debouncedKeyword);
-      const { data } = await apiClient.get<any[]>(`/orgs/tree/children?${params}`);
-      const newNodes: TreeNode[] = (data ?? []).map((o: any) => ({
-        ...o,
-        parent_id: o.parentId ?? null,
-        __hasChildren: o.__hasChildren ?? false,
-      }));
-      setTreeNodes((prev) => {
-        const filtered = prev.filter((n) => n.parent_id !== (parentId ?? null));
-        return [...filtered, ...newNodes];
-      });
+      const { data } = await apiClient.get<OrgTreeNode[]>('/orgs/tree');
+      setTreeData(data ?? []);
     } catch {
       // silently fail
     } finally {
       setTreeLoading(false);
     }
-  }, [debouncedKeyword]);
-
-  // Load root nodes when in tree mode or keyword changes
-  useEffect(() => {
-    if (viewMode === 'tree') {
-      setTreeNodes([]);
-      setExpandedIds(new Set());
-      loadTreeChildren(null);
-    }
-  }, [viewMode, debouncedKeyword, loadTreeChildren]);
-
-  const handleTreeExpand = useCallback((id: string) => {
-    setExpandedIds((prev) => new Set(prev).add(id));
-    loadTreeChildren(id);
-  }, [loadTreeChildren]);
-
-  const handleTreeCollapse = useCallback((id: string) => {
-    setExpandedIds((prev) => {
-      const n = new Set(prev);
-      n.delete(id);
-      return n;
-    });
   }, []);
 
-  // t wrapper for TreeView (needs 'common.loading' and 'common.noData')
-  const treeT = useCallback((key: string) => {
-    if (key === 'common.loading') return tCommon('loading');
-    if (key === 'common.noData') return tCommon('noData');
-    return key;
-  }, [tCommon]);
+  useEffect(() => {
+    if (viewMode === 'tree') fetchTree();
+  }, [viewMode, fetchTree]);
 
-  // tree columns
-  const treeColumns: TreeColumn[] = useMemo(() => [
-    {
-      key: 'name',
-      label: tOrg('name'),
-      width: 300,
-    },
-    {
-      key: 'code',
-      label: tOrg('code'),
-      width: 200,
-      render: (val: string) => (
-        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{val}</code>
-      ),
-    },
-    {
-      key: 'status',
-      label: tOrg('status'),
-      width: 120,
-      render: (val: string) => (
-        <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-            val === 'active'
-              ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20'
-              : 'bg-red-50 text-red-700 ring-1 ring-red-600/20'
-          }`}
-        >
-          {val === 'active' ? tOrg('statusActive') : tOrg('statusDisabled')}
-        </span>
-      ),
-    },
-  ], [tOrg]);
+  // Flatten tree → rows with depth for rendering
+  const flatTreeRows = useMemo(() => {
+    const rows: Array<{ org: Org; depth: number; isLast: boolean[] }> = [];
+    function walk(nodes: OrgTreeNode[], depth: number, isLast: boolean[]) {
+      nodes.forEach((node, idx) => {
+        const last = idx === nodes.length - 1;
+        const trail = [...isLast, last];
+        rows.push({ org: node, depth, isLast: trail });
+        if (node.children?.length) walk(node.children, depth + 1, trail);
+      });
+    }
+    walk(treeData, 0, []);
+    return rows;
+  }, [treeData]);
 
-  // Tree select nodes (flat list for the TreeSelect component)
+  // Flat list for TreeSelect in the form dialog
   const treeSelectNodes = useMemo(() => {
-    return treeNodes.map((n) => ({
-      id: n.id,
-      parentId: n.parent_id,
-      label: String(n.name ?? ''),
-    }));
-  }, [treeNodes]);
+    const nodes: Array<{ id: string; parentId: string | null; label: string }> = [];
+    function walk(list: OrgTreeNode[]) {
+      for (const n of list) {
+        nodes.push({ id: n.id, parentId: n.parentId, label: n.name });
+        if (n.children?.length) walk(n.children);
+      }
+    }
+    walk(treeData);
+    return nodes;
+  }, [treeData]);
 
   // --- refresh after CRUD ---
   const refreshData = useCallback(() => {
     if (viewMode === 'tree') {
-      setTreeNodes([]);
-      setExpandedIds(new Set());
-      loadTreeChildren(null);
+      fetchTree();
     } else {
       fetchOrgs();
     }
-  }, [viewMode, loadTreeChildren, fetchOrgs]);
+  }, [viewMode, fetchTree, fetchOrgs]);
 
   // --- create / edit dialog ---
   const openCreate = () => {
@@ -328,9 +279,9 @@ export default function OrgsPage() {
       <div className="flex items-center justify-between border-b mb-4">
         <div className="flex items-center gap-6">
           {([
-            { key: '', label: tCommon('statusAll'), count: counts.all },
-            { key: 'active', label: tCommon('statusActive'), count: counts.active },
-            { key: 'disabled', label: tCommon('statusDisabled'), count: counts.disabled },
+            { key: '', label: tCommon('statusAll'), count: viewMode === 'tree' ? flatTreeRows.length : counts.all },
+            { key: 'active', label: tCommon('statusActive'), count: viewMode === 'tree' ? flatTreeRows.filter(r => r.org.status === 'active').length : counts.active },
+            { key: 'disabled', label: tCommon('statusDisabled'), count: viewMode === 'tree' ? flatTreeRows.filter(r => r.org.status === 'disabled').length : counts.disabled },
           ] as const).map((tab) => (
             <button
               key={tab.key}
@@ -387,16 +338,84 @@ export default function OrgsPage() {
 
       {/* Tree View */}
       {viewMode === 'tree' && (
-        <TreeView
-          nodes={treeNodes}
-          columns={treeColumns}
-          loading={treeLoading}
-          expandedIds={expandedIds}
-          onExpand={handleTreeExpand}
-          onCollapse={handleTreeCollapse}
-          onRowClick={(node) => openEdit(node as unknown as Org)}
-          t={treeT}
-        />
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50">
+                <th className="p-3 text-left font-medium">{tOrg('name')}</th>
+                <th className="p-3 text-left font-medium">{tOrg('code')}</th>
+                <th className="p-3 text-left font-medium">{tCommon('status')}</th>
+                <th className="p-3 text-left font-medium w-28">{tCommon('actions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {treeLoading && flatTreeRows.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                    {tCommon('loading')}
+                  </td>
+                </tr>
+              ) : flatTreeRows.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                    {tCommon('noData')}
+                  </td>
+                </tr>
+              ) : (
+                flatTreeRows.map(({ org, depth, isLast }) => (
+                  <tr key={org.id} className="border-b hover:bg-muted/30 transition-colors">
+                    <td className="p-3 font-medium">
+                      <div className="flex items-center" style={{ paddingLeft: `${depth * 24}px` }}>
+                        {/* Tree guide lines */}
+                        {depth > 0 && (
+                          <span className="inline-flex items-center text-border mr-1.5 select-none shrink-0">
+                            {isLast[isLast.length - 1] ? '└' : '├'}
+                          </span>
+                        )}
+                        <span className="truncate">{org.name}</span>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{org.code}</code>
+                    </td>
+                    <td className="p-3">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          org.status === 'active'
+                            ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20'
+                            : 'bg-red-50 text-red-700 ring-1 ring-red-600/20'
+                        }`}
+                      >
+                        {org.status === 'active' ? tCommon('statusActive') : tCommon('statusDisabled')}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEdit(org)} className={btnGhost} title={tCommon('edit')}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setConfirmAction({ type: 'toggle-status', org })}
+                          className={btnGhost}
+                          title={org.status === 'active' ? tCommon('disable') : tCommon('enable')}
+                        >
+                          {org.status === 'active' ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => setConfirmAction({ type: 'delete', org })}
+                          className={`${btnGhost} text-destructive hover:text-destructive`}
+                          title={tCommon('delete')}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* List View */}
@@ -449,20 +468,22 @@ export default function OrgsPage() {
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => openEdit(org)} className={btnGhost}>
-                            {tCommon('edit')}
+                          <button onClick={() => openEdit(org)} className={btnGhost} title={tCommon('edit')}>
+                            <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => setConfirmAction({ type: 'toggle-status', org })}
                             className={btnGhost}
+                            title={org.status === 'active' ? tCommon('disable') : tCommon('enable')}
                           >
-                            {org.status === 'active' ? tCommon('disable') : tCommon('enable')}
+                            {org.status === 'active' ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                           </button>
                           <button
                             onClick={() => setConfirmAction({ type: 'delete', org })}
                             className={`${btnGhost} text-destructive hover:text-destructive`}
+                            title={tCommon('delete')}
                           >
-                            {tCommon('delete')}
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>

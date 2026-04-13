@@ -217,12 +217,14 @@ export default function RichTextField({ field: _field, value, onChange, disabled
   }, [editor]);
 
   if (mode === 'view') {
-    const plainText = stripHtml(value ?? '');
-    const truncated = plainText.length > 100 ? plainText.slice(0, 100) + '...' : plainText;
+    if (!value || value === '<p></p>') {
+      return <span className="text-sm text-muted-foreground">{'\u2014'}</span>;
+    }
     return (
-      <span className="text-sm" title={plainText || undefined}>
-        {truncated || '\u2014'}
-      </span>
+      <div
+        className="prose prose-sm max-w-none text-sm"
+        dangerouslySetInnerHTML={{ __html: value }}
+      />
     );
   }
 

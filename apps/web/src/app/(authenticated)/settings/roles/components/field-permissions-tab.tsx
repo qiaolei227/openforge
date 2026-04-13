@@ -41,11 +41,7 @@ interface ModelListResponse {
   total: number;
 }
 
-const ACCESS_OPTIONS: { value: Access; label: string }[] = [
-  { value: 'editable', label: '可编辑' },
-  { value: 'readonly', label: '只读' },
-  { value: 'hidden', label: '隐藏' },
-];
+const ACCESS_KEYS: Access[] = ['editable', 'readonly', 'hidden'];
 
 const inputClass =
   'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring';
@@ -53,6 +49,8 @@ const inputClass =
 export function FieldPermissionsTab({ roleId }: { roleId: string }) {
   const tErrors = useTranslations('errorCodes');
   const tCommon = useTranslations('common');
+  const tFP = useTranslations('fieldPermissions');
+  const tFields = useTranslations('fields');
 
   const [models, setModels] = useState<Model[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
@@ -83,13 +81,13 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
         const { data } = await apiClient.get<ModelListResponse>('/models?pageSize=500');
         setModels(data.data);
       } catch (err: unknown) {
-        setModelsError(getApiErrorMessage(err, tErrors, '加载模型列表失败'));
+        setModelsError(getApiErrorMessage(err, tErrors, tFP('fetchModelsFailed')));
       } finally {
         setModelsLoading(false);
       }
     };
     load();
-  }, [tErrors]);
+  }, [tErrors, tFP]);
 
   // Load fields + permissions when model changes
   useEffect(() => {
@@ -122,14 +120,14 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
         }
         setPermMap(map);
       } catch (err: unknown) {
-        showToast(getApiErrorMessage(err, tErrors, '加载字段权限失败'), 'error');
+        showToast(getApiErrorMessage(err, tErrors, tFP('fetchPermsFailed')), 'error');
       } finally {
         setFieldsLoading(false);
       }
     };
 
     load();
-  }, [selectedModelId, roleId, tErrors, showToast]);
+  }, [selectedModelId, roleId, tErrors, tFP, showToast]);
 
   // Live-save: optimistic update + rollback on error
   const handleChange = async (fieldId: string, newAccess: Access) => {
@@ -154,10 +152,15 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
     } catch (err: unknown) {
       // Rollback
       setPermMap((prev) => ({ ...prev, [fieldId]: prevAccess }));
-      showToast(getApiErrorMessage(err, tErrors, '保存失败'), 'error');
+      showToast(getApiErrorMessage(err, tErrors, tFP('saveFailed')), 'error');
     } finally {
       setSavingField(null);
     }
+  };
+
+  const fieldTypeLabel = (type: string) => {
+    const key = `type${type}` as Parameters<typeof tFields>[0];
+    return tFields.has(key) ? tFields(key) : type;
   };
 
   return (
@@ -178,11 +181,11 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
       {/* Model Selector */}
       <div className="flex items-center gap-4 mb-6">
         <div className="flex-1 max-w-sm">
-          <label className="text-sm font-medium block mb-1.5">选择模型</label>
+          <label className="text-sm font-medium block mb-1.5">{tFP('selectModel')}</label>
           {modelsLoading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" />
-              加载中…
+              {tCommon('loading')}
             </div>
           ) : modelsError ? (
             <div className="flex items-center gap-2 text-sm text-destructive">
@@ -195,7 +198,7 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
               value={selectedModelId}
               onChange={(e) => setSelectedModelId(e.target.value)}
             >
-              <option value="">— 请选择模型 —</option>
+              <option value="">{tFP('selectModelPlaceholder')}</option>
               {models.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.app ? `${model.app.name} / ` : ''}{model.name}（{model.code}）
@@ -206,7 +209,7 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
         </div>
         {selectedModelId && !fieldsLoading && (
           <p className="text-sm text-muted-foreground mt-5">
-            {fields.length} 个用户字段
+            {tFP('fieldCount', { count: fields.length })}
           </p>
         )}
       </div>
@@ -214,7 +217,7 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
       {/* Fields Table */}
       {!selectedModelId ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          请先选择一个模型以配置字段权限
+          {tFP('emptySelectModel')}
         </div>
       ) : fieldsLoading ? (
         <div className="flex items-center justify-center h-32">
@@ -222,19 +225,19 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
         </div>
       ) : fields.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          该模型暂无用户字段
+          {tFP('emptyFields')}
         </div>
       ) : (
         <div className="border rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="p-3 text-left font-medium">字段名称</th>
-                <th className="p-3 text-left font-medium">列名</th>
-                <th className="p-3 text-left font-medium w-24">类型</th>
-                <th className="p-3 text-center font-medium w-28">可编辑</th>
-                <th className="p-3 text-center font-medium w-28">只读</th>
-                <th className="p-3 text-center font-medium w-28">隐藏</th>
+                <th className="p-3 text-left font-medium">{tFP('fieldName')}</th>
+                <th className="p-3 text-left font-medium">{tFP('columnName')}</th>
+                <th className="p-3 text-left font-medium w-24">{tFP('type')}</th>
+                {ACCESS_KEYS.map((key) => (
+                  <th key={key} className="p-3 text-center font-medium w-28">{tFP(key)}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -258,10 +261,10 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
                     </td>
                     <td className="p-3">
                       <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-xs">
-                        {field.fieldType}
+                        {fieldTypeLabel(field.fieldType)}
                       </span>
                     </td>
-                    {ACCESS_OPTIONS.map(({ value }) => (
+                    {ACCESS_KEYS.map((value) => (
                       <td key={value} className="p-3 text-center">
                         <input
                           type="radio"
@@ -285,7 +288,7 @@ export function FieldPermissionsTab({ roleId }: { roleId: string }) {
       {/* Legend */}
       {selectedModelId && fields.length > 0 && (
         <p className="text-xs text-muted-foreground mt-3">
-          点击单选按钮立即保存。<strong>可编辑</strong>为默认状态（无限制），<strong>只读</strong>使字段不可修改，<strong>隐藏</strong>完全隐藏该字段。
+          {tFP('legend')}
         </p>
       )}
     </div>

@@ -52,6 +52,7 @@ export class AuthService {
       orgId: defaultOrg.orgId,
       roles: [] as string[],
       isAdmin: user.isAdmin,
+      identity: user.identity,
     };
 
     const tokens = await this.generateTokens(payload);
@@ -106,7 +107,14 @@ export class AuthService {
       isAdmin = !!u?.isAdmin;
     }
 
-    const payload = { userId, orgId, roles: [] as string[], isAdmin };
+    // Fetch identity for refresh token (may not be in old tokens)
+    const userForIdentity = await this.prisma.sysUser.findUnique({
+      where: { id: userId },
+      select: { identity: true },
+    });
+    const identity = userForIdentity?.identity ?? 'user';
+
+    const payload = { userId, orgId, roles: [] as string[], isAdmin, identity };
     const tokens = await this.generateTokens(payload);
 
     const sessionKey = `session:${userId}:${platform}`;
@@ -147,6 +155,7 @@ export class AuthService {
         phone: true,
         avatar: true,
         isAdmin: true,
+        identity: true,
       },
     });
     if (!user) {

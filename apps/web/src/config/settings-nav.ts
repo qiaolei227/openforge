@@ -12,7 +12,7 @@ import {
 
 export interface SettingsNavItem {
   code: string;
-  label: string;
+  labelKey: string;
   href: string;
   icon: LucideIcon;
   requiredPermission?: string;
@@ -20,32 +20,32 @@ export interface SettingsNavItem {
 }
 
 export interface SettingsNavGroup {
-  label: string;
+  labelKey: string;
   items: SettingsNavItem[];
 }
 
 export const SETTINGS_NAV: SettingsNavGroup[] = [
   {
-    label: '用户与权限',
+    labelKey: 'groupUsersPermissions',
     items: [
-      { code: 'users', label: '用户', href: '/settings/users', icon: Users, requiredPermission: 'platform:users', feature: 'enabled' },
-      { code: 'roles', label: '角色', href: '/settings/roles', icon: Shield, requiredPermission: 'platform:roles', feature: 'enabled' },
-      { code: 'orgs', label: '组织', href: '/settings/orgs', icon: Building2, requiredPermission: 'platform:orgs', feature: 'enabled' },
+      { code: 'users', labelKey: 'users', href: '/settings/users', icon: Users, requiredPermission: 'platform:users', feature: 'enabled' },
+      { code: 'roles', labelKey: 'roles', href: '/settings/roles', icon: Shield, requiredPermission: 'platform:roles', feature: 'enabled' },
+      { code: 'orgs', labelKey: 'orgs', href: '/settings/orgs', icon: Building2, requiredPermission: 'platform:orgs', feature: 'enabled' },
     ],
   },
   {
-    label: '平台配置',
+    labelKey: 'groupPlatformConfig',
     items: [
-      { code: 'config', label: '平台参数', href: '/settings/config', icon: SlidersHorizontal, requiredPermission: 'platform:config', feature: 'enabled' },
+      { code: 'config', labelKey: 'config', href: '/settings/config', icon: SlidersHorizontal, requiredPermission: 'platform:config', feature: 'enabled' },
     ],
   },
   {
-    label: '高级（即将推出）',
+    labelKey: 'groupAdvanced',
     items: [
-      { code: 'audit', label: '操作日志', href: '/settings/audit', icon: ScrollText, feature: 'planned' },
-      { code: 'ai-services', label: 'AI 服务', href: '/settings/ai-services', icon: Sparkles, feature: 'planned' },
-      { code: 'backup', label: '备份恢复', href: '/settings/backup', icon: Database, feature: 'planned' },
-      { code: 'theme', label: '平台主题', href: '/settings/theme', icon: Palette, feature: 'planned' },
+      { code: 'audit', labelKey: 'audit', href: '/settings/audit', icon: ScrollText, feature: 'planned' },
+      { code: 'ai-services', labelKey: 'aiServices', href: '/settings/ai-services', icon: Sparkles, feature: 'planned' },
+      { code: 'backup', labelKey: 'backup', href: '/settings/backup', icon: Database, feature: 'planned' },
+      { code: 'theme', labelKey: 'theme', href: '/settings/theme', icon: Palette, feature: 'planned' },
     ],
   },
 ];

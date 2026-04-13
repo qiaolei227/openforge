@@ -13,7 +13,7 @@ import * as LucideIcons from 'lucide-react';
 export function getLucideIcon(name: string | null | undefined): LucideIcon {
   if (!name) return LayoutGrid;
   const Icon = (LucideIcons as Record<string, unknown>)[name];
-  return typeof Icon === 'function' ? (Icon as LucideIcon) : LayoutGrid;
+  return Icon && typeof Icon === 'object' && 'render' in Icon ? (Icon as unknown as LucideIcon) : LayoutGrid;
 }
 
 interface AppIconProps {

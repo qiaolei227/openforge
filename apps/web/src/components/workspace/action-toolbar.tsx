@@ -45,6 +45,16 @@ function resolveIcon(iconName: string | null, className?: string): React.ReactNo
 /*  Enable logic                                                        */
 /* ------------------------------------------------------------------ */
 
+/** Hardcoded data_status → allowed action codes mapping (matches data-status.service.ts TRANSITIONS) */
+const STATUS_ACTION_MAP: Record<string, string[]> = {
+  draft:     ['submit'],
+  reaudit:   ['submit'],
+  submitted: ['withdraw', 'approve'],
+  approved:  ['unapprove'],
+};
+
+const DATA_STATUS_ACTIONS = new Set(['submit', 'withdraw', 'approve', 'unapprove']);
+
 function isActionEnabled(
   action: SysAction,
   selectedRecords: Array<Record<string, any>>,
@@ -52,8 +62,8 @@ function isActionEnabled(
   currentRecord?: Record<string, any>,
   currentUserId?: string,
 ): boolean {
-  // create is always enabled
-  if (action.code === 'create') return true;
+  // create and list are always enabled
+  if (action.code === 'create' || action.code === 'list') return true;
 
   // Determine the effective record set
   const records =
@@ -62,11 +72,22 @@ function isActionEnabled(
   // Other actions need at least one record
   if (records.length === 0) return false;
 
-  // dataStatus visibility check — all records must match
-  const allowedStatuses = action.visibility?.dataStatus;
-  if (allowedStatuses?.length) {
-    const allMatch = records.every((r) => allowedStatuses.includes(r['data_status'] as string));
+  // Data status actions: check hardcoded status→action mapping
+  if (DATA_STATUS_ACTIONS.has(action.code)) {
+    const allMatch = records.every((r) => {
+      const status = r['data_status'] as string;
+      return status && STATUS_ACTION_MAP[status]?.includes(action.code);
+    });
     if (!allMatch) return false;
+  }
+
+  // Edit/delete/archive: only allowed on draft records (when data_status exists)
+  if (['edit', 'delete', 'archive'].includes(action.code)) {
+    const hasNonDraft = records.some((r) => {
+      const status = r['data_status'];
+      return status && status !== 'draft' && status !== 'reaudit';
+    });
+    if (hasNonDraft) return false;
   }
 
   // withdraw — only if all records were submitted by the current user
@@ -89,9 +110,13 @@ interface ActionButtonProps {
   isPrimary: boolean;
   isDestructive: boolean;
   onAction: (actionCode: string) => void;
+  selectedRecords: Array<Record<string, any>>;
+  position: 'list' | 'detail';
+  currentRecord?: Record<string, any>;
+  currentUserId?: string;
 }
 
-function ActionButton({ action, enabled, isPrimary, isDestructive, onAction }: ActionButtonProps) {
+function ActionButton({ action, enabled, isPrimary, isDestructive, onAction, selectedRecords, position, currentRecord, currentUserId }: ActionButtonProps) {
   const icon = resolveIcon(action.icon);
   const variant: 'default' | 'destructive' = isDestructive ? 'destructive' : 'default';
 
@@ -107,6 +132,7 @@ function ActionButton({ action, enabled, isPrimary, isDestructive, onAction }: A
           label: child.name,
           icon: resolveIcon(child.icon) ?? undefined,
           onClick: () => onAction(child.code),
+          disabled: !isActionEnabled(child, selectedRecords, position, currentRecord, currentUserId),
         }))}
       />
     );
@@ -123,6 +149,7 @@ function ActionButton({ action, enabled, isPrimary, isDestructive, onAction }: A
           label: child.name,
           icon: resolveIcon(child.icon) ?? undefined,
           onClick: () => onAction(child.code),
+          disabled: !isActionEnabled(child, selectedRecords, position, currentRecord, currentUserId),
         }))}
       />
     );
@@ -175,9 +202,6 @@ export function ActionToolbar({
     (a) => a.position === position || a.position === 'both',
   );
 
-  const systemActions = visibleActions.filter((a) => a.category === 'system');
-  const customActions = visibleActions.filter((a) => a.category === 'custom');
-
   const handleAction = (actionCode: string) => {
     const records =
       position === 'detail' && currentRecord ? [currentRecord] : selectedRecords;
@@ -203,6 +227,10 @@ export function ActionToolbar({
         isPrimary={isPrimary}
         isDestructive={isDestructive}
         onAction={handleAction}
+        selectedRecords={selectedRecords}
+        position={position}
+        currentRecord={currentRecord}
+        currentUserId={currentUserId}
       />
     );
   };
@@ -211,16 +239,7 @@ export function ActionToolbar({
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {/* System actions */}
-      {systemActions.map(renderAction)}
-
-      {/* Divider between system and custom */}
-      {systemActions.length > 0 && customActions.length > 0 && (
-        <div className="w-px h-5 bg-border shrink-0" />
-      )}
-
-      {/* Custom actions */}
-      {customActions.map(renderAction)}
+      {visibleActions.map(renderAction)}
 
       {/* Spacer pushes refresh button to the right */}
       <div className="flex-1" />

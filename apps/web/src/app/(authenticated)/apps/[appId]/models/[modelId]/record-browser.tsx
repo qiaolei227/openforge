@@ -483,10 +483,8 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
           break;
         case 'submit':
         case 'approve':
-        case 'reject':
         case 'withdraw':
         case 'unapprove':
-        case 'revise':
           handleStatusChange(ids, actionCode);
           break;
         default:
@@ -577,9 +575,10 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
         return <span className="text-sm truncate">{String(value)}</span>;
       }
 
-      // For reference fields, just show the UUID (display resolution happens in detail view)
+      // For reference fields, show resolved display value
       if (field.fieldType === 'REFERENCE' || field.fieldType === 'USER' || field.fieldType === 'ORGANIZATION') {
-        return <span className="text-sm truncate">{String(value)}</span>;
+        const display = record?.[`${field.columnName}__display`];
+        return <span className="text-sm truncate">{display ?? String(value)}</span>;
       }
 
       // FILE: show file count

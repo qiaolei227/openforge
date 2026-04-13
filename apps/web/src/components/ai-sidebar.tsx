@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import {
-  Layers,
   X,
   Plus,
   Send,
@@ -185,7 +184,7 @@ export function AiSidebar() {
       {/* ---- Header ---- */}
       <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground shrink-0">
-          <Layers className="w-4 h-4" />
+          <Sparkles className="w-4 h-4" />
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold leading-tight">{t('title')}</h2>
@@ -248,7 +247,7 @@ export function AiSidebar() {
               >
                 {msg.role === 'assistant' && (
                   <div className="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground shrink-0 mt-0.5 mr-2">
-                    <Layers className="w-3 h-3" />
+                    <Sparkles className="w-3 h-3" />
                   </div>
                 )}
                 <div
@@ -272,7 +271,7 @@ export function AiSidebar() {
           {isStreaming && (
             <div className="flex justify-start">
               <div className="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground shrink-0 mt-0.5 mr-2">
-                <Layers className="w-3 h-3" />
+                <Sparkles className="w-3 h-3" />
               </div>
               <div className="border border-primary/20 bg-primary/5 rounded-lg px-3 py-2 text-sm text-muted-foreground">
                 {t('thinking')}

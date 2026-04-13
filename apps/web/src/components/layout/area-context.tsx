@@ -30,6 +30,10 @@ export function AreaProvider({ children }: { children: React.ReactNode }) {
       return { area: 'workspace', appCode: wsMatch[1], appId: null };
     }
 
+    if (pathname === '/apps') {
+      return { area: 'designer', appCode: null, appId: null };
+    }
+
     const designerMatch = pathname.match(/^\/apps\/([^/]+)/);
     if (designerMatch) {
       return { area: 'designer', appCode: null, appId: designerMatch[1] };

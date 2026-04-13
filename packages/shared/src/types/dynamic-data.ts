@@ -42,5 +42,5 @@ export interface BatchResponse {
 }
 
 export interface StatusTransitionRequest {
-  action: 'submit' | 'withdraw' | 'approve' | 'reject' | 'unapprove' | 'revise';
+  action: 'submit' | 'withdraw' | 'approve' | 'unapprove';
 }

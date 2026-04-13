@@ -20,15 +20,15 @@ import {
   ChevronRight,
   ChevronDown,
   Save,
-  Folder,
   Link,
   LayoutGrid,
   Minus,
   FileText,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Icon } from '@/components/icon';
-import type { AdminMenuNode } from '../page';
+import type { AdminMenuNode } from '../menu-tab';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -38,6 +38,7 @@ interface Props {
   tree: AdminMenuNode[];
   selected: AdminMenuNode | null;
   onSelect: (node: AdminMenuNode) => void;
+  onDelete: (node: AdminMenuNode) => void;
   onDirty: (v: boolean) => void;
   onSaveReorder: (items: Array<{ id: string; parentId: string | null; sortOrder: number }>) => Promise<void>;
   saving: boolean;
@@ -90,8 +91,6 @@ function flattenForSave(
  */
 function DefaultTypeIcon({ type, className }: { type: AdminMenuNode['type']; className?: string }) {
   switch (type) {
-    case 'group':
-      return <Folder className={cn('w-4 h-4', className)} />;
     case 'model':
       return <LayoutGrid className={cn('w-4 h-4', className)} />;
     case 'link':
@@ -116,6 +115,7 @@ function TreeNodeRow({
   selected,
   onToggleExpand,
   onSelect,
+  onDelete,
 }: {
   node: AdminMenuNode;
   depth: number;
@@ -123,6 +123,7 @@ function TreeNodeRow({
   selected: boolean;
   onToggleExpand: () => void;
   onSelect: () => void;
+  onDelete: () => void;
 }) {
   const hasChildren = (node.children?.length ?? 0) > 0;
   const isDivider = node.type === 'divider';
@@ -152,7 +153,7 @@ function TreeNodeRow({
         ref={setNodeRef}
         style={{ ...style, paddingLeft: indentPx }}
         className={cn(
-          'flex items-center gap-1 px-2 py-1.5 cursor-pointer select-none',
+          'group flex items-center gap-1 px-2 py-1.5 cursor-pointer select-none',
           selected ? 'bg-primary/10' : 'hover:bg-muted/40',
         )}
         onClick={onSelect}
@@ -167,6 +168,14 @@ function TreeNodeRow({
         </span>
         <Minus className="w-3.5 h-3.5 text-muted-foreground" />
         <span className="text-xs text-muted-foreground flex-1">分割线</span>
+        <button
+          type="button"
+          className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          title="删除"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
       </div>
     );
   }
@@ -176,7 +185,7 @@ function TreeNodeRow({
       ref={setNodeRef}
       style={{ ...style, paddingLeft: indentPx }}
       className={cn(
-        'flex items-center gap-1.5 px-2 py-1.5 cursor-pointer select-none rounded-sm',
+        'group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer select-none rounded-sm',
         selected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/40',
       )}
       onClick={onSelect}
@@ -192,7 +201,7 @@ function TreeNodeRow({
       </span>
 
       {/* Expand / collapse toggle */}
-      {hasChildren ? (
+      {(hasChildren || node.type === 'group') ? (
         <button
           type="button"
           onClick={(e) => {
@@ -211,14 +220,17 @@ function TreeNodeRow({
         <span className="w-3.5 shrink-0" />
       )}
 
-      {/* Icon */}
-      <span className={cn('shrink-0', selected ? 'text-primary' : 'text-muted-foreground')}>
-        {node.icon ? (
+      {/* Icon — root group shows custom icon; sub-group relies on expand/collapse chevron only */}
+      {node.type === 'group' && !node.parentId && node.icon && (
+        <span className={cn('shrink-0', selected ? 'text-primary' : 'text-muted-foreground')}>
           <Icon name={node.icon} className="w-4 h-4" />
-        ) : (
+        </span>
+      )}
+      {node.type !== 'model' && node.type !== 'group' && (
+        <span className={cn('shrink-0', selected ? 'text-primary' : 'text-muted-foreground')}>
           <DefaultTypeIcon type={node.type} />
-        )}
-      </span>
+        </span>
+      )}
 
       {/* Name */}
       <span
@@ -233,6 +245,15 @@ function TreeNodeRow({
         )}
       </span>
 
+      {/* Delete on hover */}
+      <button
+        type="button"
+        className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        title="删除"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }
@@ -248,6 +269,7 @@ function TreeNodes({
   selected,
   onToggleExpand,
   onSelect,
+  onDelete,
 }: {
   nodes: AdminMenuNode[];
   depth: number;
@@ -255,6 +277,7 @@ function TreeNodes({
   selected: AdminMenuNode | null;
   onToggleExpand: (id: string) => void;
   onSelect: (node: AdminMenuNode) => void;
+  onDelete: (node: AdminMenuNode) => void;
 }) {
   return (
     <SortableContext
@@ -270,6 +293,7 @@ function TreeNodes({
             selected={selected?.id === node.id}
             onToggleExpand={() => onToggleExpand(node.id)}
             onSelect={() => onSelect(node)}
+            onDelete={() => onDelete(node)}
           />
           {/* Render children when expanded */}
           {(node.children?.length ?? 0) > 0 && expanded.has(node.id) && (
@@ -280,6 +304,7 @@ function TreeNodes({
               selected={selected}
               onToggleExpand={onToggleExpand}
               onSelect={onSelect}
+              onDelete={onDelete}
             />
           )}
         </div>
@@ -296,6 +321,7 @@ export function MenuTreeEditor({
   tree,
   selected,
   onSelect,
+  onDelete,
   onDirty,
   onSaveReorder,
   saving,
@@ -405,6 +431,7 @@ export function MenuTreeEditor({
               selected={selected}
               onToggleExpand={handleToggleExpand}
               onSelect={onSelect}
+              onDelete={onDelete}
             />
           </DndContext>
         )}

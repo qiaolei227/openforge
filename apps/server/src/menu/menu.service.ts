@@ -256,6 +256,20 @@ export class MenuService {
     if (!menu) {
       throw new BusinessException(404, ErrorCodes.MENU_NOT_FOUND, 'Menu not found');
     }
+    // Recursively delete all descendants first, then delete self
+    await this.deleteRecursive(id);
+  }
+
+  private async deleteRecursive(id: string): Promise<void> {
+    const children = await this.prisma.sysMenu.findMany({
+      where: { parentId: id },
+      select: { id: true },
+    });
+    for (const child of children) {
+      await this.deleteRecursive(child.id);
+    }
+    // Delete role-menu permissions for this menu
+    await this.prisma.sysRoleMenu.deleteMany({ where: { menuId: id } });
     await this.prisma.sysMenu.delete({ where: { id } });
   }
 

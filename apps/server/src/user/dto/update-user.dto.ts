@@ -16,4 +16,8 @@ export class UpdateUserDto {
   @IsOptional()
   @IsIn(['active', 'disabled'])
   status?: 'active' | 'disabled';
+
+  @IsOptional()
+  @IsIn(['user', 'designer', 'admin'])
+  identity?: 'user' | 'designer' | 'admin';
 }

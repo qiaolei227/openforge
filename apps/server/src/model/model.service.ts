@@ -38,6 +38,8 @@ export class ModelService {
     { columnName: 'data_status', name: '数据状态', fieldType: 'ENUM' },
     { columnName: 'submitted_by', name: '提交人', fieldType: 'USER' },
     { columnName: 'submitted_at', name: '提交时间', fieldType: 'DATETIME' },
+    { columnName: 'approved_by', name: '审核人', fieldType: 'USER' },
+    { columnName: 'approved_at', name: '审核时间', fieldType: 'DATETIME' },
   ];
 
   // Explicit @Inject required for esbuild/Vitest metadata workaround.

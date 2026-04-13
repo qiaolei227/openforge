@@ -55,8 +55,8 @@ describe('ActionService', () => {
   });
 
   it('should generate system actions for model with data status', async () => {
-    prisma.sysAction.createMany.mockResolvedValue({ count: 9 });
-    prisma.sysAction.findFirst.mockResolvedValue({ id: 'archive-id' });
+    prisma.sysAction.createMany.mockResolvedValue({ count: 5 });
+    prisma.sysAction.findFirst.mockResolvedValue({ id: 'parent-id' });
     prisma.sysAction.upsert.mockResolvedValue({});
     prisma.sysModel.findUnique.mockResolvedValue({ id: 'm1', enableDataStatus: true });
 
@@ -64,12 +64,14 @@ describe('ActionService', () => {
 
     const call = prisma.sysAction.createMany.mock.calls[0][0];
     const codes = call.data.map((a: any) => a.code);
+    // Top-level split parents
     expect(codes).toContain('submit');
     expect(codes).toContain('approve');
-    expect(codes).toContain('reject');
-    expect(codes).toContain('withdraw');
-    expect(codes).toContain('unapprove');
-    expect(codes).toContain('revise');
+    // Children (withdraw, unapprove) are linked via upsert, not in createMany
+    expect(codes).not.toContain('withdraw');
+    expect(codes).not.toContain('unapprove');
+    // 3 upserts: unarchive→archive, withdraw→submit, unapprove→approve
+    expect(prisma.sysAction.upsert).toHaveBeenCalledTimes(3);
   });
 
   it('should not allow deleting system actions', async () => {
