@@ -6,7 +6,7 @@ import { PermissionService } from '../../permission/permission.service';
 import { BusinessException } from '../../exceptions/business.exception';
 
 function mockContext(params: {
-  user?: { userId: string; isAdmin: boolean };
+  user?: { userId: string; isAdmin: boolean; identity?: string };
   request?: any;
 }): ExecutionContext {
   return {
@@ -70,22 +70,34 @@ describe('PermissionGuard', () => {
   });
 
   describe('Form A — static resource string → sys_role_permission', () => {
-    it('calls checkResource and passes when it returns true', async () => {
+    it('identity-gates platform:* targets (only admin allowed)', async () => {
       vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
         if (key === 'require_permission') return { target: 'platform:users', action: 'view' };
+        return undefined;
+      });
+      // Non-admin user → forbidden (identity short-circuit, never reaches checkResource)
+      await expect(
+        guard.canActivate(mockContext({ user: { userId: 'u1', isAdmin: false, identity: 'user' } })),
+      ).rejects.toThrow(BusinessException);
+      expect(permService.checkResource).not.toHaveBeenCalled();
+    });
+
+    it('calls checkResource for non-sys/platform resources and passes when true', async () => {
+      vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
+        if (key === 'require_permission') return { target: 'custom:reports', action: 'view' };
         return undefined;
       });
       permService.checkResource.mockResolvedValue(true);
       expect(
         await guard.canActivate(mockContext({ user: { userId: 'u1', isAdmin: false } })),
       ).toBe(true);
-      expect(permService.checkResource).toHaveBeenCalledWith('u1', 'platform:users', 'view');
+      expect(permService.checkResource).toHaveBeenCalledWith('u1', 'custom:reports', 'view');
       expect(permService.check).not.toHaveBeenCalled();
     });
 
     it('throws FORBIDDEN when checkResource returns false', async () => {
       vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
-        if (key === 'require_permission') return { target: 'platform:users', action: 'delete' };
+        if (key === 'require_permission') return { target: 'custom:reports', action: 'delete' };
         return undefined;
       });
       permService.checkResource.mockResolvedValue(false);
