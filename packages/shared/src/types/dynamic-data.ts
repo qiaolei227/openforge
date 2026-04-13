@@ -40,3 +40,7 @@ export interface BatchResponse {
   succeeded: string[];
   failed: Array<{ id: string; errorCode: string; message: string }>;
 }
+
+export interface StatusTransitionRequest {
+  action: 'submit' | 'withdraw' | 'approve' | 'reject' | 'unapprove' | 'revise';
+}

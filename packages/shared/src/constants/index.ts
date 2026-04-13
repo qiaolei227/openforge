@@ -30,3 +30,22 @@ export const SYSTEM_FIELDS = [
   'id', 'org_id', 'is_archived', 'version',
   'created_by', 'updated_by', 'created_at', 'updated_at',
 ] as const;
+
+export const DATA_STATUS = ['draft', 'submitted', 'approved', 'pending_revision'] as const;
+export type DataStatus = (typeof DATA_STATUS)[number];
+
+export const DATA_STATUS_FIELDS = [
+  'data_status', 'submitted_by', 'submitted_at',
+] as const;
+
+export const ACTION_CATEGORIES = ['system', 'custom'] as const;
+export type ActionCategory = (typeof ACTION_CATEGORIES)[number];
+
+export const ACTION_TYPES = ['builtin', 'openUrl', 'callApi', 'script'] as const;
+export type ActionType = (typeof ACTION_TYPES)[number];
+
+export const DISPLAY_TYPES = ['button', 'split', 'menu'] as const;
+export type DisplayType = (typeof DISPLAY_TYPES)[number];
+
+export const ACTION_POSITIONS = ['list', 'detail', 'both'] as const;
+export type ActionPosition = (typeof ACTION_POSITIONS)[number];

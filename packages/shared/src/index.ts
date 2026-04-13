@@ -5,6 +5,7 @@ export * from './types/config';
 export * from './types/app';
 export * from './types/model';
 export * from './types/dynamic-data';
+export * from './types/action';
 export * from './types/layout';
 export * from './types/view';
 export * from './constants';

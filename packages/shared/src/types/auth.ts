@@ -9,11 +9,14 @@ export interface TokenResponse {
   refreshToken: string;
 }
 
+export type Identity = 'user' | 'designer' | 'admin';
+
 export interface JwtPayload {
   userId: string;
   orgId: string;
   roles: string[];
   isAdmin: boolean;
+  identity: Identity;
 }
 
 export interface RefreshRequest {
@@ -28,6 +31,7 @@ export interface UserProfile {
   phone: string | null;
   avatar: string | null;
   isAdmin: boolean;
+  identity: Identity;
 }
 
 export interface UpdateProfileRequest {
