@@ -879,6 +879,16 @@
     "settings": "Platform Settings",
     "home": "Home"
   },
+  "recordPage": {
+    "createTitle": "New {name}",
+    "detailTitle": "{name} Detail",
+    "save": "Save",
+    "saving": "Saving...",
+    "createdBy": "Created by",
+    "createdAt": "Created at",
+    "updatedBy": "Updated by",
+    "updatedAt": "Updated at"
+  },
   "dataStatus": {
     "draft": "Draft",
     "submitted": "Submitted",

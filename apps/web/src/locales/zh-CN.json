@@ -879,6 +879,16 @@
     "settings": "平台设置",
     "home": "首页"
   },
+  "recordPage": {
+    "createTitle": "新建{name}",
+    "detailTitle": "{name}详情",
+    "save": "保存",
+    "saving": "保存中...",
+    "createdBy": "创建人",
+    "createdAt": "创建时间",
+    "updatedBy": "更新人",
+    "updatedAt": "更新时间"
+  },
   "dataStatus": {
     "draft": "草稿",
     "submitted": "已提交",
