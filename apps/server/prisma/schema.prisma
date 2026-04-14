@@ -152,6 +152,7 @@ model SysModel {
   enableDataStatus Boolean  @default(false) @map("enable_data_status")
   semantic         String?  @db.Text
   aiHint      String?  @map("ai_hint") @db.Text
+  defaultSort  Json?    @map("default_sort") @db.JsonB
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

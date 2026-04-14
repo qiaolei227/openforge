@@ -1,4 +1,5 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { ModelCreatedEvent } from '../event-bus/events';
@@ -192,12 +193,35 @@ export class ModelService {
 
   async update(id: string, dto: UpdateModelDto) {
     const existing = await this.findById(id);
-    // Note: dataScope is intentionally not in UpdateModelDto — it's immutable once created
 
-    // Handle enableDataStatus toggle — must run DDL + action sync before metadata update
-    if (dto.enableDataStatus !== undefined && dto.enableDataStatus !== existing.enableDataStatus) {
-      await this.toggleDataStatus(id, dto.enableDataStatus);
-      await this.actionService.syncDataStatusActions(id, dto.enableDataStatus);
+    // Validate defaultSort field references
+    if (dto.defaultSort !== undefined && dto.defaultSort !== null) {
+      const validColumns = existing.fields
+        .filter((f: any) => !f.isSystem && f.deletedAt === null)
+        .map((f: any) => f.columnName);
+      // Also allow system columns that make sense for sorting
+      const systemSortable = ['created_at', 'updated_at'];
+      const allValid = [...validColumns, ...systemSortable];
+
+      for (const item of dto.defaultSort) {
+        if (!allValid.includes(item.field)) {
+          throw new BusinessException(
+            400,
+            ErrorCodes.DATA_VALIDATION_FAILED,
+            `Invalid sort field: ${item.field}`,
+          );
+        }
+      }
+
+      // Check for duplicates
+      const fields = dto.defaultSort.map((s) => s.field);
+      if (new Set(fields).size !== fields.length) {
+        throw new BusinessException(
+          400,
+          ErrorCodes.DATA_VALIDATION_FAILED,
+          'Duplicate sort fields are not allowed',
+        );
+      }
     }
 
     return this.prisma.sysModel.update({
@@ -205,6 +229,12 @@ export class ModelService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
+        ...(dto.defaultSort !== undefined && {
+          defaultSort:
+            dto.defaultSort === null
+              ? Prisma.JsonNull
+              : (dto.defaultSort as unknown as Prisma.InputJsonValue),
+        }),
       },
     });
   }

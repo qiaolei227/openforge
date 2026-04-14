@@ -14,7 +14,7 @@ import {
   type TreeNode,
   type TreeColumn,
 } from '@openforge/ui';
-import type { Field, FieldType, LayoutConfig, LayoutNode, QueryResponse, BatchResponse, SysView, FilterGroup } from '@openforge/shared';
+import type { Field, FieldType, LayoutConfig, LayoutNode, QueryResponse, BatchResponse, SysView, FilterGroup, SortItem } from '@openforge/shared';
 import { useTabStore } from '@/stores/tab-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useActions } from '@/hooks/use-actions';
@@ -51,6 +51,7 @@ interface RecordBrowserProps {
     tableName: string;
     isTree?: boolean;
     enableDataStatus?: boolean;
+    defaultSort?: SortItem[] | null;
     app: { code: string };
   };
   fields: Field[];

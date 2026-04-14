@@ -53,6 +53,7 @@ export class DynamicDataService {
       model.dataScope,
       orgId,
       model.isTree,
+      model.defaultSort as Array<{ field: string; order: 'asc' | 'desc' }> | null,
     );
 
     const [data, countResult] = await Promise.all([

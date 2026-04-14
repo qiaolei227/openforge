@@ -54,6 +54,7 @@ export class QueryBuilderService {
     dataScope: string,
     orgId: string,
     isTree = false,
+    defaultSort?: Array<{ field: string; order: 'asc' | 'desc' }> | null,
   ): QueryResult {
     const params: any[] = [];
     const conditions: string[] = [];
@@ -99,7 +100,7 @@ export class QueryBuilderService {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // ORDER BY
-    const orderBy = this.buildSort(query.sort, validColumns);
+    const orderBy = this.buildSort(query.sort, validColumns, defaultSort);
 
     // Pagination
     const page = query.page || 1;
@@ -236,18 +237,30 @@ export class QueryBuilderService {
   private buildSort(
     sort: any[] | undefined,
     validColumns: string[],
+    defaultSort?: Array<{ field: string; order: 'asc' | 'desc' }> | null,
   ): string {
-    if (!sort || sort.length === 0) {
-      return 'ORDER BY "created_at" DESC';
+    // User-specified sort takes highest priority
+    if (sort && sort.length > 0) {
+      const parts = sort.map((s) => {
+        const col = this.resolveColumn(s.field, validColumns);
+        const dir = s.order === 'asc' ? 'ASC' : 'DESC';
+        return `"${col}" ${dir}`;
+      });
+      return `ORDER BY ${parts.join(', ')}`;
     }
 
-    const parts = sort.map((s) => {
-      const col = this.resolveColumn(s.field, validColumns);
-      const dir = s.order === 'asc' ? 'ASC' : 'DESC';
-      return `"${col}" ${dir}`;
-    });
+    // Model default sort as fallback
+    if (defaultSort && defaultSort.length > 0) {
+      const parts = defaultSort
+        .filter((s) => validColumns.includes(s.field))
+        .map((s) => `"${s.field}" ${s.order === 'asc' ? 'ASC' : 'DESC'}`);
+      if (parts.length > 0) {
+        return `ORDER BY ${parts.join(', ')}`;
+      }
+    }
 
-    return `ORDER BY ${parts.join(', ')}`;
+    // Ultimate fallback
+    return 'ORDER BY "created_at" DESC';
   }
 
   /** Resolve and validate a field name against the whitelist */

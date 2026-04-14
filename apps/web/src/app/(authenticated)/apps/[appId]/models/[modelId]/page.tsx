@@ -38,10 +38,11 @@ import {
   TableProperties,
   Star,
 } from 'lucide-react';
-import { FIELD_TYPES, type LayoutConfig, type Field as SharedField, type SysEntity } from '@openforge/shared';
+import { FIELD_TYPES, type LayoutConfig, type Field as SharedField, type SysEntity, type SortItem } from '@openforge/shared';
 import { generateDefaultFormLayout, generateDefaultListLayout } from '@openforge/render-engine';
 import { useDesignerBreadcrumbStore } from '@/stores/designer-breadcrumb-store';
 import { fieldTypeBadgeClass } from './designer/field-type-styles';
+import DefaultSortPopover from './default-sort-popover';
 import { ModelActionsTab } from './components/model-actions-tab';
 import { CreateViewDialog } from './designer/create-view-dialog';
 import { PreviewMode } from './designer/preview-mode';
@@ -110,6 +111,7 @@ interface ModelItem {
   dataScope: 'private' | 'shared' | 'distributed';
   isTree: boolean;
   enableDataStatus: boolean;
+  defaultSort?: SortItem[] | null;
   app?: { id?: string; code?: string; name?: string };
 }
 
@@ -1307,6 +1309,24 @@ export default function ModelDetailPage() {
               {model.description && (
                 <p className="text-sm text-muted-foreground">{model.description}</p>
               )}
+              {/* Property Badges */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                {[
+                  { private: 'badgePrivate', shared: 'badgeShared', distributed: 'badgeDistributed' }[model.dataScope],
+                  model.isTree && 'badgeTree',
+                  model.enableDataStatus && 'badgeDataStatus',
+                ].filter(Boolean).map((key) => (
+                  <span key={key as string} className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {tModels(key as 'badgePrivate')}
+                  </span>
+                ))}
+                <DefaultSortPopover
+                  modelId={model.id}
+                  fields={fields.map((f) => ({ columnName: f.columnName, name: f.name }))}
+                  defaultSort={model.defaultSort ?? null}
+                  onSaved={fetchModel}
+                />
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-4">
               <button onClick={() => router.push(`/apps/${appId}`)} className={btnOutline}>

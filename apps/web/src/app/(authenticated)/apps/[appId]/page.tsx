@@ -316,7 +316,6 @@ export default function AppDetailPage() {
         await apiClient.put(`/models/${editingModel.id}`, {
           name: formName,
           description: formDescription || undefined,
-          enableDataStatus: formEnableDataStatus,
         });
         showToast(tModels('updateSuccess'), 'success');
       }
@@ -1010,20 +1009,24 @@ export default function AppDetailPage() {
                 </>
               )}
 
-              {/* Enable Data Status */}
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="enableDataStatus"
-                  checked={formEnableDataStatus}
-                  onChange={(e) => setFormEnableDataStatus(e.target.checked)}
-                  className="h-4 w-4 rounded border-input"
-                />
-                <label htmlFor="enableDataStatus" className="text-sm font-medium cursor-pointer">
-                  {tModels('enableDataStatus')}
-                </label>
-              </div>
-              <p className="text-xs text-muted-foreground -mt-1">{tModels('enableDataStatusHint')}</p>
+              {/* Enable Data Status — immutable after creation, like isTree */}
+              {dialogMode === 'create' && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="enableDataStatus"
+                      checked={formEnableDataStatus}
+                      onChange={(e) => setFormEnableDataStatus(e.target.checked)}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <label htmlFor="enableDataStatus" className="text-sm font-medium cursor-pointer">
+                      {tModels('enableDataStatus')}
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground -mt-1">{tModels('enableDataStatusHint')}</p>
+                </>
+              )}
 
               {formError && (
                 <p className="text-sm text-destructive">{formError}</p>
