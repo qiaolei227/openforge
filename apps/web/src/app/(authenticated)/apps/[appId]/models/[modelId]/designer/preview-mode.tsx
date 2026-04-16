@@ -1,11 +1,12 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import type { Field, LayoutConfig } from '@openforge/shared';
+import type { Field, LayoutConfig, FieldType } from '@openforge/shared';
 import {
   RenderProvider,
   FormRenderer,
   ListRenderer,
+  DEFAULT_COLUMN_WIDTH,
   type EntityWithFields,
   type LayoutColumnConfig,
 } from '@openforge/render-engine';
@@ -36,7 +37,7 @@ function ListPreviewTable({
 
   return (
     <div className="overflow-x-auto rounded-lg border bg-background">
-      <table className="w-full border-collapse text-sm">
+      <table className="w-auto table-fixed border-collapse text-sm">
         <thead>
           <tr className="bg-muted/40">
             <th className="h-10 w-8 min-w-[32px] border-b px-2 text-center">
@@ -48,13 +49,15 @@ function ListPreviewTable({
             {columns.map((col) => {
               const field = fieldMap.get(col.fieldId);
               const label = col.label ?? field?.name ?? '?';
-              const width = col.width ?? 150;
+              const width =
+                col.width ??
+                (field ? DEFAULT_COLUMN_WIDTH[field.fieldType as FieldType] ?? 150 : 150);
               const align = col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left';
               return (
                 <th
                   key={col.fieldId}
                   className={`h-10 border-b px-3 text-xs font-medium text-muted-foreground whitespace-nowrap ${align}`}
-                  style={{ width, minWidth: width }}
+                  style={{ width, minWidth: width, maxWidth: width }}
                 >
                   {label}
                 </th>

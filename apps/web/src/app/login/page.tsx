@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
@@ -19,6 +19,7 @@ const REMEMBER_KEY = 'openforge_remember_username';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const t = useTranslations('auth');
   const tErrors = useTranslations('errorCodes');
 
@@ -27,6 +28,14 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
+
+  // Show warning from redirect reason
+  useEffect(() => {
+    if (searchParams.get('reason') === 'session_replaced') {
+      setWarning(t('sessionReplaced'));
+    }
+  }, [searchParams, t]);
 
   // Check initialization status + redirect if already authenticated
   useEffect(() => {
@@ -100,6 +109,11 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              {warning && (
+                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+                  {warning}
+                </div>
+              )}
               {error && (
                 <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {error}

@@ -21,24 +21,44 @@ function ChevronRightIcon() {
   );
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
 export interface DataTablePaginationProps {
   total: number;
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
   t: (key: string, values?: Record<string, any>) => string;
 }
 
-export function DataTablePagination({ total, page, pageSize, onPageChange, t }: DataTablePaginationProps) {
+export function DataTablePagination({ total, page, pageSize, onPageChange, onPageSizeChange, t }: DataTablePaginationProps) {
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
 
   return (
     <div className="flex items-center justify-between px-4 py-3 border-t">
-      <span className="text-sm text-muted-foreground">
-        {t('common.total', { count: total })}
-      </span>
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-muted-foreground">
+          {t('common.total', { count: total })}
+        </span>
+
+        {onPageSizeChange && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm text-muted-foreground">{t('common.perPage')}</span>
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              className="h-7 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              {PAGE_SIZE_OPTIONS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center gap-1">
         <button

@@ -93,7 +93,9 @@ export class ChildrenService {
       .filter((f: any) => f.fieldType !== 'MULTI_REFERENCE')
       .map((f: any) => f.columnName);
 
-    for (const record of records) {
+    for (let idx = 0; idx < records.length; idx++) {
+      const record = records[idx];
+      const isNewRow = !record.id || !existingIds.has(record.id);
       const cleanData: Record<string, any> = {};
       for (const [key, value] of Object.entries(record)) {
         if (key === 'id') continue;
@@ -102,6 +104,9 @@ export class ChildrenService {
         if (!writableColumns.includes(key)) continue;
         cleanData[key] = value;
       }
+
+      // Validate required fields for entity rows
+      this.validateChildRecord(cleanData, childFields, childModel.name, idx + 1, isNewRow);
 
       if (record.id && existingIds.has(record.id)) {
         await this.updateChild(tx, tableName, record.id, cleanData, userId);
@@ -162,6 +167,69 @@ export class ChildrenService {
   }
 
   /**
+   * Validate required fields and basic types for a single child record.
+   * Error format matches the parent's validateFields: { field, code, name }.
+   */
+  private validateChildRecord(
+    data: Record<string, any>,
+    childFields: any[],
+    entityName: string,
+    rowNum: number,
+    isNewRow: boolean,
+  ) {
+    const errors: Array<{ field: string; code: string; name: string }> = [];
+    const writableFields = childFields.filter(
+      (f: any) => !f.isSystem && !f.deletedAt && f.fieldType !== 'MULTI_REFERENCE' && f.fieldType !== 'AUTO_NUMBER',
+    );
+
+    for (const field of writableFields) {
+      const value = data[field.columnName];
+      const isEmpty = value === null || value === undefined || value === '';
+
+      // Required check — new rows: must exist; existing rows: cannot clear to empty
+      if (field.isRequired) {
+        if (isNewRow && isEmpty) {
+          errors.push({ field: field.columnName, code: 'entity_field_required', name: `${entityName}#${rowNum}.${field.name}` });
+          continue;
+        }
+        if (!isNewRow && field.columnName in data && isEmpty) {
+          errors.push({ field: field.columnName, code: 'entity_field_required', name: `${entityName}#${rowNum}.${field.name}` });
+          continue;
+        }
+      }
+
+      if (isEmpty) continue;
+
+      // Basic type coercion for numbers (same as parent validateFields)
+      if (field.fieldType === 'INTEGER') {
+        const intVal = typeof value === 'string' ? Number(value) : value;
+        if (typeof intVal !== 'number' || !Number.isFinite(intVal) || !Number.isInteger(intVal)) {
+          errors.push({ field: field.columnName, code: 'must_be_integer', name: `${entityName}#${rowNum}.${field.name}` });
+        } else {
+          data[field.columnName] = intVal;
+        }
+      } else if (field.fieldType === 'DECIMAL') {
+        const decVal = typeof value === 'string' ? Number(value) : value;
+        if (typeof decVal !== 'number' || !Number.isFinite(decVal)) {
+          errors.push({ field: field.columnName, code: 'must_be_number', name: `${entityName}#${rowNum}.${field.name}` });
+        } else {
+          const scale = (field.options as any)?.scale ?? 2;
+          const factor = Math.pow(10, scale);
+          data[field.columnName] = Math.round(decVal * factor) / factor;
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new BusinessException(
+        400,
+        ErrorCodes.DATA_VALIDATION_FAILED,
+        JSON.stringify(errors),
+      );
+    }
+  }
+
+  /**
    * Resolve the child entity metadata from a childKey (entity code on parent model).
    */
   private async resolveChildModel(parentModelId: string, childKey: string) {
@@ -184,7 +252,7 @@ export class ChildrenService {
     const fkColumnName = `${entity.model.code}_id`;
 
     return {
-      childModel: { tableName: entity.tableName, code: entity.code },
+      childModel: { tableName: entity.tableName, code: entity.code, name: entity.name },
       fkColumnName,
       childFields: entity.fields,
     };

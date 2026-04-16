@@ -340,6 +340,12 @@ export function RecordPage({
     tErrors, tCommon, setDirty, closeTab, updateTitle,
   ]);
 
+  /* ---------- Navigate to list ---------- */
+  const handleNavigateToList = useCallback(() => {
+    const { openListTab } = useTabStore.getState();
+    openListTab({ appCode, modelCode, modelName });
+  }, [appCode, modelCode, modelName]);
+
   /* ---------- ActionToolbar onAction handler ---------- */
   const handleAction = useCallback(
     async (actionCode: string, _records: Record<string, any>[]) => {
@@ -347,11 +353,6 @@ export function RecordPage({
         case 'create': {
           const { openCreateTab } = useTabStore.getState();
           openCreateTab({ appCode, modelCode, modelName });
-          break;
-        }
-        case 'list': {
-          const { openListTab } = useTabStore.getState();
-          openListTab({ appCode, modelCode, modelName });
           break;
         }
         case 'edit':
@@ -483,20 +484,19 @@ export function RecordPage({
       )}
 
       {/* Toolbar */}
-      {!isCreate && (
-        <div className="px-6 pt-4 pb-2">
-          <ActionToolbar
-            actions={actions}
-            selectedRecords={record ? [record] : []}
-            enableDataStatus={enableDataStatus}
-            position="detail"
-            currentRecord={record ?? undefined}
-            currentUserId={user?.id}
-            onAction={handleAction}
-            onRefresh={fetchRecord}
-          />
-        </div>
-      )}
+      <div className="px-6 pt-4 pb-2">
+        <ActionToolbar
+          actions={isCreate ? [] : actions}
+          selectedRecords={isCreate ? [] : (record ? [record] : [])}
+          enableDataStatus={enableDataStatus}
+          position="detail"
+          currentRecord={isCreate ? undefined : (record ?? undefined)}
+          currentUserId={user?.id}
+          onAction={handleAction}
+          onNavigateToList={handleNavigateToList}
+          onRefresh={isCreate ? undefined : fetchRecord}
+        />
+      </div>
 
       {/* Header: Title + Status + Save button */}
       <div className="flex items-center gap-4 px-6 py-3 border-b">

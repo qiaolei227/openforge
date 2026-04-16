@@ -21,6 +21,13 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Session replaced by another login — skip refresh, redirect with reason
+      if (error.response?.data?.errorCode === 'AUTH_SESSION_REPLACED') {
+        clearTokens();
+        window.location.href = '/login?reason=session_replaced';
+        return new Promise(() => {});
+      }
+
       originalRequest._retry = true;
       const refreshToken = getRefreshToken();
       if (refreshToken) {

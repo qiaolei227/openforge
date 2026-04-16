@@ -38,6 +38,12 @@ export default function DecimalField({ field, value, onChange, disabled, error, 
             if (!isNaN(parsed)) onChange(parsed);
           }
         }}
+        onBlur={() => {
+          if (value == null) return;
+          const factor = Math.pow(10, scale);
+          const rounded = Math.round(Number(value) * factor) / factor;
+          if (rounded !== Number(value)) onChange(rounded);
+        }}
         disabled={disabled}
         placeholder={field.name}
       />

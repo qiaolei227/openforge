@@ -52,6 +52,7 @@ export function useRenderServices(
           page: params.page || 1,
           pageSize: params.pageSize || 10,
           includeArchived: params.includeArchived ?? false,
+          ...(params.searchFields?.length ? { searchFields: params.searchFields } : {}),
         },
       );
       return { data: resp.data, total: resp.total };

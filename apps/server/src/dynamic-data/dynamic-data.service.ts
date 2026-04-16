@@ -81,6 +81,16 @@ export class DynamicDataService {
       await this.batchResolveDisplayValues(data, model.fields);
     }
 
+    // Resolve 1:N detail rows (single entity, master-detail expand)
+    if (data.length > 0 && queryDto.detailEntity?.entityCode) {
+      await this.resolveDetailRows(data, model.id, model.code, queryDto.detailEntity);
+    }
+
+    // Resolve 1:1 entity fields (attach as __oneToOne[entityCode])
+    if (data.length > 0 && queryDto.oneToOneFields && Object.keys(queryDto.oneToOneFields).length > 0) {
+      await this.resolveOneToOneFields(data, model.id, model.code, queryDto.oneToOneFields);
+    }
+
     return {
       data,
       total: countResult[0]?.total ?? 0,
@@ -118,61 +128,7 @@ export class DynamicDataService {
     }
 
     const record = rows[0];
-
-    // Resolve display values and load entity metadata in parallel
-    const [, entities] = await Promise.all([
-      this.resolveDisplayValues(record, model.fields),
-      this.prisma.sysEntity.findMany({
-        where: { modelId: model.id },
-        include: {
-          fields: {
-            where: { isSystem: false, deletedAt: null },
-            orderBy: { sortOrder: 'asc' },
-          },
-        },
-      }),
-    ]);
-
-    if (entities.length > 0) {
-      const childrenMeta: Record<string, any> = {};
-      for (const entity of entities) {
-        const fkColumnName = `${model.code}_id`;
-
-        // Fetch actual child rows for this entity
-        let rows: any[] = [];
-        try {
-          rows = await this.prisma.$queryRawUnsafe<any[]>(
-            `SELECT * FROM biz."${entity.tableName}" WHERE "${fkColumnName}" = $1::uuid ORDER BY "created_at" ASC`,
-            record.id,
-          );
-          // Resolve display values for entity REFERENCE fields
-          if (rows.length > 0) {
-            const entityRefFields = entity.fields.filter((f: any) =>
-              f.fieldType === 'REFERENCE' || f.fieldType === 'USER' || f.fieldType === 'ORGANIZATION'
-            );
-            if (entityRefFields.length > 0) {
-              await this.batchResolveDisplayValues(rows, entityRefFields);
-            }
-          }
-        } catch {
-          this.logger.warn(`Failed to load children for entity ${entity.code}`);
-        }
-
-        childrenMeta[entity.code] = {
-          entityId: entity.id,
-          entityName: entity.name,
-          entityCode: entity.code,
-          targetTableName: entity.tableName,
-          fkColumnName,
-          isOneToOne: entity.entityType === 'one_to_one',
-          targetFields: entity.fields,
-          rows,
-        };
-      }
-      record.__childrenMeta = childrenMeta;
-    }
-
-    return record;
+    return this.enrichRecord(record, model);
   }
 
   // ────────────────────────── Create ──────────────────────────
@@ -400,7 +356,10 @@ export class DynamicDataService {
     this.eventBus.emit('record.updated', new RecordUpdatedEvent(
       userId, orgId, { modelCode, recordId: id },
     ));
-    return updated;
+
+    // Enrich with display values + children metadata so the frontend
+    // can update state in-place without an extra GET
+    return this.enrichRecord(updated, model);
   }
 
   // ────────────────────────── Delete ──────────────────────────
@@ -619,6 +578,40 @@ export class DynamicDataService {
    *   so the form renderer can disable input.
    * - admin (`isAdmin=true`) bypasses all filtering and gets the full schema.
    */
+
+  // ────────────────────────── Status Counts ──────────────────────────
+
+  async statusCounts(
+    appCode: string,
+    modelCode: string,
+    orgId: string,
+  ) {
+    const model = await this.getModelByAppAndCode(appCode, modelCode);
+    if (!model.enableDataStatus) {
+      return { all: 0, draft: 0, submitted: 0, approved: 0, reaudit: 0 };
+    }
+
+    const params: any[] = [];
+    let whereClause = '"is_archived" = false';
+    if (model.dataScope === 'private' || model.dataScope === 'distributed') {
+      params.push(orgId);
+      whereClause += ` AND "org_id" = $${params.length}::uuid`;
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ data_status: string; count: number }>>(
+      `SELECT "data_status", COUNT(*)::int AS "count" FROM biz."${model.tableName}" WHERE ${whereClause} GROUP BY "data_status"`,
+      ...params,
+    );
+
+    const counts: Record<string, number> = { draft: 0, submitted: 0, approved: 0, reaudit: 0 };
+    let all = 0;
+    for (const row of rows) {
+      counts[row.data_status] = row.count;
+      all += row.count;
+    }
+    return { all, ...counts };
+  }
+
   async getSchema(
     appCode: string,
     modelCode: string,
@@ -759,6 +752,12 @@ export class DynamicDataService {
   /**
    * Validate field values against metadata.
    */
+  /**
+   * Validate field values against metadata.
+   *
+   * Error format: { field, code, name } — frontend translates `code`
+   * using `validation.{code}` i18n key with `{name}` interpolation.
+   */
   private async validateFields(
     data: Record<string, any>,
     fields: Array<{
@@ -774,7 +773,7 @@ export class DynamicDataService {
     isCreate: boolean,
     recordId?: string,
   ) {
-    const errors: Array<{ field: string; message: string }> = [];
+    const errors: Array<{ field: string; code: string; name: string }> = [];
 
     for (const field of fields) {
       const value = data[field.columnName];
@@ -785,13 +784,15 @@ export class DynamicDataService {
       // AUTO_NUMBER is generated, skip user validation
       if (field.fieldType === 'AUTO_NUMBER') continue;
 
-      // Required check (only for creates, or if value is explicitly provided on update)
-      if (field.isRequired && isCreate) {
-        if (value === null || value === undefined || value === '') {
-          errors.push({
-            field: field.columnName,
-            message: `"${field.name}" is required`,
-          });
+      // Required check — create: must exist; update: cannot clear to empty
+      if (field.isRequired) {
+        const isEmpty = value === null || value === undefined || value === '';
+        if (isCreate && isEmpty) {
+          errors.push({ field: field.columnName, code: 'required', name: field.name });
+          continue;
+        }
+        if (!isCreate && field.columnName in data && isEmpty) {
+          errors.push({ field: field.columnName, code: 'required', name: field.name });
           continue;
         }
       }
@@ -801,39 +802,38 @@ export class DynamicDataService {
 
       // Type validation
       switch (field.fieldType) {
-        case 'INTEGER':
-          if (typeof value !== 'number' || !Number.isInteger(value)) {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must be an integer`,
-            });
+        case 'INTEGER': {
+          const intVal = typeof value === 'string' ? Number(value) : value;
+          if (typeof intVal !== 'number' || !Number.isFinite(intVal) || !Number.isInteger(intVal)) {
+            errors.push({ field: field.columnName, code: 'must_be_integer', name: field.name });
+          } else {
+            data[field.columnName] = intVal;
           }
           break;
+        }
 
-        case 'DECIMAL':
-          if (typeof value !== 'number') {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must be a number`,
-            });
+        case 'DECIMAL': {
+          const decVal = typeof value === 'string' ? Number(value) : value;
+          if (typeof decVal !== 'number' || !Number.isFinite(decVal)) {
+            errors.push({ field: field.columnName, code: 'must_be_number', name: field.name });
+          } else {
+            // Round to configured scale (default 2)
+            const scale = (field.options as any)?.scale ?? 2;
+            const factor = Math.pow(10, scale);
+            data[field.columnName] = Math.round(decVal * factor) / factor;
           }
           break;
+        }
 
         case 'BOOLEAN':
           if (typeof value !== 'boolean') {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must be a boolean`,
-            });
+            errors.push({ field: field.columnName, code: 'must_be_boolean', name: field.name });
           }
           break;
 
         case 'TIME': {
           if (typeof value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(value)) {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must be a valid time (HH:MM or HH:MM:SS)`,
-            });
+            errors.push({ field: field.columnName, code: 'must_be_time', name: field.name });
           }
           break;
         }
@@ -842,52 +842,34 @@ export class DynamicDataService {
           const choices: string[] =
             (field.options as any)?.choices?.map((c: any) => c.value) ?? [];
           if (choices.length > 0 && !choices.includes(value)) {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must be one of: ${choices.join(', ')}`,
-            });
+            errors.push({ field: field.columnName, code: 'invalid_enum_value', name: field.name });
           }
           break;
         }
 
         case 'MULTI_ENUM': {
           if (!Array.isArray(value)) {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must be an array`,
-            });
+            errors.push({ field: field.columnName, code: 'must_be_array', name: field.name });
             break;
           }
-          // Check for duplicates
           if (new Set(value).size !== value.length) {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must not contain duplicate values`,
-            });
+            errors.push({ field: field.columnName, code: 'duplicate_values', name: field.name });
             break;
           }
-          // Check each value is in choices
           const multiChoices: string[] =
             (field.options as any)?.choices?.map((c: any) => c.value) ?? [];
           if (multiChoices.length > 0) {
             const invalid = value.filter((v: string) => !multiChoices.includes(v));
             if (invalid.length > 0) {
-              errors.push({
-                field: field.columnName,
-                message: `"${field.name}" contains invalid values: ${invalid.join(', ')}`,
-              });
+              errors.push({ field: field.columnName, code: 'invalid_enum_values', name: field.name });
             }
           }
           break;
         }
 
         case 'USER': {
-          // Validate that the referenced user exists
           if (typeof value !== 'string') {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must be a UUID string`,
-            });
+            errors.push({ field: field.columnName, code: 'must_be_uuid', name: field.name });
             break;
           }
           const userExists = await this.prisma.sysUser.findUnique({
@@ -895,21 +877,14 @@ export class DynamicDataService {
             select: { id: true },
           });
           if (!userExists) {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" references a non-existent user`,
-            });
+            errors.push({ field: field.columnName, code: 'user_not_found', name: field.name });
           }
           break;
         }
 
         case 'ORGANIZATION': {
-          // Validate that the referenced organization exists
           if (typeof value !== 'string') {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must be a UUID string`,
-            });
+            errors.push({ field: field.columnName, code: 'must_be_uuid', name: field.name });
             break;
           }
           const orgExists = await this.prisma.sysOrganization.findUnique({
@@ -917,10 +892,7 @@ export class DynamicDataService {
             select: { id: true },
           });
           if (!orgExists) {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" references a non-existent organization`,
-            });
+            errors.push({ field: field.columnName, code: 'org_not_found', name: field.name });
           }
           break;
         }
@@ -928,18 +900,12 @@ export class DynamicDataService {
         case 'FILE':
         case 'IMAGE': {
           if (!Array.isArray(value)) {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" must be an array of file IDs`,
-            });
+            errors.push({ field: field.columnName, code: 'must_be_file_array', name: field.name });
             break;
           }
           const maxCount = (field.options as any)?.maxCount ?? 10;
           if (value.length > maxCount) {
-            errors.push({
-              field: field.columnName,
-              message: `"${field.name}" exceeds max file count (${maxCount})`,
-            });
+            errors.push({ field: field.columnName, code: 'max_file_count_exceeded', name: field.name });
           }
           break;
         }
@@ -960,10 +926,7 @@ export class DynamicDataService {
         );
 
         if (uniqueResult[0]?.exists) {
-          errors.push({
-            field: field.columnName,
-            message: `"${field.name}" value must be unique`,
-          });
+          errors.push({ field: field.columnName, code: 'must_be_unique', name: field.name });
         }
       }
     }
@@ -1051,7 +1014,7 @@ export class DynamicDataService {
     for (const field of refFields) {
       const opts = field.options as any;
       const targetModelId = opts?.targetModelId;
-      const targetDisplayField = opts?.targetDisplayField || 'name';
+      const targetDisplayField = opts?.targetDisplayField || 'id';
       if (!targetModelId) continue;
 
       const fkValues = [...new Set(
@@ -1135,6 +1098,201 @@ export class DynamicDataService {
         }
       }
     }
+  }
+
+  /**
+   * Enrich a single record with __display values and __childrenMeta.
+   * Shared by findById and update to ensure consistent API responses.
+   */
+  // ────────────────────────── Entity Expansion ──────────────────────────
+
+  /**
+   * Load child rows of a single 1:N entity for each master record.
+   * Attaches as `row.__detail = { entityCode, rows: [...] }`.
+   * Selected child fields' REFERENCE/USER/ORGANIZATION display values are resolved.
+   */
+  private async resolveDetailRows(
+    rows: any[],
+    modelId: string,
+    modelCode: string,
+    detailEntity: { entityCode: string; fields: string[] },
+  ) {
+    if (!detailEntity.fields?.length) return;
+
+    const entity = await this.prisma.sysEntity.findFirst({
+      where: { modelId, code: detailEntity.entityCode, entityType: 'one_to_many' },
+      include: {
+        fields: {
+          where: { deletedAt: null },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+    if (!entity) return;
+
+    const parentIds = rows.map((r) => r.id);
+    const fkCol = `${modelCode}_id`;
+
+    let childRows: any[] = [];
+    try {
+      childRows = await this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT * FROM biz."${entity.tableName}" WHERE "${fkCol}" = ANY($1::uuid[]) ORDER BY "${fkCol}", "created_at" ASC`,
+        parentIds,
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to load detail rows for entity ${detailEntity.entityCode}: ${err}`);
+      return;
+    }
+
+    // Resolve display values for visible REFERENCE/USER/ORG fields on child rows
+    if (childRows.length > 0) {
+      const visibleCols = new Set(detailEntity.fields);
+      const resolvableFields = entity.fields.filter(
+        (f: any) =>
+          visibleCols.has(f.columnName) &&
+          (f.fieldType === 'REFERENCE' || f.fieldType === 'USER' || f.fieldType === 'ORGANIZATION'),
+      );
+      if (resolvableFields.length > 0) {
+        await this.batchResolveDisplayValues(childRows, resolvableFields);
+      }
+    }
+
+    // Group by fk
+    const byMaster = new Map<string, any[]>();
+    for (const c of childRows) {
+      const fk = c[fkCol];
+      const arr = byMaster.get(fk) ?? [];
+      arr.push(c);
+      byMaster.set(fk, arr);
+    }
+
+    for (const row of rows) {
+      row.__detail = {
+        entityCode: detailEntity.entityCode,
+        rows: byMaster.get(row.id) ?? [],
+      };
+    }
+  }
+
+  /**
+   * Load 1:1 entity records for each master. Attaches as
+   * `row.__oneToOne[entityCode] = { ...childFields } | null`.
+   */
+  private async resolveOneToOneFields(
+    rows: any[],
+    modelId: string,
+    modelCode: string,
+    oneToOneFields: Record<string, string[]>,
+  ) {
+    const parentIds = rows.map((r) => r.id);
+    const fkCol = `${modelCode}_id`;
+
+    for (const [entityCode, fieldCols] of Object.entries(oneToOneFields)) {
+      if (!fieldCols?.length) continue;
+
+      const entity = await this.prisma.sysEntity.findFirst({
+        where: { modelId, code: entityCode, entityType: 'one_to_one' },
+        include: {
+          fields: {
+            where: { deletedAt: null },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      });
+      if (!entity) continue;
+
+      let childRows: any[] = [];
+      try {
+        childRows = await this.prisma.$queryRawUnsafe<any[]>(
+          `SELECT DISTINCT ON ("${fkCol}") * FROM biz."${entity.tableName}" WHERE "${fkCol}" = ANY($1::uuid[]) ORDER BY "${fkCol}", "created_at" ASC`,
+          parentIds,
+        );
+      } catch (err) {
+        this.logger.warn(`Failed to load 1:1 rows for entity ${entityCode}: ${err}`);
+        continue;
+      }
+
+      if (childRows.length > 0) {
+        const visibleCols = new Set(fieldCols);
+        const resolvableFields = entity.fields.filter(
+          (f: any) =>
+            visibleCols.has(f.columnName) &&
+            (f.fieldType === 'REFERENCE' || f.fieldType === 'USER' || f.fieldType === 'ORGANIZATION'),
+        );
+        if (resolvableFields.length > 0) {
+          await this.batchResolveDisplayValues(childRows, resolvableFields);
+        }
+      }
+
+      const byMaster = new Map<string, any>();
+      for (const c of childRows) byMaster.set(c[fkCol], c);
+
+      for (const row of rows) {
+        if (!row.__oneToOne) row.__oneToOne = {};
+        row.__oneToOne[entityCode] = byMaster.get(row.id) ?? null;
+      }
+    }
+  }
+
+  private async enrichRecord(
+    record: Record<string, any>,
+    model: {
+      id: string;
+      code: string;
+      fields: Array<{ columnName: string; fieldType: string; options: any }>;
+    },
+  ) {
+    const [, entities] = await Promise.all([
+      this.resolveDisplayValues(record, model.fields),
+      this.prisma.sysEntity.findMany({
+        where: { modelId: model.id },
+        include: {
+          fields: {
+            where: { isSystem: false, deletedAt: null },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      }),
+    ]);
+
+    if (entities.length > 0) {
+      const childrenMeta: Record<string, any> = {};
+      for (const entity of entities) {
+        const fkColumnName = `${model.code}_id`;
+
+        let childRows: any[] = [];
+        try {
+          childRows = await this.prisma.$queryRawUnsafe<any[]>(
+            `SELECT * FROM biz."${entity.tableName}" WHERE "${fkColumnName}" = $1::uuid ORDER BY "created_at" ASC`,
+            record.id,
+          );
+          if (childRows.length > 0) {
+            const entityRefFields = entity.fields.filter((f: any) =>
+              f.fieldType === 'REFERENCE' || f.fieldType === 'USER' || f.fieldType === 'ORGANIZATION'
+            );
+            if (entityRefFields.length > 0) {
+              await this.batchResolveDisplayValues(childRows, entityRefFields);
+            }
+          }
+        } catch {
+          this.logger.warn(`Failed to load children for entity ${entity.code}`);
+        }
+
+        childrenMeta[entity.code] = {
+          entityId: entity.id,
+          entityName: entity.name,
+          entityCode: entity.code,
+          targetTableName: entity.tableName,
+          fkColumnName,
+          isOneToOne: entity.entityType === 'one_to_one',
+          targetFields: entity.fields,
+          rows: childRows,
+        };
+      }
+      record.__childrenMeta = childrenMeta;
+    }
+
+    return record;
   }
 
   /**

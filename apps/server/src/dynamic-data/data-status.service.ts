@@ -21,6 +21,7 @@ export class DataStatusService {
     recordId: string,
     action: StatusAction,
     userId: string,
+    isAdmin = false,
   ): Promise<void> {
     const rule = TRANSITIONS[action];
     if (!rule) {
@@ -45,7 +46,7 @@ export class DataStatusService {
         );
       }
 
-      if (action === 'withdraw' && record.submitted_by !== userId) {
+      if (action === 'withdraw' && !isAdmin && record.submitted_by !== userId) {
         throw new BusinessException(403, ErrorCodes.DATA_STATUS_NOT_SUBMITTER, 'Only submitter can withdraw');
       }
 

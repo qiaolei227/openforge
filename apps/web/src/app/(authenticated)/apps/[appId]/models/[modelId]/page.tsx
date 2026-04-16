@@ -183,6 +183,7 @@ interface FormData {
     startFrom?: number;
     targetModelId?: string;
     targetDisplayField?: string;
+    targetDisplayFields?: string[];
   };
   semantic: string;
   aiHint: string;
@@ -922,6 +923,7 @@ export default function ModelDetailPage() {
   const handleTargetModelChange = (targetId: string) => {
     updateOptions('targetModelId', targetId);
     updateOptions('targetDisplayField', '');
+    updateOptions('targetDisplayFields', []);
     setTargetModelFields([]);
     if (targetId) {
       fetchTargetModelFields(targetId);
@@ -2731,6 +2733,38 @@ export default function ModelDetailPage() {
                               </SelectContent>
                             </Select>
                           )}
+                        </div>
+                      )}
+                      {formData.options.targetModelId && targetModelFields.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label>{tFields('targetDisplayFields')}</Label>
+                          <p className="text-xs text-muted-foreground">{tFields('targetDisplayFieldsHint')}</p>
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {targetModelFields.map((f) => {
+                              const selected = formData.options.targetDisplayFields ?? [];
+                              const isChecked = selected.includes(f.columnName);
+                              return (
+                                <button
+                                  key={f.id}
+                                  type="button"
+                                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
+                                    isChecked
+                                      ? 'border-primary bg-primary/10 text-primary'
+                                      : 'border-input bg-background text-muted-foreground hover:bg-accent'
+                                  }`}
+                                  onClick={() => {
+                                    const prev = selected;
+                                    const next = isChecked
+                                      ? prev.filter((k: string) => k !== f.columnName)
+                                      : [...prev, f.columnName];
+                                    updateOptions('targetDisplayFields', next);
+                                  }}
+                                >
+                                  {f.name}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </>

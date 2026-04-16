@@ -2,6 +2,7 @@ export { getFieldComponent } from './fields';
 export type { FieldComponentProps, ApiQueryFn, SystemQueryFn } from './fields';
 export { DataTable } from './data-table/data-table';
 export type { DataTableProps, LayoutColumnConfig } from './data-table/data-table';
+export type { ColumnDef } from '@tanstack/react-table';
 export { FormDrawer } from './form/form-drawer';
 export { SubTableField } from './fields/sub-table-field';
 export type { ChildrenMeta, SubTableProps } from './fields/sub-table-types';

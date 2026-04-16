@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/profile.dto';
@@ -47,12 +48,15 @@ export class AuthService {
       throw new BusinessException(401, ErrorCodes.AUTH_NO_ORGANIZATION, 'User has no organization');
     }
 
+    const sid = randomUUID();
     const payload = {
       userId: user.id,
       orgId: defaultOrg.orgId,
       roles: [] as string[],
       isAdmin: user.isAdmin,
       identity: user.identity,
+      sid,
+      platform,
     };
 
     const tokens = await this.generateTokens(payload);
@@ -64,6 +68,9 @@ export class AuthService {
       const old = JSON.parse(oldSession);
       await this.redis.del(`refresh:${old.refreshToken}`);
     }
+
+    // Active session id — AuthGuard checks every request against this
+    await this.redis.set(`sid:${user.id}:${platform}`, sid, 'EX', 7 * 24 * 3600);
 
     await this.redis.set(
       sessionKey,
@@ -114,7 +121,9 @@ export class AuthService {
     });
     const identity = userForIdentity?.identity ?? 'user';
 
-    const payload = { userId, orgId, roles: [] as string[], isAdmin, identity };
+    // Carry forward the active session id
+    const sid = await this.redis.get(`sid:${userId}:${platform}`);
+    const payload = { userId, orgId, roles: [] as string[], isAdmin, identity, sid, platform };
     const tokens = await this.generateTokens(payload);
 
     const sessionKey = `session:${userId}:${platform}`;
@@ -142,6 +151,7 @@ export class AuthService {
       await this.redis.del(`refresh:${refreshToken}`);
       await this.redis.del(sessionKey);
     }
+    await this.redis.del(`sid:${userId}:${platform}`);
   }
 
   async getProfile(userId: string) {
@@ -198,34 +208,6 @@ export class AuthService {
       where: { id: userId },
       data: { passwordHash },
     });
-  }
-
-  /**
-   * Create a one-time handoff code storing tokens in Redis (60s TTL).
-   * Used for cross-origin auth handoff between portal and designer/runtime.
-   */
-  async createHandoffCode(accessToken: string, refreshToken: string): Promise<string> {
-    const code = require('crypto').randomUUID();
-    await this.redis.set(
-      `handoff:${code}`,
-      JSON.stringify({ accessToken, refreshToken }),
-      'EX',
-      60,
-    );
-    return code;
-  }
-
-  /**
-   * Exchange a one-time handoff code for tokens. Code is deleted after use.
-   */
-  async exchangeHandoffCode(code: string) {
-    const key = `handoff:${code}`;
-    const data = await this.redis.get(key);
-    if (!data) {
-      throw new BusinessException(401, ErrorCodes.AUTH_INVALID_HANDOFF_CODE, 'Invalid or expired handoff code');
-    }
-    await this.redis.del(key);
-    return JSON.parse(data);
   }
 
   private async generateTokens(payload: { userId: string; orgId: string; roles: string[] }) {

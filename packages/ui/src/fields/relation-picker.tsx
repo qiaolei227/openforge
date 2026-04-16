@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import type { FieldComponentProps, ApiQueryFn } from './field-props';
+import type { FieldComponentProps, ApiQueryFn, PickerColumn } from './field-props';
 import ReferencePickerDialog from './reference-picker-dialog';
 import { usePickerColumns } from './use-picker-columns';
 
@@ -23,6 +23,28 @@ export interface RelationPickerExtraProps {
 
 const INPUT_BASE =
   'flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm shadow-xs border-input disabled:cursor-not-allowed disabled:opacity-50';
+
+/* ── Format a popover cell value, preferring backend-resolved __display ── */
+function formatPopoverCell(record: Record<string, any>, col: PickerColumn): string {
+  const ft = col.fieldType;
+  if (ft === 'REFERENCE' || ft === 'USER' || ft === 'ORGANIZATION') {
+    const display = record[`${col.key}__display`];
+    if (display !== null && display !== undefined && display !== '') return String(display);
+    const raw = record[col.key];
+    return raw == null ? '' : String(raw);
+  }
+  if (ft === 'MULTI_REFERENCE') {
+    const items = record[`${col.key}__m2m`];
+    if (Array.isArray(items) && items.length > 0) {
+      return items.map((it: any) => it.displayValue ?? it.id).join(', ');
+    }
+    return '';
+  }
+  const val = record[col.key];
+  if (val == null) return '';
+  if (Array.isArray(val)) return val.join(', ');
+  return String(val);
+}
 
 /* ── ExternalLink inline SVG icon ── */
 function ExternalLinkIcon() {
@@ -49,7 +71,7 @@ function ExternalLinkIcon() {
 export default function RelationPicker(props: FieldComponentProps & Partial<RelationPickerExtraProps>) {
   const { field, value, onChange, disabled, error, mode, queryFn, targetAppCode, targetModelCode, targetModelName, displayValue, fetchSchema, t } = props;
 
-  const displayField = field.options?.targetDisplayField || 'id';
+  const displayField = field.options?.targetDisplayField || 'name';
 
   const { columns } = usePickerColumns(
     field,
@@ -57,6 +79,18 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
     targetModelCode ?? '',
     fetchSchema ?? (async () => ({ fields: [], views: [] })),
   );
+
+  // Popover columns: field.options.targetDisplayFields if configured, else first 2 from picker columns
+  const popoverColumns = useMemo<PickerColumn[]>(() => {
+    const configured = field.options?.targetDisplayFields as string[] | undefined;
+    if (configured?.length) {
+      const colMap = new Map(columns.map((c) => [c.key, c]));
+      const resolved = configured.map((k) => colMap.get(k)).filter(Boolean) as PickerColumn[];
+      if (resolved.length > 0) return resolved;
+    }
+    return columns.slice(0, 2);
+  }, [field.options?.targetDisplayFields, columns]);
+  const searchFields = useMemo(() => popoverColumns.map((c) => c.key), [popoverColumns]);
 
   const entityCtx = (props as any).entityContext;
   const pickerMode = entityCtx ? 'multiple' : 'single';
@@ -114,7 +148,7 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
         const keyword = kw.trim() || undefined; // empty → load all
         const result = await queryFn(
           { appCode: targetAppCode, modelCode: targetModelCode },
-          { keyword, page: 1, pageSize: 6, includeArchived: false },
+          { keyword, page: 1, pageSize: 6, includeArchived: false, searchFields },
         );
         setDropdownData(result.data.slice(0, 5));
         setDropdownTotal(result.total);
@@ -125,7 +159,7 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
         setDropdownOpen(false);
       }
     },
-    [queryFn, targetAppCode, targetModelCode],
+    [queryFn, targetAppCode, targetModelCode, searchFields],
   );
 
   function handleInputChange(val: string) {
@@ -134,6 +168,22 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
     debounceRef.current = setTimeout(() => {
       doSearch(val);
     }, 300);
+  }
+
+  // On blur: auto-select if exactly one match, otherwise clear invalid input
+  function handleInputBlur() {
+    // Small delay so that dropdown item clicks can fire before blur clears state
+    setTimeout(() => {
+      if (value) return; // Already has a valid selection
+      if (dropdownData.length === 1) {
+        // Auto-select the single match
+        handleSelectRecord(dropdownData[0]);
+      } else {
+        // No match or multiple — clear the invalid text
+        setSearchKeyword('');
+        setDropdownOpen(false);
+      }
+    }, 200);
   }
 
   function handleSelectRecord(record: Record<string, any>) {
@@ -197,6 +247,7 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
               className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
               value={searchKeyword}
               onChange={(e) => handleInputChange(e.target.value)}
+              onBlur={handleInputBlur}
               disabled={disabled}
               placeholder={field.name}
             />
@@ -217,18 +268,26 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
       {dropdownOpen && dropdownData.length > 0 && dropdownPos && createPortal(
         <div
           ref={dropdownRef}
+          data-rp-portal="dropdown"
           className="fixed z-[100] rounded-md border bg-popover shadow-md"
-          style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+          style={{ top: dropdownPos.top, left: dropdownPos.left, minWidth: dropdownPos.width }}
         >
           <div className="py-1">
             {dropdownData.map((record) => (
               <button
                 key={record.id}
                 type="button"
-                className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted transition-colors"
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted transition-colors flex items-center gap-3"
                 onClick={() => handleSelectRecord(record)}
               >
-                {record[displayField] ?? record.id}
+                {popoverColumns.map((col, i) => {
+                  const text = formatPopoverCell(record, col);
+                  return i === 0 ? (
+                    <span key={col.key} className="font-medium truncate">{text || record.id}</span>
+                  ) : (
+                    <span key={col.key} className="text-muted-foreground truncate">{text}</span>
+                  );
+                })}
               </button>
             ))}
           </div>

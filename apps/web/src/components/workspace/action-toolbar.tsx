@@ -1,7 +1,7 @@
 'use client';
 
 import * as LucideIcons from 'lucide-react';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, List } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { SysAction } from '@openforge/shared';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,8 @@ interface ActionToolbarProps {
   currentUserId?: string;
   onAction: (actionCode: string, records: Array<Record<string, any>>) => void;
   onRefresh?: () => void;
+  /** Navigate back to list view (rendered as icon button next to refresh) */
+  onNavigateToList?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -62,8 +64,8 @@ function isActionEnabled(
   currentRecord?: Record<string, any>,
   currentUserId?: string,
 ): boolean {
-  // create and list are always enabled
-  if (action.code === 'create' || action.code === 'list') return true;
+  // create is always enabled
+  if (action.code === 'create') return true;
 
   // Determine the effective record set
   const records =
@@ -72,17 +74,8 @@ function isActionEnabled(
   // Other actions need at least one record
   if (records.length === 0) return false;
 
-  // Data status actions: check hardcoded status→action mapping
-  if (DATA_STATUS_ACTIONS.has(action.code)) {
-    const allMatch = records.every((r) => {
-      const status = r['data_status'] as string;
-      return status && STATUS_ACTION_MAP[status]?.includes(action.code);
-    });
-    if (!allMatch) return false;
-  }
-
-  // Edit/delete/archive: only allowed on draft records (when data_status exists)
-  if (['edit', 'delete', 'archive'].includes(action.code)) {
+  // Edit: only allowed when all selected are draft/reaudit (single-record operation)
+  if (action.code === 'edit') {
     const hasNonDraft = records.some((r) => {
       const status = r['data_status'];
       return status && status !== 'draft' && status !== 'reaudit';
@@ -90,11 +83,24 @@ function isActionEnabled(
     if (hasNonDraft) return false;
   }
 
-  // withdraw — only if all records were submitted by the current user
-  if (action.code === 'withdraw') {
-    if (!currentUserId) return false;
-    const allOwned = records.every((r) => r['submitted_by'] === currentUserId);
-    if (!allOwned) return false;
+  // Delete/archive: at least one draft/reaudit record
+  if (['delete', 'archive'].includes(action.code)) {
+    const hasDraft = records.some((r) => {
+      const status = r['data_status'];
+      return !status || status === 'draft' || status === 'reaudit';
+    });
+    if (!hasDraft) return false;
+  }
+
+  // Data status actions (submit/approve/withdraw/unapprove):
+  // enabled when at least one record matches the status→action mapping
+  // (further filtering like withdraw's submitter check happens at execution time)
+  if (DATA_STATUS_ACTIONS.has(action.code)) {
+    const hasMatch = records.some((r) => {
+      const status = r['data_status'] as string;
+      return status && STATUS_ACTION_MAP[status]?.includes(action.code);
+    });
+    if (!hasMatch) return false;
   }
 
   return true;
@@ -194,6 +200,7 @@ export function ActionToolbar({
   currentUserId,
   onAction,
   onRefresh,
+  onNavigateToList,
 }: ActionToolbarProps) {
   const t = useTranslations('workspace');
 
@@ -235,7 +242,7 @@ export function ActionToolbar({
     );
   };
 
-  if (visibleActions.length === 0 && !onRefresh) return null;
+  if (visibleActions.length === 0 && !onRefresh && !onNavigateToList) return null;
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -243,6 +250,23 @@ export function ActionToolbar({
 
       {/* Spacer pushes refresh button to the right */}
       <div className="flex-1" />
+
+      {/* Back to list */}
+      {onNavigateToList && (
+        <button
+          type="button"
+          onClick={onNavigateToList}
+          title={t('backToList')}
+          className={cn(
+            'inline-flex items-center justify-center w-8 h-8 rounded-md border border-border',
+            'text-muted-foreground hover:text-foreground hover:bg-accent transition-colors',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          )}
+          aria-label={t('backToList')}
+        >
+          <List className="w-4 h-4" />
+        </button>
+      )}
 
       {/* Refresh */}
       {onRefresh && (

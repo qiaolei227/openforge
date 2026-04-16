@@ -1,6 +1,6 @@
 export interface FilterCondition {
   field: string;
-  op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'not_in' | 'like' | 'is_null' | 'is_not_null';
+  op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'not_in' | 'like' | 'not_like' | 'is_null' | 'is_not_null';
   value?: any;
 }
 

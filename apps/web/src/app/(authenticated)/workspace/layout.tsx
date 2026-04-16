@@ -28,12 +28,12 @@ export default function WorkspaceLayout({
   return (
     <>
       {/* Tab contents — always mounted, hidden/visible toggled */}
-      <div className={showTabs ? '' : 'hidden'}>
+      <div className={showTabs ? 'h-full' : 'hidden'}>
         <WorkspaceTabRenderer />
       </div>
 
       {/* Children (dashboard, model tab-opener, workspace root) — hidden when tabs are visible */}
-      <div className={showTabs ? 'hidden' : ''}>{children}</div>
+      <div className={showTabs ? 'hidden' : 'h-full overflow-auto p-6'}>{children}</div>
     </>
   );
 }

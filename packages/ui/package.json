@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@openforge/shared": "workspace:*",
+    "@openforge/render-engine": "workspace:*",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.6",
     "@tiptap/extension-link": "^2.12.0",

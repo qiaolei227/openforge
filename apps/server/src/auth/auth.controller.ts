@@ -60,18 +60,4 @@ export class AuthController {
     return { message: 'Password changed successfully' };
   }
 
-  @Post('handoff')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  async createHandoff(@Body() body: { accessToken: string; refreshToken: string }) {
-    const code = await this.authService.createHandoffCode(body.accessToken, body.refreshToken);
-    return { code };
-  }
-
-  @Public()
-  @Post('exchange')
-  @HttpCode(HttpStatus.OK)
-  async exchangeHandoff(@Body() body: { code: string }) {
-    return this.authService.exchangeHandoffCode(body.code);
-  }
 }

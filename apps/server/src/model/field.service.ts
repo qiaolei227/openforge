@@ -113,6 +113,17 @@ export class FieldService {
     const relTableName = `${sourceModel.tableName}_${targetModel.tableName}_rel`;
     await this.ddlManager.createJunctionTable(relTableName);
 
+    // Resolve display field for reverse side: first business field of the source model
+    let reverseDisplayField = dto.options?.targetDisplayField;
+    if (!reverseDisplayField) {
+      const firstField = await this.prisma.sysField.findFirst({
+        where: { modelId, isSystem: false, entityId: null, deletedAt: null },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: { columnName: true },
+      });
+      reverseDisplayField = firstField?.columnName ?? 'id';
+    }
+
     const reverseField = await this.prisma.sysField.create({
       data: {
         modelId: targetModelId,
@@ -127,7 +138,7 @@ export class FieldService {
           targetModelId: modelId,
           relTableName,
           reverseFieldId: fieldId,
-          targetDisplayField: dto.options?.targetDisplayField ?? 'name',
+          targetDisplayField: reverseDisplayField,
         },
       },
     });
@@ -201,6 +212,23 @@ export class FieldService {
       sortOrder = (maxField?.sortOrder ?? -1) + 1;
     }
 
+    // Auto-populate targetDisplayField for REFERENCE/MULTI_REFERENCE if not provided
+    let options = dto.options ?? undefined;
+    if (
+      (dto.fieldType === 'REFERENCE' || dto.fieldType === 'MULTI_REFERENCE') &&
+      dto.options?.targetModelId &&
+      !dto.options?.targetDisplayField
+    ) {
+      const firstField = await this.prisma.sysField.findFirst({
+        where: { modelId: dto.options.targetModelId, isSystem: false, entityId: null, deletedAt: null },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: { columnName: true },
+      });
+      if (firstField) {
+        options = { ...dto.options, targetDisplayField: firstField.columnName };
+      }
+    }
+
     const field = await this.prisma.sysField.create({
       data: {
         modelId,
@@ -210,7 +238,7 @@ export class FieldService {
         isRequired: dto.isRequired ?? false,
         isUnique: dto.isUnique ?? false,
         defaultValue: dto.defaultValue ?? undefined,
-        options: dto.options ?? undefined,
+        options,
         sortOrder,
         entityId: dto.entityId || null,
       },

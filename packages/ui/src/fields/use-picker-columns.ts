@@ -104,24 +104,7 @@ export function usePickerColumns(
         fieldById.set(f.id, f);
       }
 
-      // --- Tier 1: field.options.targetDisplayFields ---
-      const targetDisplayFields = field.options?.targetDisplayFields;
-      if (targetDisplayFields && targetDisplayFields.length > 0) {
-        const tier1: PickerColumn[] = [];
-        for (const colName of targetDisplayFields) {
-          const f = fieldByColumnName.get(colName);
-          if (f) {
-            tier1.push({ key: f.columnName, label: f.name, fieldType: f.fieldType });
-          }
-        }
-        if (tier1.length > 0) {
-          setColumns(tier1);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // --- Tier 2: default list view layout ---
+      // --- Tier 1: default list view layout ---
       const defaultListView = schema.views?.find(
         (v) => v.type === 'list' && v.isDefault,
       );
@@ -149,7 +132,7 @@ export function usePickerColumns(
         }
       }
 
-      // --- Tier 3: all non-system fields from target model ---
+      // --- Tier 2: all non-system fields from target model ---
       const allCols: PickerColumn[] = schema.fields
         .filter((f) => !f.isSystem && !f.deletedAt)
         .map((f) => ({ key: f.columnName, label: f.name, fieldType: f.fieldType }));

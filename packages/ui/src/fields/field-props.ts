@@ -12,7 +12,7 @@ export interface FieldComponentProps {
 /** API client function type — injected by consuming app (avoids axios coupling) */
 export type ApiQueryFn = (
   ref: { appCode: string; modelCode: string },
-  params: { keyword?: string; page?: number; pageSize?: number; includeArchived?: boolean },
+  params: { keyword?: string; page?: number; pageSize?: number; includeArchived?: boolean; searchFields?: string[] },
 ) => Promise<{ data: Record<string, any>[]; total: number }>;
 
 /** System table query function — for USER and ORGANIZATION fields */

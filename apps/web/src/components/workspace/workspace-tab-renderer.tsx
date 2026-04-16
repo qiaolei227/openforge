@@ -47,6 +47,7 @@ function TabContent({ tab, schema }: { tab: Tab; schema: ModelSchema }) {
           app: { code: schema.app.code },
         }}
         fields={schema.fields}
+        entities={schema.entities}
         tabId={tab.id}
       />
     );
@@ -147,7 +148,7 @@ export function WorkspaceTabRenderer() {
         if (!schema) return null;
         const isVisible = activeTab?.id === tab.id && !activeSchemaLoading;
         return (
-          <div key={tab.id} className={isVisible ? '' : 'hidden'}>
+          <div key={tab.id} className={isVisible ? 'h-full' : 'hidden'}>
             <TabContent tab={tab} schema={schema} />
           </div>
         );

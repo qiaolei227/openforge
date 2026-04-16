@@ -9,6 +9,7 @@ import {
   DataTable,
   getFieldComponent,
   TreeView,
+  type ColumnDef,
   type FieldComponentProps,
   type LayoutColumnConfig,
   type TreeNode,
@@ -22,6 +23,9 @@ import { ActionToolbar } from '@/components/workspace/action-toolbar';
 import { FilterPanel } from '@/components/workspace/filter-panel';
 import { FilterChips } from '@/components/workspace/filter-chips';
 import { DataStatusBadge } from '@/components/workspace/data-status-badge';
+import { useUserListConfig } from '@/hooks/use-user-list-config';
+import { ColumnSettings } from '@/components/workspace/column-settings';
+import type { FilterPreset } from '@/components/workspace/filter-presets';
 import {
   Popover,
   PopoverContent,
@@ -55,6 +59,7 @@ interface RecordBrowserProps {
     app: { code: string };
   };
   fields: Field[];
+  entities?: Array<{ id: string; code: string; name: string; entityType: string; fields?: Field[] }>;
   tabId?: string;
 }
 
@@ -83,27 +88,54 @@ function hasFilterConditions(group: FilterGroup): boolean {
 /*  RecordBrowser Component                                            */
 /* ------------------------------------------------------------------ */
 
-export default function RecordBrowser({ model, fields, tabId }: RecordBrowserProps) {
+export default function RecordBrowser({ model, fields: allFields, entities, tabId }: RecordBrowserProps) {
   const t = useTranslations();
   const tErrors = useTranslations('errorCodes');
   const tCommon = useTranslations('common');
   const tFilter = useTranslations('filter');
 
+  // Main record fields only — exclude entity/sub-table fields (those belong to entities[])
+  const fields = useMemo(
+    () => allFields.filter((f) => !f.entityId),
+    [allFields],
+  );
+
   const user = useAuthStore((s) => s.user);
   const { openDetailTab, openCreateTab } = useTabStore();
   const { actions } = useActions(model.id);
+  const { config: userConfig, save: saveUserConfig } = useUserListConfig(model.app.code, model.code);
 
   /* ---------- Data state ---------- */
   const [data, setData] = useState<Record<string, any>[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(userConfig.pageSize ?? 20);
   const [sort, setSort] = useState<{ field: string; order: 'asc' | 'desc' } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  /* ---------- Filter state (replaces keyword + includeArchived) ---------- */
+  // Sync pageSize from user config when it loads
+  useEffect(() => {
+    if (userConfig.pageSize) setPageSize(userConfig.pageSize);
+  }, [userConfig.pageSize]);
+
+  /* ---------- Filter state ---------- */
   const [filter, setFilter] = useState<FilterGroup>({ op: 'and', conditions: [] });
+  const [pendingFilter, setPendingFilter] = useState<FilterGroup>({ op: 'and', conditions: [] });
   const [filterOpen, setFilterOpen] = useState(false);
+
+  // Sync pendingFilter from committed filter when popover opens
+  useEffect(() => {
+    if (filterOpen) setPendingFilter(filter);
+  }, [filterOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ---------- (Data Status Tab removed — use filter panel instead) ---------- */
+
+  /* ---------- Active preset tracking ---------- */
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const activePreset = useMemo(
+    () => (userConfig.filterPresets ?? []).find((p) => p.id === activePresetId) ?? null,
+    [userConfig.filterPresets, activePresetId],
+  );
 
   /* ---------- Selection state ---------- */
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -118,7 +150,7 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
 
   /* ---------- Confirm dialog ---------- */
   const [confirmDialog, setConfirmDialog] = useState<{
-    type: 'delete' | 'batchDelete' | 'batchArchive' | 'batchUnarchive' | 'archiveInstead';
+    type: 'delete' | 'batchDelete' | 'batchArchive' | 'batchUnarchive' | 'archiveInstead' | 'submit' | 'approve' | 'withdraw' | 'unapprove';
     message: string;
     ids: string[];
   } | null>(null);
@@ -149,8 +181,8 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
     return () => { cancelled = true; };
   }, [model.id]);
 
-  /** Derive layout column config from the saved list view layout */
-  const layoutColumns = useMemo<LayoutColumnConfig[] | undefined>(() => {
+  /** Derive layout column config: user config > designer view > auto-generated */
+  const designerColumns = useMemo<LayoutColumnConfig[] | undefined>(() => {
     const listView = views.find((v) => v.type === 'list' && v.isDefault) ?? views.find((v) => v.type === 'list');
     if (!listView?.layout?.children?.length) return undefined;
     return listView.layout.children
@@ -164,11 +196,24 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
       }));
   }, [views]);
 
+  const layoutColumns = useMemo<LayoutColumnConfig[] | undefined>(() => {
+    if (!userConfig.columns?.length) return designerColumns;
+    // User config: ordered fieldId list → LayoutColumnConfig array
+    // Inherit width/align from designer config when available
+    const designerMap = new Map((designerColumns ?? []).map((c) => [c.fieldId, c]));
+    return userConfig.columns.map((fid) => ({
+      fieldId: fid,
+      ...(designerMap.get(fid) ?? {}),
+    }));
+  }, [userConfig.columns, designerColumns]);
+
   /* ------------------------------------------------------------------ */
   /*  API calls                                                          */
   /* ------------------------------------------------------------------ */
 
   const isFirstLoad = useRef(true);
+
+  const effectiveFilter = filter;
 
   const fetchData = useCallback(async () => {
     if (isFirstLoad.current) {
@@ -176,14 +221,29 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
     }
     try {
       const sortArr = sort ? [{ field: sort.field, order: sort.order }] : undefined;
-      const hasConditions = hasFilterConditions(filter);
+      const hasConditions = hasFilterConditions(effectiveFilter);
+      const oneToOnePayload = userConfig.oneToOneFields
+        ? Object.fromEntries(
+            Object.entries(userConfig.oneToOneFields).filter(([, v]) => v.length > 0),
+          )
+        : undefined;
+      const detailPayload =
+        userConfig.detailEntity &&
+        userConfig.detailEntity.entityCode &&
+        userConfig.detailEntity.fields.length > 0
+          ? userConfig.detailEntity
+          : undefined;
+
       const { data: resp } = await apiClient.post<QueryResponse>(
         `/apps/${model.app.code}/models/${model.code}/data/query`,
         {
-          filter: hasConditions ? filter : undefined,
+          filter: hasConditions ? effectiveFilter : undefined,
           page,
           pageSize,
           sort: sortArr,
+          detailEntity: detailPayload,
+          oneToOneFields:
+            oneToOnePayload && Object.keys(oneToOnePayload).length > 0 ? oneToOnePayload : undefined,
         },
       );
       setData(resp.data);
@@ -194,11 +254,13 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
       setLoading(false);
       isFirstLoad.current = false;
     }
-  }, [model.app.code, model.code, filter, page, pageSize, sort, showToast, t]);
+  }, [model.app.code, model.code, effectiveFilter, page, pageSize, sort, userConfig.detailEntity, userConfig.oneToOneFields, showToast, t]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  /* Status counts removed — use filter panel for data_status filtering */
 
   /* ------------------------------------------------------------------ */
   /*  Tree data loading                                                  */
@@ -207,13 +269,13 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
   const loadTreeChildren = useCallback(async (parentId: string | null) => {
     setTreeLoading(true);
     try {
-      const hasConditions = hasFilterConditions(filter);
+      const hasConditions = hasFilterConditions(effectiveFilter);
       const res = await apiClient.post(
         `/apps/${model.app.code}/models/${model.code}/data/query`,
         {
           treeMode: true,
           parentId,
-          filter: hasConditions ? filter : undefined,
+          filter: hasConditions ? effectiveFilter : undefined,
           pageSize: 200,
         },
       );
@@ -264,11 +326,25 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
   /*  Handlers                                                           */
   /* ------------------------------------------------------------------ */
 
-  /** Determine the first user-visible field's column name (for tab title) */
+  /** Determine the first user-visible field's column name (for tab title + link column).
+   *  Matches DataTable's visibleFields ordering: layoutColumns order → AUTO_NUMBER first → sortOrder. */
   const firstFieldColumnName = useMemo(() => {
-    const firstField = fields.find((f) => !f.isSystem && !f.deletedAt);
-    return firstField?.columnName ?? 'id';
-  }, [fields]);
+    if (layoutColumns && layoutColumns.length > 0) {
+      const fieldMap = new Map(fields.map((f) => [f.id, f]));
+      const first = layoutColumns
+        .map((lc) => fieldMap.get(lc.fieldId))
+        .find((f): f is Field => f != null && !f.isSystem && !f.deletedAt);
+      return first?.columnName ?? 'id';
+    }
+    const sorted = [...fields]
+      .filter((f) => !f.isSystem && !f.deletedAt)
+      .sort((a, b) => {
+        if (a.fieldType === 'AUTO_NUMBER' && b.fieldType !== 'AUTO_NUMBER') return -1;
+        if (a.fieldType !== 'AUTO_NUMBER' && b.fieldType === 'AUTO_NUMBER') return 1;
+        return a.sortOrder - b.sortOrder;
+      });
+    return sorted[0]?.columnName ?? 'id';
+  }, [fields, layoutColumns]);
 
   const handleCreate = useCallback(() => {
     if (tabId) {
@@ -283,15 +359,16 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
 
   const handleOpenRecord = useCallback(
     (record: Record<string, any>) => {
-      if (tabId) {
-        openDetailTab({
-          appCode: model.app.code,
-          modelCode: model.code,
-          modelName: model.name,
-          recordId: record.id,
-          title: record[firstFieldColumnName] || record.id,
-        });
-      }
+      if (!tabId) return;
+      // In detail-expand mode, record.id may be a child or sentinel; use master id.
+      const recordId = record.__masterId ?? record.id;
+      openDetailTab({
+        appCode: model.app.code,
+        modelCode: model.code,
+        modelName: model.name,
+        recordId,
+        title: record[firstFieldColumnName] || recordId,
+      });
     },
     [tabId, openDetailTab, model.app.code, model.code, model.name, firstFieldColumnName],
   );
@@ -424,6 +501,8 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
         }
         showToast(t('dataTab.unarchiveSuccess'), 'success');
         fetchData();
+      } else if (['submit', 'approve', 'withdraw', 'unapprove'].includes(confirmDialog.type)) {
+        await handleStatusChange(confirmDialog.ids, confirmDialog.type);
       }
       setConfirmDialog(null);
     } catch (err: any) {
@@ -440,6 +519,20 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
 
   const handleAction = useCallback(
     (actionCode: string, records: Record<string, any>[]) => {
+      // In detail-expand mode, multiple flat rows share the same master.
+      // Dedupe master-level actions by __masterId so we operate on unique master records.
+      const dedupedMasters = new Map<string, Record<string, any>>();
+      for (const r of records) {
+        const mid = r.__masterId ?? r.id;
+        if (!dedupedMasters.has(mid)) {
+          dedupedMasters.set(mid, {
+            ...(r.__masterRecord ?? r),
+            id: mid,
+            __masterId: mid,
+          });
+        }
+      }
+      records = [...dedupedMasters.values()];
       const ids = records.map((r) => r.id);
 
       switch (actionCode) {
@@ -449,30 +542,45 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
         case 'edit':
           if (records.length > 0) handleOpenRecord(records[0]);
           break;
-        case 'delete':
-          if (ids.length === 1) {
-            setConfirmDialog({
-              type: 'delete',
-              message: t('common.confirmDelete'),
-              ids,
-            });
-          } else if (ids.length > 1) {
-            setConfirmDialog({
-              type: 'batchDelete',
-              message: t('dataTab.confirmBatchDelete', { count: ids.length }),
-              ids,
-            });
-          }
+        case 'delete': {
+          // Filter to only draft/reaudit records (submitted/approved cannot be deleted)
+          const deletable = records.filter((r) => {
+            const s = r['data_status'];
+            return !s || s === 'draft' || s === 'reaudit';
+          });
+          const delIds = deletable.map((r) => r.id);
+          if (delIds.length === 0) { showToast(t('dataTab.noEligibleRecords'), 'error'); break; }
+          const skippedDel = ids.length - delIds.length;
+          const delMsg = delIds.length === 1
+            ? t('common.confirmDelete')
+            : t('dataTab.confirmBatchDelete', { count: delIds.length });
+          setConfirmDialog({
+            type: delIds.length === 1 ? 'delete' : 'batchDelete',
+            message: skippedDel > 0
+              ? `${delMsg}\n${t('dataTab.statusSkipped', { count: skippedDel })}`
+              : delMsg,
+            ids: delIds,
+          });
           break;
-        case 'archive':
-          if (ids.length > 0) {
-            setConfirmDialog({
-              type: 'batchArchive',
-              message: t('dataTab.confirmBatchArchive', { count: ids.length }),
-              ids,
-            });
-          }
+        }
+        case 'archive': {
+          const archivable = records.filter((r) => {
+            const s = r['data_status'];
+            return !s || s === 'draft' || s === 'reaudit';
+          });
+          const archIds = archivable.map((r) => r.id);
+          if (archIds.length === 0) { showToast(t('dataTab.noEligibleRecords'), 'error'); break; }
+          const skippedArch = ids.length - archIds.length;
+          const archMsg = t('dataTab.confirmBatchArchive', { count: archIds.length });
+          setConfirmDialog({
+            type: 'batchArchive',
+            message: skippedArch > 0
+              ? `${archMsg}\n${t('dataTab.statusSkipped', { count: skippedArch })}`
+              : archMsg,
+            ids: archIds,
+          });
           break;
+        }
         case 'unarchive':
           if (ids.length > 0) {
             setConfirmDialog({
@@ -485,9 +593,38 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
         case 'submit':
         case 'approve':
         case 'withdraw':
-        case 'unapprove':
-          handleStatusChange(ids, actionCode);
+        case 'unapprove': {
+          // Filter to only records whose status allows this action
+          const statusMap: Record<string, string[]> = {
+            draft: ['submit'], reaudit: ['submit'],
+            submitted: ['withdraw', 'approve'], approved: ['unapprove'],
+          };
+          let eligible = records.filter((r) => {
+            const s = r['data_status'] as string;
+            return s && statusMap[s]?.includes(actionCode);
+          });
+          // withdraw: only submitter's own (admin can withdraw anyone's)
+          if (actionCode === 'withdraw' && !user?.isAdmin) {
+            const userId = user?.id;
+            eligible = eligible.filter((r) => r['submitted_by'] === userId);
+          }
+          const eligibleIds = eligible.map((r) => r.id);
+          if (eligibleIds.length === 0) {
+            showToast(t('dataTab.noEligibleRecords'), 'error');
+            break;
+          }
+          const skipped = ids.length - eligibleIds.length;
+          const confirmKey = `dataTab.confirmBatch${actionCode.charAt(0).toUpperCase()}${actionCode.slice(1)}`;
+          const actionMsg = t(confirmKey, { count: eligibleIds.length });
+          setConfirmDialog({
+            type: actionCode as any,
+            message: skipped > 0
+              ? `${actionMsg}\n${t('dataTab.statusSkipped', { count: skipped })}`
+              : actionMsg,
+            ids: eligibleIds,
+          });
           break;
+        }
         default:
           // Custom actions — future extension
           break;
@@ -501,18 +638,77 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
   /* ------------------------------------------------------------------ */
 
   const handleFilterChange = useCallback((newFilter: FilterGroup) => {
-    setFilter(newFilter);
+    setPendingFilter(newFilter);
   }, []);
 
   const handleFilterApply = useCallback(() => {
+    setFilter(pendingFilter);
+    setActivePresetId(null); // manual filter edit clears preset selection
+    setFilterOpen(false);
+    setPage(1);
+  }, [pendingFilter]);
+
+  const handleFilterReset = useCallback(() => {
+    const empty: FilterGroup = { op: 'and', conditions: [] };
+    setPendingFilter(empty);
+    setFilter(empty);
+    setActivePresetId(null);
     setFilterOpen(false);
     setPage(1);
   }, []);
 
-  const handleFilterReset = useCallback(() => {
-    setFilterOpen(false);
+  const handlePresetLoad = useCallback((presetId: string, presetFilter: FilterGroup) => {
+    setFilter(presetFilter);
+    setActivePresetId(presetId);
     setPage(1);
   }, []);
+
+  const handlePresetSave = useCallback((preset: FilterPreset) => {
+    const existing = userConfig.filterPresets ?? [];
+    saveUserConfig({ filterPresets: [...existing, preset] });
+  }, [userConfig.filterPresets, saveUserConfig]);
+
+  const handlePresetDelete = useCallback((presetId: string) => {
+    const existing = userConfig.filterPresets ?? [];
+    saveUserConfig({ filterPresets: existing.filter((p) => p.id !== presetId) });
+    if (activePresetId === presetId) setActivePresetId(null);
+  }, [userConfig.filterPresets, saveUserConfig, activePresetId]);
+
+  const handlePresetUpdate = useCallback((updated: FilterPreset) => {
+    const existing = userConfig.filterPresets ?? [];
+    saveUserConfig({
+      filterPresets: existing.map((p) => (p.id === updated.id ? updated : p)),
+    });
+    // Also apply the updated filter and keep preset active (don't clear activePresetId)
+    setFilter(updated.filter);
+    setFilterOpen(false);
+    setPage(1);
+  }, [userConfig.filterPresets, saveUserConfig]);
+
+  const handleSavePresetFromPanel = useCallback((preset: FilterPreset) => {
+    handlePresetSave(preset);
+  }, [handlePresetSave]);
+
+  const handleColumnsApply = useCallback(
+    (value: { columns: string[]; oneToOneFields: Record<string, string[]>; detailEntity: { entityCode: string; fields: string[] } | null }) => {
+      saveUserConfig({
+        columns: value.columns,
+        oneToOneFields: Object.keys(value.oneToOneFields).length > 0 ? value.oneToOneFields : undefined,
+        detailEntity: value.detailEntity,
+      });
+    },
+    [saveUserConfig],
+  );
+
+  const handleColumnsReset = useCallback(() => {
+    saveUserConfig({ columns: undefined, oneToOneFields: undefined, detailEntity: null });
+  }, [saveUserConfig]);
+
+  const handlePageSizeChange = useCallback((size: number) => {
+    setPageSize(size);
+    setPage(1);
+    saveUserConfig({ pageSize: size });
+  }, [saveUserConfig]);
 
   const handleSortChange = useCallback((field: string, order: 'asc' | 'desc') => {
     setSort({ field, order });
@@ -630,13 +826,59 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
   );
 
   /* ------------------------------------------------------------------ */
-  /*  Extra columns for DataTable (data_status badge)                    */
+  /*  Master-detail expansion — flatten rows when detailEntity is active */
   /* ------------------------------------------------------------------ */
 
-  const extraColumns = useMemo(() => {
-    if (!model.enableDataStatus) return undefined;
-    return [
-      {
+  const detailCfg = userConfig.detailEntity;
+  const isDetailMode = !!(detailCfg && detailCfg.entityCode && detailCfg.fields.length > 0);
+
+  const detailEntityMeta = useMemo(() => {
+    if (!isDetailMode || !detailCfg || !entities) return null;
+    return entities.find((e) => e.code === detailCfg.entityCode && e.entityType === 'one_to_many') ?? null;
+  }, [isDetailMode, detailCfg, entities]);
+
+  const displayData = useMemo(() => {
+    if (!isDetailMode || !detailCfg) return data;
+    const out: Record<string, any>[] = [];
+    data.forEach((master, mIdx) => {
+      const detail = master.__detail;
+      const childRows: any[] = detail && detail.entityCode === detailCfg.entityCode ? (detail.rows ?? []) : [];
+      if (childRows.length === 0) {
+        out.push({
+          ...master,
+          id: `${master.id}:__empty`,
+          __masterId: master.id,
+          __masterRecord: master,
+          __masterIndex: mIdx,
+          __detailRow: null,
+          __groupId: master.id,
+        });
+      } else {
+        for (const child of childRows) {
+          out.push({
+            ...master,
+            id: child.id,
+            __masterId: master.id,
+            __masterRecord: master,
+            __masterIndex: mIdx,
+            __detailRow: child,
+            __groupId: master.id,
+          });
+        }
+      }
+    });
+    return out;
+  }, [data, isDetailMode, detailCfg]);
+
+  /* ------------------------------------------------------------------ */
+  /*  Extra / trailing columns (data_status, 1:1 fields, detail fields)  */
+  /* ------------------------------------------------------------------ */
+
+  const extraColumns = useMemo<ColumnDef<Record<string, any>>[] | undefined>(() => {
+    const cols: ColumnDef<Record<string, any>>[] = [];
+
+    if (model.enableDataStatus) {
+      cols.push({
         id: '_data_status',
         size: 100,
         header: () => <span className="text-xs font-medium">{t('filter.dataStatus')}</span>,
@@ -645,9 +887,91 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
           if (!status) return <span className="text-muted-foreground">&mdash;</span>;
           return <DataStatusBadge status={status} />;
         },
-      },
-    ];
-  }, [model.enableDataStatus, t]);
+      });
+    }
+
+    // 1:1 entity field columns
+    const oneToOneSel = userConfig.oneToOneFields ?? {};
+    if (entities && Object.keys(oneToOneSel).length > 0) {
+      for (const [entityCode, fieldCols] of Object.entries(oneToOneSel)) {
+        if (!fieldCols.length) continue;
+        const entity = entities.find((e) => e.code === entityCode && e.entityType === 'one_to_one');
+        if (!entity) continue;
+        for (const colName of fieldCols) {
+          const field = entity.fields?.find((f) => f.columnName === colName);
+          if (!field) continue;
+          const colId = `__one__${entityCode}__${colName}`;
+          cols.push({
+            id: colId,
+            size: 150,
+            header: () => (
+              <span className="text-xs font-medium truncate" title={`${entity.name}.${field.name}`}>
+                {`${entity.name}.${field.name}`}
+              </span>
+            ),
+            cell: ({ row }: any) => {
+              const subRecord = row.original.__oneToOne?.[entityCode];
+              if (!subRecord) return <span className="text-muted-foreground">&mdash;</span>;
+              const val = subRecord[colName];
+              if (val === null || val === undefined) return <span className="text-muted-foreground">&mdash;</span>;
+              return renderCell(field, val, subRecord);
+            },
+          });
+        }
+      }
+    }
+
+    return cols.length > 0 ? cols : undefined;
+  }, [model.enableDataStatus, userConfig.oneToOneFields, entities, t, renderCell]);
+
+  const trailingColumns = useMemo<ColumnDef<Record<string, any>>[] | undefined>(() => {
+    if (!isDetailMode || !detailCfg || !detailEntityMeta) return undefined;
+    const cols: ColumnDef<Record<string, any>>[] = [];
+    for (const colName of detailCfg.fields) {
+      const field = detailEntityMeta.fields?.find((f) => f.columnName === colName);
+      if (!field) continue;
+      const colId = `__detail__${colName}`;
+      cols.push({
+        id: colId,
+        size: 150,
+        header: () => (
+          <span className="text-xs font-medium truncate" title={`${detailEntityMeta.name}.${field.name}`}>
+            {`${detailEntityMeta.name}.${field.name}`}
+          </span>
+        ),
+        cell: ({ row }: any) => {
+          const child = row.original.__detailRow;
+          if (!child) return <span className="text-muted-foreground">&mdash;</span>;
+          const val = child[colName];
+          if (val === null || val === undefined) return <span className="text-muted-foreground">&mdash;</span>;
+          return renderCell(field, val, child);
+        },
+      });
+    }
+    return cols.length > 0 ? cols : undefined;
+  }, [isDetailMode, detailCfg, detailEntityMeta, renderCell]);
+
+  // IDs of columns that should merge (rowSpan) within a master group.
+  const groupedColumnIds = useMemo<string[] | undefined>(() => {
+    if (!isDetailMode) return undefined;
+    const ids: string[] = ['_row_number'];
+    if (model.enableDataStatus) ids.push('_data_status');
+    // Master field columns (identified by field.columnName — matches DataTable col ids)
+    for (const f of fields) {
+      if (!f.isSystem && !f.deletedAt) ids.push(f.columnName);
+    }
+    // 1:1 synthetic columns
+    const oneToOneSel = userConfig.oneToOneFields ?? {};
+    for (const [entityCode, cols] of Object.entries(oneToOneSel)) {
+      for (const c of cols) ids.push(`__one__${entityCode}__${c}`);
+    }
+    return ids;
+  }, [isDetailMode, model.enableDataStatus, fields, userConfig.oneToOneFields]);
+
+  const getRowGroupKey = useMemo(
+    () => (isDetailMode ? (row: Record<string, any>) => row.__groupId ?? null : undefined),
+    [isDetailMode],
+  );
 
   /* ------------------------------------------------------------------ */
   /*  Render                                                             */
@@ -670,25 +994,41 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
         </div>
       )}
 
-      {/* Action Toolbar + Filter trigger */}
+      {/* Row 1: Filter button + ActionToolbar */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <ActionToolbar
-            actions={actions}
-            selectedRecords={selectedRecords}
-            enableDataStatus={!!model.enableDataStatus}
-            position="list"
-            currentUserId={user?.id}
-            onAction={handleAction}
-            onRefresh={fetchData}
-          />
-        </div>
-
-        {/* Filter trigger + chips row */}
-        <div className="flex items-center gap-2">
-          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+          {/* Filter trigger — always first */}
+          <Popover
+            open={filterOpen}
+            onOpenChange={(newOpen, details) => {
+              if (!newOpen && details && 'reason' in details) {
+                const reason = (details as any).reason;
+                // Ignore focus-out: when a reference is picked the input is
+                // swapped for a display span, removing the focused element from
+                // the DOM and triggering a spurious focus-out on the popover.
+                // Dismissal is fully covered by Escape, outside-press, and the
+                // explicit Apply/Cancel buttons.
+                if (reason === 'focus-out') {
+                  (details as any).cancel?.();
+                  return;
+                }
+                // Prevent close when user interacts with RelationPicker
+                // dropdown/dialog which renders to document.body (Base UI sees
+                // those clicks as "outside").
+                if (reason === 'outside-press') {
+                  const event = (details as any).event;
+                  const target = event?.target as Element | undefined;
+                  if (target && typeof target.closest === 'function' && target.closest('[data-rp-portal]')) {
+                    (details as any).cancel?.();
+                    return;
+                  }
+                }
+              }
+              setFilterOpen(newOpen);
+            }}
+          >
             <PopoverTrigger
-              className={`inline-flex items-center gap-1.5 h-8 px-3 text-sm rounded-md border transition-colors ${
+              className={`inline-flex items-center gap-1.5 h-9 px-3 text-sm rounded-md border transition-colors ${
                 hasActiveFilters
                   ? 'border-primary/50 bg-primary/5 text-primary hover:bg-primary/10'
                   : 'border-input bg-background hover:bg-accent hover:text-accent-foreground'
@@ -706,13 +1046,26 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
               <FilterPanel
                 fields={fields}
                 enableDataStatus={!!model.enableDataStatus}
-                value={filter}
+                value={pendingFilter}
                 onChange={handleFilterChange}
                 onApply={handleFilterApply}
                 onReset={handleFilterReset}
+                onSavePreset={handleSavePresetFromPanel}
+                activePreset={activePreset}
+                onUpdatePreset={handlePresetUpdate}
               />
             </PopoverContent>
           </Popover>
+
+          <ActionToolbar
+            actions={actions}
+            selectedRecords={selectedRecords}
+            enableDataStatus={!!model.enableDataStatus}
+            position="list"
+            currentUserId={user?.id}
+            onAction={handleAction}
+            onRefresh={fetchData}
+          />
 
           {/* Tree / Table view mode toggle */}
           {isTreeModel && (
@@ -742,12 +1095,42 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
           )}
         </div>
 
+        {/* Row 2: Saved filter presets (inline) */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {/* Saved filter presets as inline tabs */}
+          {(userConfig.filterPresets ?? []).map((preset) => {
+            const isActive = activePresetId === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => handlePresetLoad(preset.id, preset.filter)}
+                className={`group inline-flex items-center gap-1 h-7 px-3 text-xs rounded-md border transition-colors ${
+                  isActive
+                    ? 'border-primary bg-primary/5 text-primary font-medium'
+                    : 'border-dashed border-input text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                {preset.name}
+                <span
+                  role="button"
+                  onClick={(e) => { e.stopPropagation(); handlePresetDelete(preset.id); }}
+                  className="hidden group-hover:inline-flex items-center justify-center w-3.5 h-3.5 rounded-full hover:bg-destructive/20 hover:text-destructive text-muted-foreground"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Filter chips */}
         <FilterChips
           fields={fields}
           value={filter}
           onChange={(newFilter) => {
             setFilter(newFilter);
+            setActivePresetId(null); // chip removal clears preset selection
             setPage(1);
           }}
         />
@@ -769,7 +1152,7 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
         ) : (
           <DataTable
             fields={fields}
-            data={data}
+            data={displayData}
             total={total}
             page={page}
             pageSize={pageSize}
@@ -782,6 +1165,7 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
             onSortChange={handleSortChange}
             onRowClick={handleRowClick}
             onRowDoubleClick={handleOpenRecord}
+            onLinkClick={handleOpenRecord}
             onNew={handleCreate}
             onBatchArchive={() => {}}
             onBatchDelete={() => {}}
@@ -791,6 +1175,21 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
             hideToolbar
             onSelectionChange={handleSelectionChange}
             extraColumns={extraColumns}
+            trailingColumns={trailingColumns}
+            getRowGroupKey={getRowGroupKey}
+            groupedColumnIds={groupedColumnIds}
+            onPageSizeChange={handlePageSizeChange}
+            headerEndSlot={
+              <ColumnSettings
+                fields={fields}
+                userColumns={userConfig.columns}
+                oneToOneFields={userConfig.oneToOneFields}
+                detailEntity={userConfig.detailEntity}
+                onApply={handleColumnsApply}
+                onReset={handleColumnsReset}
+                entities={entities}
+              />
+            }
           />
         )}
       </div>
@@ -830,7 +1229,9 @@ export default function RecordBrowser({ model, fields, tabId }: RecordBrowserPro
                       ? t('common.confirmDeleteBtn')
                       : confirmDialog.type === 'batchArchive'
                         ? t('archive.archive')
-                        : t('archive.unarchive')}
+                        : confirmDialog.type === 'batchUnarchive'
+                          ? t('archive.unarchive')
+                          : tCommon('confirm')}
               </button>
             </div>
           </div>

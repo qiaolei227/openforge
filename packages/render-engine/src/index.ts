@@ -18,7 +18,7 @@ export { FieldNode } from './form/field-node';
 export { ListRenderer } from './list/list-renderer';
 
 // Utilities (kept from before)
-export { generateDefaultFormLayout, generateDefaultListLayout } from './auto-layout';
+export { generateDefaultFormLayout, generateDefaultListLayout, DEFAULT_COLUMN_WIDTH } from './auto-layout';
 export { ensureNodeIds } from './ensure-ids';
 
 // Designer registry (used by property panel)

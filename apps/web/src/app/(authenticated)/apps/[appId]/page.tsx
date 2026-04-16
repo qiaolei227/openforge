@@ -716,9 +716,9 @@ export default function AppDetailPage() {
                   {/* Badges: data scope + data status */}
                   <div className="absolute top-3 right-12 flex items-center gap-1.5">
                     {model.enableDataStatus && (
-                      <span className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 text-xs font-medium">
+                      <Badge variant="outline" className="bg-gray-100 text-gray-600 border-0 dark:bg-gray-800/50 dark:text-gray-400">
                         {tModels('enableDataStatus')}
-                      </span>
+                      </Badge>
                     )}
                     {renderDataScopeBadge(model.dataScope)}
                   </div>
@@ -972,23 +972,21 @@ export default function AppDetailPage() {
                 />
               </div>
 
-              {/* Data Scope */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{tModels('dataScope')}</label>
-                <select
-                  className={`${inputClass} disabled:opacity-70 disabled:cursor-not-allowed`}
-                  value={formDataScope}
-                  disabled={dialogMode === 'edit'}
-                  onChange={(e) => setFormDataScope(e.target.value as 'private' | 'shared' | 'distributed')}
-                >
-                  <option value="private">{tModels('dataScopePrivate')}</option>
-                  <option value="shared">{tModels('dataScopeShared')}</option>
-                  <option value="distributed">{tModels('dataScopeDistributed')}</option>
-                </select>
-                {dialogMode === 'edit' && (
-                  <p className="text-xs text-muted-foreground">{tModels('dataScopeImmutable')}</p>
-                )}
-              </div>
+              {/* Data Scope — immutable after creation, hide in edit */}
+              {dialogMode === 'create' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{tModels('dataScope')}</label>
+                  <select
+                    className={inputClass}
+                    value={formDataScope}
+                    onChange={(e) => setFormDataScope(e.target.value as 'private' | 'shared' | 'distributed')}
+                  >
+                    <option value="private">{tModels('dataScopePrivate')}</option>
+                    <option value="shared">{tModels('dataScopeShared')}</option>
+                    <option value="distributed">{tModels('dataScopeDistributed')}</option>
+                  </select>
+                </div>
+              )}
 
               {/* Is Tree */}
               {dialogMode === 'create' && (

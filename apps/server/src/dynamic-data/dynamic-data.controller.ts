@@ -45,6 +45,19 @@ export class DynamicDataController {
     );
   }
 
+  @Get('status-counts')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'view',
+  )
+  async statusCounts(
+    @Param('appCode') appCode: string,
+    @Param('modelCode') modelCode: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.dynamicDataService.statusCounts(appCode, modelCode, user.orgId);
+  }
+
   @Get('schema')
   @RequirePermission(
     (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
@@ -162,6 +175,7 @@ export class DynamicDataController {
       id,
       body.action as any,
       req.user.userId,
+      req.user.isAdmin,
     );
     return { success: true };
   }

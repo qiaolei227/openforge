@@ -1,8 +1,8 @@
 import type { Field, FieldType, LayoutConfig, LayoutNode } from '@openforge/shared';
 import { isVirtualFieldType } from '@openforge/shared';
 
-/* ── Column width map (same as DataTable) ── */
-const COLUMN_WIDTH: Record<FieldType, number> = {
+/* ── Column width map (shared across DataTable + SubTable) ── */
+export const DEFAULT_COLUMN_WIDTH: Record<FieldType, number> = {
   STRING: 150,
   ENUM: 150,
   MULTI_ENUM: 150,
@@ -96,7 +96,7 @@ export function generateDefaultListLayout(fields: Field[]): LayoutConfig {
         fieldId: field.id,
         columnName: field.columnName,
         fieldType: field.fieldType,
-        width: COLUMN_WIDTH[field.fieldType] ?? 150,
+        width: DEFAULT_COLUMN_WIDTH[field.fieldType] ?? 150,
         align: COLUMN_ALIGN[field.fieldType] ?? 'left',
       },
     }));

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { FieldType } from '@openforge/shared';
 import type { ApiQueryFn, PickerColumn } from './field-props';
 
@@ -30,13 +31,36 @@ export interface ReferencePickerDialogProps {
 // Cell formatting
 // ---------------------------------------------------------------------------
 
-function formatCellValue(value: any, fieldType: FieldType): string {
+function formatCellValue(
+  record: Record<string, any>,
+  columnKey: string,
+  fieldType: FieldType,
+): string {
+  // REFERENCE / USER / ORGANIZATION — backend resolves display into `${col}__display`
+  if (fieldType === 'REFERENCE' || fieldType === 'USER' || fieldType === 'ORGANIZATION') {
+    const display = record[`${columnKey}__display`];
+    if (display !== null && display !== undefined && display !== '') return String(display);
+    const raw = record[columnKey];
+    return raw === null || raw === undefined ? '' : String(raw);
+  }
+
+  // MULTI_REFERENCE — backend resolves into `${col}__m2m` array of {id, displayValue}
+  if (fieldType === 'MULTI_REFERENCE') {
+    const items = record[`${columnKey}__m2m`];
+    if (Array.isArray(items) && items.length > 0) {
+      return items.map((it: any) => it.displayValue ?? it.id).join(', ');
+    }
+    return '';
+  }
+
+  const value = record[columnKey];
   if (value === null || value === undefined) return '';
   if (fieldType === 'BOOLEAN') return value ? '✓' : '';
   if (fieldType === 'DATE' || fieldType === 'DATETIME') {
     const d = new Date(value);
     return isNaN(d.getTime()) ? String(value) : d.toLocaleDateString();
   }
+  if (Array.isArray(value)) return value.join(', ');
   return String(value);
 }
 
@@ -295,8 +319,13 @@ export default function ReferencePickerDialog({
   const confirmDisabled =
     mode === 'single' ? singleSelected === null : multiSelected.size === 0;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      data-rp-portal="dialog"
+      className="fixed inset-0 z-[200] flex items-center justify-center"
+    >
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/50"
@@ -304,7 +333,7 @@ export default function ReferencePickerDialog({
       />
 
       {/* Modal */}
-      <div className="relative z-10 flex w-full max-w-2xl flex-col rounded-lg border border-border bg-background shadow-lg"
+      <div className="relative z-10 flex w-full max-w-4xl flex-col rounded-lg border border-border bg-background shadow-lg"
         style={{ maxHeight: '80vh' }}
       >
         {/* Header */}
@@ -347,7 +376,7 @@ export default function ReferencePickerDialog({
 
         {/* Table */}
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full text-sm">
+          <table className="text-sm" style={{ tableLayout: 'fixed', width: 40 + columns.length * 150 }}>
             <thead className="sticky top-0 z-10 border-b border-border bg-background">
               <tr>
                 {/* Selection column */}
@@ -370,7 +399,7 @@ export default function ReferencePickerDialog({
                 {columns.map((col) => (
                   <th
                     key={col.key}
-                    className="px-3 py-2 text-left font-medium text-muted-foreground"
+                    className="w-[150px] px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap"
                   >
                     {col.label}
                   </th>
@@ -435,9 +464,11 @@ export default function ReferencePickerDialog({
                     {columns.map((col) => (
                       <td
                         key={col.key}
-                        className="px-3 py-2 text-foreground"
+                        className="w-[150px] px-3 py-2 text-foreground overflow-hidden"
                       >
-                        {formatCellValue(record[col.key], col.fieldType)}
+                        <div className="truncate">
+                          {formatCellValue(record, col.key, col.fieldType)}
+                        </div>
                       </td>
                     ))}
                   </tr>
@@ -499,6 +530,7 @@ export default function ReferencePickerDialog({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

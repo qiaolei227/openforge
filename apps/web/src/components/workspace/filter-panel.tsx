@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Plus, Trash2, CopyPlus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/select';
 import type { FilterGroup, FilterCondition } from '@openforge/shared';
 import type { Field, FieldType } from '@openforge/shared';
+import type { FilterPreset } from '@/components/workspace/filter-presets';
+import { FilterSearchInput } from '@/components/workspace/filter-search-input';
 
 /* ------------------------------------------------------------------ */
 /*  Operator definitions per field type                                 */
@@ -22,12 +24,12 @@ import type { Field, FieldType } from '@openforge/shared';
 
 type OpKey =
   | 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte'
-  | 'in' | 'not_in' | 'like' | 'is_null' | 'is_not_null';
+  | 'in' | 'not_in' | 'like' | 'not_like' | 'is_null' | 'is_not_null';
 
 const OPS_BY_TYPE: Record<string, OpKey[]> = {
-  STRING:        ['like', 'eq', 'ne', 'is_null', 'is_not_null'],
-  TEXT:          ['like', 'eq', 'ne', 'is_null', 'is_not_null'],
-  RICHTEXT:      ['like', 'is_null', 'is_not_null'],
+  STRING:        ['like', 'not_like', 'eq', 'ne', 'is_null', 'is_not_null'],
+  TEXT:          ['like', 'not_like', 'eq', 'ne', 'is_null', 'is_not_null'],
+  RICHTEXT:      ['like', 'not_like', 'is_null', 'is_not_null'],
   INTEGER:       ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'is_null', 'is_not_null'],
   DECIMAL:       ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'is_null', 'is_not_null'],
   BOOLEAN:       ['eq', 'is_null', 'is_not_null'],
@@ -36,7 +38,7 @@ const OPS_BY_TYPE: Record<string, OpKey[]> = {
   TIME:          ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'is_null', 'is_not_null'],
   ENUM:          ['eq', 'ne', 'in', 'not_in', 'is_null', 'is_not_null'],
   MULTI_ENUM:    ['in', 'not_in', 'is_null', 'is_not_null'],
-  AUTO_NUMBER:   ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'is_null', 'is_not_null'],
+  AUTO_NUMBER:   ['like', 'not_like', 'eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'is_null', 'is_not_null'],
   REFERENCE:     ['eq', 'ne', 'is_null', 'is_not_null'],
   USER:          ['eq', 'ne', 'is_null', 'is_not_null'],
   ORGANIZATION:  ['eq', 'ne', 'is_null', 'is_not_null'],
@@ -55,22 +57,10 @@ const EXCLUDED_TYPES: FieldType[] = ['FILE', 'IMAGE', 'MULTI_REFERENCE'];
 const NO_VALUE_OPS: OpKey[] = ['is_null', 'is_not_null'];
 
 /* ------------------------------------------------------------------ */
-/*  System pseudo-field definitions                                     */
+/*  Constants                                                           */
 /* ------------------------------------------------------------------ */
 
-interface PseudoField {
-  columnName: string;
-  labelKey: keyof ReturnType<typeof useTranslations<'filter'>>;
-  inputType: 'text' | 'select' | 'date' | 'datetime-local' | 'boolean';
-  choices?: Array<{ value: string; label: string }>;
-}
-
-const DATA_STATUS_CHOICES = [
-  { value: 'draft', label: 'draft' },
-  { value: 'submitted', label: 'submitted' },
-  { value: 'approved', label: 'approved' },
-  { value: 'reaudit', label: 'reaudit' },
-];
+const DATA_STATUS_KEYS = ['draft', 'submitted', 'approved', 'reaudit'] as const;
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                               */
@@ -86,6 +76,12 @@ export interface FilterPanelProps {
   onChange: (value: FilterGroup) => void;
   onApply?: () => void;
   onReset?: () => void;
+  /** Called when user saves a new preset from within the panel */
+  onSavePreset?: (preset: FilterPreset) => void;
+  /** Currently active preset — when provided, a "保存" button updates it in-place */
+  activePreset?: FilterPreset | null;
+  /** Called when user updates the active preset */
+  onUpdatePreset?: (preset: FilterPreset) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -109,32 +105,41 @@ function makeGroup(): FilterGroup {
 interface FieldOption {
   value: string;
   label: string;
-  inputType: PseudoField['inputType'];
-  choices?: PseudoField['choices'];
+  inputType: 'text' | 'select' | 'date' | 'datetime-local' | 'time' | 'number' | 'boolean' | 'reference' | 'user' | 'organization';
+  choices?: Array<{ value: string; label: string }>;
   opsKey: string;
+  /** Original Field object — needed by the REFERENCE/USER/ORG picker components */
+  field?: Field;
 }
 
 function buildFieldOptions(
   fields: Field[],
   enableDataStatus: boolean,
   t: ReturnType<typeof useTranslations<'filter'>>,
+  tStatus: ReturnType<typeof useTranslations<'dataStatus'>>,
 ): FieldOption[] {
   const opts: FieldOption[] = [];
 
   // Model fields (exclude unsupported types)
   for (const f of fields) {
     if (EXCLUDED_TYPES.includes(f.fieldType)) continue;
-    let inputType: PseudoField['inputType'] = 'text';
+    let inputType: FieldOption['inputType'] = 'text';
     if (f.fieldType === 'DATE') inputType = 'date';
     else if (f.fieldType === 'DATETIME') inputType = 'datetime-local';
+    else if (f.fieldType === 'TIME') inputType = 'time';
+    else if (f.fieldType === 'INTEGER' || f.fieldType === 'DECIMAL') inputType = 'number';
     else if (f.fieldType === 'BOOLEAN') inputType = 'boolean';
     else if (f.fieldType === 'ENUM' || f.fieldType === 'MULTI_ENUM') inputType = 'select';
+    else if (f.fieldType === 'REFERENCE') inputType = 'reference';
+    else if (f.fieldType === 'USER') inputType = 'user';
+    else if (f.fieldType === 'ORGANIZATION') inputType = 'organization';
     opts.push({
       value: f.columnName,
       label: f.name,
       inputType,
       choices: f.options?.choices?.map((c) => ({ value: c.value, label: c.label })),
       opsKey: f.fieldType,
+      field: f,
     });
   }
 
@@ -144,7 +149,7 @@ function buildFieldOptions(
       value: 'data_status',
       label: t('dataStatus'),
       inputType: 'select',
-      choices: DATA_STATUS_CHOICES,
+      choices: DATA_STATUS_KEYS.map((k) => ({ value: k, label: tStatus(k) })),
       opsKey: 'data_status',
     });
   }
@@ -186,9 +191,10 @@ interface ValueInputProps {
   value: any;
   onChange: (v: any) => void;
   placeholder: string;
+  t: ReturnType<typeof useTranslations<'filter'>>;
 }
 
-function ValueInput({ op, fieldOpt, value, onChange, placeholder }: ValueInputProps) {
+function ValueInput({ op, fieldOpt, value, onChange, placeholder, t }: ValueInputProps) {
   if (NO_VALUE_OPS.includes(op as OpKey)) return null;
   if (!fieldOpt) return null;
 
@@ -196,14 +202,17 @@ function ValueInput({ op, fieldOpt, value, onChange, placeholder }: ValueInputPr
 
   // Boolean — simple true/false select
   if (inputType === 'boolean') {
+    const boolLabel = value === true || value === 'true' ? t('boolTrue') : value === false || value === 'false' ? t('boolFalse') : null;
     return (
-      <Select value={value ?? null} onValueChange={(v) => onChange(v === 'true')}>
+      <Select value={value != null ? String(value) : null} onValueChange={(v) => onChange(v === 'true')}>
         <SelectTrigger className="flex-1 min-w-0 bg-background h-7 text-xs">
-          <SelectValue placeholder={placeholder} />
+          <span className="flex flex-1 text-left truncate text-sm">
+            {boolLabel ?? <span className="text-muted-foreground">{placeholder}</span>}
+          </span>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="true">True</SelectItem>
-          <SelectItem value="false">False</SelectItem>
+          <SelectItem value="true">{t('boolTrue')}</SelectItem>
+          <SelectItem value="false">{t('boolFalse')}</SelectItem>
         </SelectContent>
       </Select>
     );
@@ -211,10 +220,13 @@ function ValueInput({ op, fieldOpt, value, onChange, placeholder }: ValueInputPr
 
   // Enum / data_status — choices select
   if (inputType === 'select' && choices?.length) {
+    const choiceLabel = choices.find((c) => c.value === value)?.label;
     return (
       <Select value={value ?? null} onValueChange={onChange}>
         <SelectTrigger className="flex-1 min-w-0 bg-background h-7 text-xs">
-          <SelectValue placeholder={placeholder} />
+          <span className="flex flex-1 text-left truncate text-sm">
+            {choiceLabel ?? <span className="text-muted-foreground">{placeholder}</span>}
+          </span>
         </SelectTrigger>
         <SelectContent>
           {choices.map((c) => (
@@ -227,12 +239,37 @@ function ValueInput({ op, fieldOpt, value, onChange, placeholder }: ValueInputPr
     );
   }
 
-  // Date / datetime / text
+  // Reference / User / Organization — reuse the form's real picker components
+  if ((inputType === 'reference' || inputType === 'user' || inputType === 'organization') && fieldOpt.field) {
+    return (
+      <FilterSearchInput
+        type={inputType}
+        field={fieldOpt.field}
+        value={value}
+        onChange={onChange}
+      />
+    );
+  }
+
+  // Date / datetime / time / number / text
+  const htmlType =
+    inputType === 'datetime-local' ? 'datetime-local'
+    : inputType === 'date' ? 'date'
+    : inputType === 'time' ? 'time'
+    : inputType === 'number' ? 'number'
+    : 'text';
   return (
     <Input
-      type={inputType === 'datetime-local' ? 'datetime-local' : inputType === 'date' ? 'date' : 'text'}
+      type={htmlType}
       value={value ?? ''}
-      onChange={(e) => onChange(e.target.value || undefined)}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (inputType === 'number' && v !== '') {
+          onChange(Number(v));
+        } else {
+          onChange(v || undefined);
+        }
+      }}
       placeholder={placeholder}
       className="flex-1 min-w-0 bg-background h-7 text-xs"
     />
@@ -293,7 +330,9 @@ function ConditionRow({ condition, fieldOptions, path, onUpdate, onRemove, t }: 
       {/* Field selector */}
       <Select value={condition.field || null} onValueChange={handleFieldChange}>
         <SelectTrigger className="w-32 shrink-0 bg-background h-7 text-xs">
-          <SelectValue placeholder="字段" />
+          <span className="flex flex-1 text-left truncate text-sm">
+            {fieldOpt ? fieldOpt.label : <span className="text-muted-foreground">{t('fieldPlaceholder')}</span>}
+          </span>
         </SelectTrigger>
         <SelectContent>
           {fieldOptions.map((opt) => (
@@ -307,7 +346,9 @@ function ConditionRow({ condition, fieldOptions, path, onUpdate, onRemove, t }: 
       {/* Operator selector */}
       <Select value={condition.op || null} onValueChange={handleOpChange}>
         <SelectTrigger className="w-28 shrink-0 bg-background h-7 text-xs">
-          <SelectValue />
+          <span className="flex flex-1 text-left truncate text-sm">
+            {condition.op ? t(`ops.${condition.op}` as any) : null}
+          </span>
         </SelectTrigger>
         <SelectContent>
           {availableOps.map((op) => (
@@ -325,12 +366,13 @@ function ConditionRow({ condition, fieldOptions, path, onUpdate, onRemove, t }: 
         value={condition.value}
         onChange={handleValueChange}
         placeholder={t('valuePlaceholder')}
+        t={t}
       />
 
       {/* Delete button */}
       <button
         type="button"
-        title="删除条件"
+        title={t('deleteCondition')}
         onClick={() => onRemove(path)}
         className="shrink-0 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
       >
@@ -418,7 +460,7 @@ function FilterGroupEditor({
         {!isRoot && (
           <button
             type="button"
-            title="删除分组"
+            title={t('deleteGroup')}
             onClick={() => onRemove(path)}
             className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
           >
@@ -493,9 +535,17 @@ export function FilterPanel({
   onChange,
   onApply,
   onReset,
+  onSavePreset,
+  activePreset,
+  onUpdatePreset,
 }: FilterPanelProps) {
   const t = useTranslations('filter');
-  const fieldOptions = buildFieldOptions(fields, enableDataStatus, t);
+  const tCommon = useTranslations('common');
+  const tStatus = useTranslations('dataStatus');
+  const fieldOptions = buildFieldOptions(fields, enableDataStatus, t, tStatus);
+
+  const [presetSaving, setPresetSaving] = useState(false);
+  const [presetName, setPresetName] = useState('');
 
   const handleUpdate = useCallback(
     (
@@ -524,6 +574,33 @@ export function FilterPanel({
     onReset?.();
   };
 
+  const handleStartSavePreset = () => {
+    setPresetSaving(true);
+    setPresetName('');
+  };
+
+  const handleConfirmPreset = () => {
+    if (!presetName.trim() || !onSavePreset) return;
+    onSavePreset({
+      id: crypto.randomUUID(),
+      name: presetName.trim(),
+      filter: value,
+    });
+    setPresetSaving(false);
+    setPresetName('');
+  };
+
+  const handleCancelPreset = () => {
+    setPresetSaving(false);
+    setPresetName('');
+  };
+
+  const handleUpdateActivePreset = () => {
+    if (!activePreset || !onUpdatePreset) return;
+    onUpdatePreset({ ...activePreset, filter: value });
+    // The parent handler is expected to apply the filter and close the panel.
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4 min-w-[520px]">
       <FilterGroupEditor
@@ -536,8 +613,43 @@ export function FilterPanel({
         depth={0}
       />
 
+      {/* Inline preset name input */}
+      {presetSaving && (
+        <div className="flex items-center gap-2 pt-2 border-t border-border">
+          <span className="text-xs text-muted-foreground shrink-0">{t('presetName')}:</span>
+          <Input
+            autoFocus
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleConfirmPreset();
+              if (e.key === 'Escape') handleCancelPreset();
+            }}
+            placeholder={t('presetNamePlaceholder')}
+            className="flex-1 h-7 text-xs bg-background"
+          />
+          <Button size="sm" onClick={handleConfirmPreset} disabled={!presetName.trim()}>
+            {t('savePreset')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleCancelPreset}>
+            {tCommon('cancel')}
+          </Button>
+        </div>
+      )}
+
       {/* Footer */}
-      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+      <div className="flex items-center gap-2 pt-2 border-t border-border">
+        {!presetSaving && activePreset && onUpdatePreset && (
+          <Button variant="outline" size="sm" onClick={handleUpdateActivePreset} title={activePreset.name}>
+            {t('updatePreset')}
+          </Button>
+        )}
+        {!presetSaving && onSavePreset && value.conditions.length > 0 && (
+          <Button variant="outline" size="sm" onClick={handleStartSavePreset}>
+            {t('savePreset')}
+          </Button>
+        )}
+        <div className="flex-1" />
         <Button variant="outline" size="sm" onClick={handleReset}>
           {t('reset')}
         </Button>

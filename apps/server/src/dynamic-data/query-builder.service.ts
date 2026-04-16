@@ -91,9 +91,12 @@ export class QueryBuilderService {
       if (filterSql) conditions.push(filterSql);
     }
 
-    // Keyword search across STRING fields
+    // Keyword search — restrict to searchFields when provided, else all text-like fields
     if (query.keyword) {
-      const keywordSql = this.buildKeyword(query.keyword, fields, params);
+      const searchScope = query.searchFields?.length
+        ? fields.filter((f) => query.searchFields!.includes(f.columnName))
+        : fields;
+      const keywordSql = this.buildKeyword(query.keyword, searchScope, params);
       if (keywordSql) conditions.push(keywordSql);
     }
 
@@ -191,6 +194,11 @@ export class QueryBuilderService {
     if (op === 'like') {
       params.push(`%${value}%`);
       return `"${columnName}" ILIKE $${params.length}`;
+    }
+
+    if (op === 'not_like') {
+      params.push(`%${value}%`);
+      return `"${columnName}" NOT ILIKE $${params.length}`;
     }
 
     const sqlOp = OP_MAP[op];

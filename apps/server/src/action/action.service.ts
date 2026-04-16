@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
@@ -7,7 +7,6 @@ import { ModelCreatedEvent } from '../event-bus/events';
 
 const BASE_SYSTEM_ACTIONS = [
   { code: 'create',    name: '新建',     icon: 'plus',            sortOrder: 0, displayType: 'button', position: 'both' },
-  { code: 'list',      name: '列表',     icon: 'list',            sortOrder: 1, displayType: 'button', position: 'detail' },
   { code: 'delete',    name: '删除',     icon: 'trash-2',         sortOrder: 8, displayType: 'button', position: 'both' },
   { code: 'archive',   name: '归档',     icon: 'archive',         sortOrder: 7, displayType: 'split',  position: 'both' },
   { code: 'unarchive', name: '取消归档', icon: 'archive-restore', sortOrder: 7, displayType: 'button', position: 'both' },
@@ -21,8 +20,15 @@ const DATA_STATUS_ACTIONS = [
 ];
 
 @Injectable()
-export class ActionService {
+export class ActionService implements OnApplicationBootstrap {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+
+  /** Clean up deprecated "list" system actions from existing models */
+  async onApplicationBootstrap(): Promise<void> {
+    await this.prisma.sysAction.deleteMany({
+      where: { code: 'list', category: 'system' },
+    });
+  }
 
   @OnEvent('model.created')
   async handleModelCreated(event: ModelCreatedEvent): Promise<void> {

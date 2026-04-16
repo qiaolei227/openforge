@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, type ComponentType } from 'react';
 import type { Field, FieldType } from '@openforge/shared';
+import { DEFAULT_COLUMN_WIDTH } from '@openforge/render-engine';
 import type { SubTableProps } from './sub-table-types';
 import type { FieldComponentProps } from './field-props';
 import { getFieldComponent } from './index';
@@ -250,11 +251,11 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
 
       {/* Table */}
       <div className="max-h-[480px] overflow-auto">
-        <table className="w-full text-sm">
+        <table className="w-auto table-fixed text-sm">
           <thead className="sticky top-0 z-10">
             <tr>
               {isEditable && (
-                <th className="w-10 border-b bg-muted px-2 py-2 text-center">
+                <th className="border-b bg-muted px-2 py-2 text-center" style={{ width: 40, minWidth: 40, maxWidth: 40 }}>
                   <input
                     type="checkbox"
                     checked={rows.length > 0 && selectedRows.size === rows.length}
@@ -263,16 +264,20 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
                   />
                 </th>
               )}
-              <th className="w-10 border-b bg-muted px-2 py-2 text-center text-muted-foreground">#</th>
-              {visibleFields.map((field) => (
-                <th
-                  key={field.id}
-                  className="border-b bg-muted px-3 py-2 text-left font-medium text-muted-foreground"
-                >
-                  {field.name}
-                  {field.isRequired && <span className="ml-0.5 text-destructive">*</span>}
-                </th>
-              ))}
+              <th className="border-b bg-muted px-2 py-2 text-center text-muted-foreground" style={{ width: 40, minWidth: 40, maxWidth: 40 }}>#</th>
+              {visibleFields.map((field) => {
+                const colW = DEFAULT_COLUMN_WIDTH[field.fieldType as FieldType] ?? 150;
+                return (
+                  <th
+                    key={field.id}
+                    className="border-b bg-muted px-3 py-2 text-left font-medium text-muted-foreground truncate"
+                    style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                  >
+                    {field.name}
+                    {field.isRequired && <span className="ml-0.5 text-destructive">*</span>}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -295,7 +300,7 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
                   {rowIndex + 1}
                 </td>
                 {visibleFields.map((field) => (
-                  <td key={field.id} className="px-3 py-1.5">
+                  <td key={field.id} className="px-3 py-1.5 overflow-hidden">
                     <EditableCell
                       field={field}
                       value={row[field.columnName]}

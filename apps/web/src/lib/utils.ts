@@ -13,7 +13,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function getApiErrorMessage(
   err: any,
-  tErrors: (key: string) => string,
+  tErrors: (key: string, values?: Record<string, any>) => string,
   fallback: string,
 ): string {
   const data = err?.response?.data;
@@ -28,7 +28,17 @@ export function getApiErrorMessage(
         try {
           const fieldErrors = JSON.parse(data.message);
           if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
-            const details = fieldErrors.map((e: any) => e.message ?? e.field).join('; ');
+            const details = fieldErrors.map((e: any) => {
+              // New format: { field, code, name } — translate via validation.{code}
+              if (e.code && e.name) {
+                const key = `validation.${e.code}`;
+                const translated = tErrors(key, { name: e.name });
+                // If the key maps correctly, use it; otherwise fallback to code + name
+                return translated && translated !== key ? translated : `${e.name}: ${e.code}`;
+              }
+              // Legacy format: { field, message }
+              return e.message ?? e.field;
+            }).join('; ');
             return `${base}: ${details}`;
           }
         } catch {

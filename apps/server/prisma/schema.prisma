@@ -36,9 +36,10 @@ model SysUser {
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
 
-  userOrgs    SysUserOrg[]
-  userRoles   SysUserRole[]
-  createdApps SysApp[]     @relation("AppCreator")
+  userOrgs        SysUserOrg[]
+  userRoles       SysUserRole[]
+  createdApps     SysApp[]              @relation("AppCreator")
+  listConfigs     SysUserListConfig[]
 
   @@map("sys_user")
 }
@@ -401,4 +402,19 @@ model SysRolePermission {
   @@unique([roleId, resource])
   @@index([roleId])
   @@map("sys_role_permission")
+}
+
+model SysUserListConfig {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  modelId   String   @map("model_id") @db.Uuid
+  config    Json     @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user SysUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, modelId])
+  @@index([userId])
+  @@map("sys_user_list_config")
 }
