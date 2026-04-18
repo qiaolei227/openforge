@@ -133,6 +133,8 @@ interface FieldOption {
   field?: Field;
   /** Group label for grouped rendering in the field selector */
   group: string;
+  /** Stable group key for deduplication — differs from `group` (display label). */
+  groupKey: string;
 }
 
 function buildFieldOptions(
@@ -147,7 +149,7 @@ function buildFieldOptions(
   const mainGroupLabel = t('groupMain');
 
   // Helper to convert a Field to a FieldOption with chosen encoded value + group label.
-  const fieldToOpt = (f: Field, valueOverride: string | null, group: string): FieldOption => {
+  const fieldToOpt = (f: Field, valueOverride: string | null, group: string, groupKey: string): FieldOption => {
     let inputType: FieldOption['inputType'] = 'text';
     if (f.fieldType === 'DATE') inputType = 'date';
     else if (f.fieldType === 'DATETIME') inputType = 'datetime-local';
@@ -166,13 +168,14 @@ function buildFieldOptions(
       opsKey: f.fieldType,
       field: f,
       group,
+      groupKey,
     };
   };
 
   // Main fields
   for (const f of fields) {
     if (EXCLUDED_TYPES.includes(f.fieldType)) continue;
-    opts.push(fieldToOpt(f, null, mainGroupLabel));
+    opts.push(fieldToOpt(f, null, mainGroupLabel, 'main'));
   }
 
   // System pseudo-fields — under main group
@@ -184,19 +187,20 @@ function buildFieldOptions(
       choices: DATA_STATUS_KEYS.map((k) => ({ value: k, label: tStatus(k) })),
       opsKey: 'data_status',
       group: mainGroupLabel,
+      groupKey: 'main',
     });
   }
-  opts.push({ value: 'is_archived', label: t('archived'), inputType: 'boolean', opsKey: 'is_archived', group: mainGroupLabel });
-  opts.push({ value: 'created_by', label: t('createdBy'), inputType: 'text', opsKey: 'created_by', group: mainGroupLabel });
-  opts.push({ value: 'created_at', label: t('createdAt'), inputType: 'datetime-local', opsKey: 'created_at', group: mainGroupLabel });
-  opts.push({ value: 'updated_at', label: t('updatedAt'), inputType: 'datetime-local', opsKey: 'updated_at', group: mainGroupLabel });
+  opts.push({ value: 'is_archived', label: t('archived'), inputType: 'boolean', opsKey: 'is_archived', group: mainGroupLabel, groupKey: 'main' });
+  opts.push({ value: 'created_by', label: t('createdBy'), inputType: 'text', opsKey: 'created_by', group: mainGroupLabel, groupKey: 'main' });
+  opts.push({ value: 'created_at', label: t('createdAt'), inputType: 'datetime-local', opsKey: 'created_at', group: mainGroupLabel, groupKey: 'main' });
+  opts.push({ value: 'updated_at', label: t('updatedAt'), inputType: 'datetime-local', opsKey: 'updated_at', group: mainGroupLabel, groupKey: 'main' });
 
   // 1:1 entity fields
   if (oneToOneGroups) {
     for (const grp of oneToOneGroups) {
       for (const f of grp.fields) {
         if (EXCLUDED_TYPES.includes(f.fieldType)) continue;
-        opts.push(fieldToOpt(f, buildEntityFieldName('oneToOne', grp.entityCode, f.columnName), grp.entityName));
+        opts.push(fieldToOpt(f, buildEntityFieldName('oneToOne', grp.entityCode, f.columnName), grp.entityName, `oneToOne:${grp.entityCode}`));
       }
     }
   }
@@ -206,7 +210,7 @@ function buildFieldOptions(
     const detailHeader = `${t('groupDetailPrefix')} ${detailGroup.entityName}`;
     for (const f of detailGroup.fields) {
       if (EXCLUDED_TYPES.includes(f.fieldType)) continue;
-      opts.push(fieldToOpt(f, buildEntityFieldName('detail', detailGroup.entityCode, f.columnName), detailHeader));
+      opts.push(fieldToOpt(f, buildEntityFieldName('detail', detailGroup.entityCode, f.columnName), detailHeader, `detail:${detailGroup.entityCode}`));
     }
   }
 
@@ -368,16 +372,19 @@ function ConditionRow({ condition, fieldOptions, path, onUpdate, onRemove, t }: 
         </SelectTrigger>
         <SelectContent>
           {(() => {
-            const grouped = new Map<string, FieldOption[]>();
+            const groups = new Map<string, { label: string; items: FieldOption[] }>();
             for (const opt of fieldOptions) {
-              const arr = grouped.get(opt.group) ?? [];
-              arr.push(opt);
-              grouped.set(opt.group, arr);
+              const g = groups.get(opt.groupKey);
+              if (g) {
+                g.items.push(opt);
+              } else {
+                groups.set(opt.groupKey, { label: opt.group, items: [opt] });
+              }
             }
-            return Array.from(grouped.entries()).map(([groupLabel, items]) => (
-              <SelectGroup key={groupLabel}>
+            return Array.from(groups.entries()).map(([key, { label, items }]) => (
+              <SelectGroup key={key}>
                 <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-                  {groupLabel}
+                  {label}
                 </SelectLabel>
                 {items.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
