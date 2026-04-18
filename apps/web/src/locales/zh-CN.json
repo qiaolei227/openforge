@@ -786,6 +786,8 @@
     "presetName": "方案名称",
     "presetNamePlaceholder": "输入方案名称",
     "noResults": "无匹配结果",
+    "groupMain": "主字段",
+    "groupDetailPrefix": "明细：",
     "ops": {
       "eq": "等于",
       "ne": "不等于",

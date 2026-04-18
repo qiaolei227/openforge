@@ -786,6 +786,8 @@
     "presetName": "Preset name",
     "presetNamePlaceholder": "Enter preset name",
     "noResults": "No results found",
+    "groupMain": "Main",
+    "groupDetailPrefix": "Detail:",
     "ops": {
       "eq": "equals",
       "ne": "not equal",

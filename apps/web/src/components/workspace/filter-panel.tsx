@@ -9,10 +9,13 @@ import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { buildEntityFieldName } from '@/lib/filter-entity-field';
 import type { FilterGroup, FilterCondition } from '@openforge/shared';
 import type { Field, FieldType } from '@openforge/shared';
 import type { FilterPreset } from '@/components/workspace/filter-presets';
@@ -66,6 +69,20 @@ const DATA_STATUS_KEYS = ['draft', 'submitted', 'approved', 'reaudit'] as const;
 /*  Props                                                               */
 /* ------------------------------------------------------------------ */
 
+/** Visible 1:1 entity columns (filter allowed on these). */
+export interface OneToOneEntityGroup {
+  entityCode: string;
+  entityName: string;
+  fields: Field[]; // only visible ones
+}
+
+/** Visible 1:N detail entity (filter allowed on these when expansion is active). */
+export interface DetailEntityGroup {
+  entityCode: string;
+  entityName: string;
+  fields: Field[];
+}
+
 export interface FilterPanelProps {
   /** Model fields to expose as filterable columns */
   fields: Field[];
@@ -82,6 +99,10 @@ export interface FilterPanelProps {
   activePreset?: FilterPreset | null;
   /** Called when user updates the active preset */
   onUpdatePreset?: (preset: FilterPreset) => void;
+  /** Visible 1:1 entity field groups */
+  oneToOneGroups?: OneToOneEntityGroup[];
+  /** Visible 1:N detail entity group (only one at a time when expansion is active) */
+  detailGroup?: DetailEntityGroup | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -110,19 +131,23 @@ interface FieldOption {
   opsKey: string;
   /** Original Field object — needed by the REFERENCE/USER/ORG picker components */
   field?: Field;
+  /** Group label for grouped rendering in the field selector */
+  group: string;
 }
 
 function buildFieldOptions(
   fields: Field[],
   enableDataStatus: boolean,
+  oneToOneGroups: OneToOneEntityGroup[] | undefined,
+  detailGroup: DetailEntityGroup | null | undefined,
   t: ReturnType<typeof useTranslations<'filter'>>,
   tStatus: ReturnType<typeof useTranslations<'dataStatus'>>,
 ): FieldOption[] {
   const opts: FieldOption[] = [];
+  const mainGroupLabel = t('groupMain');
 
-  // Model fields (exclude unsupported types)
-  for (const f of fields) {
-    if (EXCLUDED_TYPES.includes(f.fieldType)) continue;
+  // Helper to convert a Field to a FieldOption with chosen encoded value + group label.
+  const fieldToOpt = (f: Field, valueOverride: string | null, group: string): FieldOption => {
     let inputType: FieldOption['inputType'] = 'text';
     if (f.fieldType === 'DATE') inputType = 'date';
     else if (f.fieldType === 'DATETIME') inputType = 'datetime-local';
@@ -133,17 +158,24 @@ function buildFieldOptions(
     else if (f.fieldType === 'REFERENCE') inputType = 'reference';
     else if (f.fieldType === 'USER') inputType = 'user';
     else if (f.fieldType === 'ORGANIZATION') inputType = 'organization';
-    opts.push({
-      value: f.columnName,
+    return {
+      value: valueOverride ?? f.columnName,
       label: f.name,
       inputType,
       choices: f.options?.choices?.map((c) => ({ value: c.value, label: c.label })),
       opsKey: f.fieldType,
       field: f,
-    });
+      group,
+    };
+  };
+
+  // Main fields
+  for (const f of fields) {
+    if (EXCLUDED_TYPES.includes(f.fieldType)) continue;
+    opts.push(fieldToOpt(f, null, mainGroupLabel));
   }
 
-  // System pseudo-fields
+  // System pseudo-fields — under main group
   if (enableDataStatus) {
     opts.push({
       value: 'data_status',
@@ -151,32 +183,32 @@ function buildFieldOptions(
       inputType: 'select',
       choices: DATA_STATUS_KEYS.map((k) => ({ value: k, label: tStatus(k) })),
       opsKey: 'data_status',
+      group: mainGroupLabel,
     });
   }
-  opts.push({
-    value: 'is_archived',
-    label: t('archived'),
-    inputType: 'boolean',
-    opsKey: 'is_archived',
-  });
-  opts.push({
-    value: 'created_by',
-    label: t('createdBy'),
-    inputType: 'text',
-    opsKey: 'created_by',
-  });
-  opts.push({
-    value: 'created_at',
-    label: t('createdAt'),
-    inputType: 'datetime-local',
-    opsKey: 'created_at',
-  });
-  opts.push({
-    value: 'updated_at',
-    label: t('updatedAt'),
-    inputType: 'datetime-local',
-    opsKey: 'updated_at',
-  });
+  opts.push({ value: 'is_archived', label: t('archived'), inputType: 'boolean', opsKey: 'is_archived', group: mainGroupLabel });
+  opts.push({ value: 'created_by', label: t('createdBy'), inputType: 'text', opsKey: 'created_by', group: mainGroupLabel });
+  opts.push({ value: 'created_at', label: t('createdAt'), inputType: 'datetime-local', opsKey: 'created_at', group: mainGroupLabel });
+  opts.push({ value: 'updated_at', label: t('updatedAt'), inputType: 'datetime-local', opsKey: 'updated_at', group: mainGroupLabel });
+
+  // 1:1 entity fields
+  if (oneToOneGroups) {
+    for (const grp of oneToOneGroups) {
+      for (const f of grp.fields) {
+        if (EXCLUDED_TYPES.includes(f.fieldType)) continue;
+        opts.push(fieldToOpt(f, buildEntityFieldName('oneToOne', grp.entityCode, f.columnName), grp.entityName));
+      }
+    }
+  }
+
+  // 1:N detail entity fields
+  if (detailGroup) {
+    const detailHeader = `${t('groupDetailPrefix')} ${detailGroup.entityName}`;
+    for (const f of detailGroup.fields) {
+      if (EXCLUDED_TYPES.includes(f.fieldType)) continue;
+      opts.push(fieldToOpt(f, buildEntityFieldName('detail', detailGroup.entityCode, f.columnName), detailHeader));
+    }
+  }
 
   return opts;
 }
@@ -335,11 +367,26 @@ function ConditionRow({ condition, fieldOptions, path, onUpdate, onRemove, t }: 
           </span>
         </SelectTrigger>
         <SelectContent>
-          {fieldOptions.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
-          ))}
+          {(() => {
+            const grouped = new Map<string, FieldOption[]>();
+            for (const opt of fieldOptions) {
+              const arr = grouped.get(opt.group) ?? [];
+              arr.push(opt);
+              grouped.set(opt.group, arr);
+            }
+            return Array.from(grouped.entries()).map(([groupLabel, items]) => (
+              <SelectGroup key={groupLabel}>
+                <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                  {groupLabel}
+                </SelectLabel>
+                {items.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ));
+          })()}
         </SelectContent>
       </Select>
 
@@ -538,11 +585,13 @@ export function FilterPanel({
   onSavePreset,
   activePreset,
   onUpdatePreset,
+  oneToOneGroups,
+  detailGroup,
 }: FilterPanelProps) {
   const t = useTranslations('filter');
   const tCommon = useTranslations('common');
   const tStatus = useTranslations('dataStatus');
-  const fieldOptions = buildFieldOptions(fields, enableDataStatus, t, tStatus);
+  const fieldOptions = buildFieldOptions(fields, enableDataStatus, oneToOneGroups, detailGroup, t, tStatus);
 
   const [presetSaving, setPresetSaving] = useState(false);
   const [presetName, setPresetName] = useState('');
