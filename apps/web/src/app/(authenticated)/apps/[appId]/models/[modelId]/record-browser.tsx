@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo, type ComponentType } from 'react';
 import { Filter } from 'lucide-react';
+import { arrayMove } from '@dnd-kit/sortable';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -228,6 +229,10 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [treeLoading, setTreeLoading] = useState(false);
+
+  /* ---------- Column reorder ref-mirror ---------- */
+  const columnsRef = useRef<string[] | undefined>(userConfig.columns);
+  columnsRef.current = userConfig.columns;
 
   /* ---------- Confirm dialog ---------- */
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -791,7 +796,7 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
 
   const handleColumnReorder = useCallback(
     (fromKey: string, toKey: string) => {
-      let current = userConfig.columns;
+      let current = columnsRef.current;
       if (!current || current.length === 0) {
         // Initialize from the currently-rendered designer columns (as columnName strings)
         current = (designerColumns ?? [])
@@ -801,12 +806,10 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
       const fromIdx = current.indexOf(fromKey);
       const toIdx = current.indexOf(toKey);
       if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
-      const next = [...current];
-      const [moved] = next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, moved);
+      const next = arrayMove(current, fromIdx, toIdx);
       saveUserConfig({ columns: next });
     },
-    [userConfig.columns, designerColumns, fields, saveUserConfig],
+    [designerColumns, fields, saveUserConfig],
   );
 
   const handleColumnsReset = useCallback(() => {
