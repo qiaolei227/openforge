@@ -136,9 +136,16 @@ export class QueryBuilderService {
   }
 
   /**
-   * Build a standalone WHERE fragment for use by resolveDetailRows.
-   * paramOffset shifts all $N placeholders so they don't conflict with
-   * placeholders already present in the caller's query (e.g. $1 = parentIds).
+   * Build a standalone WHERE fragment (no wrapping) for use in auxiliary queries
+   * such as the detail-entity subquery in resolveDetailRows.
+   *
+   * Shifts `$N` placeholders by `paramOffset` so the caller's params[] can be
+   * extended at that offset.
+   *
+   * Limitation: only main-table-style field names are supported. Callers must
+   * strip any `__oneToOne__` / `__detail__` prefixes from FilterCondition.field
+   * before passing the filter here; otherwise buildCondition throws
+   * "Entity filter requires main table context".
    */
   buildFilterOnly(
     filter: any,
