@@ -798,10 +798,18 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     (fromKey: string, toKey: string) => {
       let current = columnsRef.current;
       if (!current || current.length === 0) {
-        // Initialize from the currently-rendered designer columns (as columnName strings)
-        current = (designerColumns ?? [])
+        // Initialize to match what DataTable currently renders:
+        //   1) designer's list-view columns (ordered), OR
+        //   2) all non-system fields in field sortOrder (DataTable's default)
+        const fromDesigner = (designerColumns ?? [])
           .map((c) => fields.find((f) => f.id === c.fieldId)?.columnName)
           .filter((x): x is string => !!x);
+        current =
+          fromDesigner.length > 0
+            ? fromDesigner
+            : fields
+                .filter((f) => !f.isSystem && !f.deletedAt)
+                .map((f) => f.columnName);
       }
       const fromIdx = current.indexOf(fromKey);
       const toIdx = current.indexOf(toKey);
