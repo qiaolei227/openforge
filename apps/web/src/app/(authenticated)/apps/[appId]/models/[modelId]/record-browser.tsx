@@ -789,6 +789,26 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     [saveUserConfig],
   );
 
+  const handleColumnReorder = useCallback(
+    (fromKey: string, toKey: string) => {
+      let current = userConfig.columns;
+      if (!current || current.length === 0) {
+        // Initialize from the currently-rendered designer columns (as columnName strings)
+        current = (designerColumns ?? [])
+          .map((c) => fields.find((f) => f.id === c.fieldId)?.columnName)
+          .filter((x): x is string => !!x);
+      }
+      const fromIdx = current.indexOf(fromKey);
+      const toIdx = current.indexOf(toKey);
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+      const next = [...current];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      saveUserConfig({ columns: next });
+    },
+    [userConfig.columns, designerColumns, fields, saveUserConfig],
+  );
+
   const handleColumnsReset = useCallback(() => {
     saveUserConfig({ columns: undefined });
   }, [saveUserConfig]);
@@ -1054,6 +1074,12 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     [isDetailMode],
   );
 
+  const fixedColumnKeys = useMemo(() => {
+    const keys = ['_select', '_row_number'];
+    if (model.enableDataStatus) keys.push('_data_status');
+    return keys;
+  }, [model.enableDataStatus]);
+
   /* ------------------------------------------------------------------ */
   /*  Render                                                             */
   /* ------------------------------------------------------------------ */
@@ -1267,6 +1293,8 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
             getRowGroupKey={getRowGroupKey}
             groupedColumnIds={groupedColumnIds}
             onPageSizeChange={handlePageSizeChange}
+            onColumnReorder={handleColumnReorder}
+            fixedColumnKeys={fixedColumnKeys}
             headerEndSlot={
               <ColumnSettings
                 fields={fields}
