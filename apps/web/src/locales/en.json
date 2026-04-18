@@ -825,7 +825,8 @@
       "empty": "No saved presets",
       "saveCurrent": "Save current filter",
       "namePlaceholder": "Preset name",
-      "save": "Save"
+      "save": "Save",
+      "deleteTooltip": "Delete preset"
     },
     "columnSettings": {
       "title": "Columns",

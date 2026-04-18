@@ -825,7 +825,8 @@
       "empty": "暂无已保存的方案",
       "saveCurrent": "保存当前筛选",
       "namePlaceholder": "输入方案名称",
-      "save": "保存"
+      "save": "保存",
+      "deleteTooltip": "删除方案"
     },
     "columnSettings": {
       "title": "列设置",

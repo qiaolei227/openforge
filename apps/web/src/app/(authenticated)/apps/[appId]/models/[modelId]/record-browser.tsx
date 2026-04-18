@@ -1101,25 +1101,28 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
           {(userConfig.filterPresets ?? []).map((preset) => {
             const isActive = activePresetId === preset.id;
             return (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => handlePresetLoad(preset.id, preset.filter)}
-                className={`group inline-flex items-center gap-1 h-7 px-3 text-xs rounded-md border transition-colors ${
-                  isActive
-                    ? 'border-primary bg-primary/5 text-primary font-medium'
-                    : 'border-dashed border-input text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
-              >
-                {preset.name}
-                <span
-                  role="button"
-                  onClick={(e) => { e.stopPropagation(); handlePresetDelete(preset.id); }}
-                  className="hidden group-hover:inline-flex items-center justify-center w-3.5 h-3.5 rounded-full hover:bg-destructive/20 hover:text-destructive text-muted-foreground"
+              <div key={preset.id} className="relative group">
+                <button
+                  type="button"
+                  onClick={() => handlePresetLoad(preset.id, preset.filter)}
+                  className={`inline-flex items-center h-7 px-3 text-xs rounded-md border transition-colors ${
+                    isActive
+                      ? 'border-primary bg-primary/5 text-primary font-medium'
+                      : 'border-dashed border-input text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                </span>
-              </button>
+                  {preset.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePresetDelete(preset.id)}
+                  title={t('workspace.filterPresets.deleteTooltip')}
+                  aria-label={t('workspace.filterPresets.deleteTooltip')}
+                  className="hidden group-hover:flex absolute -top-1.5 -right-1.5 items-center justify-center w-4 h-4 rounded-full bg-background border border-input shadow-sm text-muted-foreground hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width={9} height={9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                </button>
+              </div>
             );
           })}
         </div>
