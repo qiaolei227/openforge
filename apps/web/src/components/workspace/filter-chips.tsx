@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api-client';
+import { parseEntityField } from '@/lib/filter-entity-field';
 import type { FilterGroup, FilterCondition } from '@openforge/shared';
 import type { Field } from '@openforge/shared';
 
@@ -120,6 +121,10 @@ function formatPrimitive(value: any): string {
 export interface FilterChipsProps {
   /** Model fields — used to resolve field names */
   fields: Field[];
+  /** Visible 1:1 entities + their visible fields (for entity-prefix chip labels). */
+  oneToOneGroups?: Array<{ entityCode: string; entityName: string; fields: Field[] }>;
+  /** Visible detail entity (for entity-prefix chip labels). */
+  detailGroup?: { entityCode: string; entityName: string; fields: Field[] } | null;
   /** Current filter tree */
   value: FilterGroup;
   onChange: (value: FilterGroup) => void;
@@ -278,22 +283,64 @@ const SYSTEM_FIELD_LABEL_KEYS: Record<string, keyof Record<string, string>> = {
   updated_at: 'updatedAt',
 };
 
-export function FilterChips({ fields, value, onChange, className }: FilterChipsProps) {
+export function FilterChips({
+  fields,
+  oneToOneGroups,
+  detailGroup,
+  value,
+  onChange,
+  className,
+}: FilterChipsProps) {
   const t = useTranslations('filter');
 
   const flat = flattenConditions(value);
 
   if (flat.length === 0) return null;
 
-  const fieldByColumnName = new Map(fields.map((f) => [f.columnName, f]));
-  const fieldLabelMap = new Map(fields.map((f) => [f.columnName, f.name]));
+  const mainFieldMap = new Map(fields.map((f) => [f.columnName, f]));
 
-  function getFieldLabel(columnName: string): string {
-    const modelLabel = fieldLabelMap.get(columnName);
-    if (modelLabel) return modelLabel;
-    const sysKey = SYSTEM_FIELD_LABEL_KEYS[columnName];
-    if (sysKey) return t(sysKey as any);
-    return columnName;
+  const oneToOneMap = new Map<string, { entityName: string; fieldMap: Map<string, Field> }>();
+  for (const g of oneToOneGroups ?? []) {
+    oneToOneMap.set(g.entityCode, {
+      entityName: g.entityName,
+      fieldMap: new Map(g.fields.map((f) => [f.columnName, f])),
+    });
+  }
+  const detailMap = detailGroup
+    ? {
+        entityCode: detailGroup.entityCode,
+        entityName: detailGroup.entityName,
+        fieldMap: new Map(detailGroup.fields.map((f) => [f.columnName, f])),
+      }
+    : null;
+
+  function resolveChip(field: string): { label: string; field: Field | undefined } {
+    const parsed = parseEntityField(field);
+    if (parsed.kind === 'main') {
+      const f = mainFieldMap.get(parsed.columnName);
+      if (f) return { label: f.name, field: f };
+      const sysKey = SYSTEM_FIELD_LABEL_KEYS[parsed.columnName];
+      if (sysKey) return { label: t(sysKey as any), field: undefined };
+      return { label: parsed.columnName, field: undefined };
+    }
+    if (parsed.kind === 'oneToOne') {
+      const grp = oneToOneMap.get(parsed.entityCode!);
+      if (!grp) return { label: field, field: undefined };
+      const f = grp.fieldMap.get(parsed.columnName);
+      return {
+        label: `${grp.entityName}.${f?.name ?? parsed.columnName}`,
+        field: f,
+      };
+    }
+    // detail
+    if (!detailMap || detailMap.entityCode !== parsed.entityCode) {
+      return { label: field, field: undefined };
+    }
+    const f = detailMap.fieldMap.get(parsed.columnName);
+    return {
+      label: `${detailMap.entityName} · ${f?.name ?? parsed.columnName}`,
+      field: f,
+    };
   }
 
   const handleRemove = (path: number[]) => {
@@ -309,10 +356,9 @@ export function FilterChips({ fields, value, onChange, className }: FilterChipsP
       <span className="text-xs text-muted-foreground shrink-0">{t('activeFilters')}:</span>
 
       {flat.map(({ path, condition }) => {
-        const fieldLabel = getFieldLabel(condition.field);
+        const { label: fieldLabel, field } = resolveChip(condition.field);
         const opLabel = t(`ops.${condition.op}` as any);
         const hasValue = !NO_VALUE_OPS.includes(condition.op);
-        const field = fieldByColumnName.get(condition.field);
 
         return (
           <span
