@@ -36,6 +36,13 @@ describe('parseEntityField', () => {
       columnName: '__oneToOne__only_two_parts',
     });
   });
+
+  it('returns main when columnName is empty', () => {
+    expect(parseEntityField('__oneToOne__customer__')).toEqual({
+      kind: 'main',
+      columnName: '__oneToOne__customer__',
+    });
+  });
 });
 
 describe('buildEntityFieldName', () => {

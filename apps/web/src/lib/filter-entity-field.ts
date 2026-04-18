@@ -1,3 +1,8 @@
+// NOTE: this file is mirrored between
+//   apps/server/src/dynamic-data/filter-entity-field.ts
+//   apps/web/src/lib/filter-entity-field.ts
+// Keep them byte-identical. Shared package has no test runner yet.
+
 export type EntityFieldKind = 'main' | 'oneToOne' | 'detail';
 
 export interface ParsedEntityField {
@@ -22,6 +27,7 @@ export function parseEntityField(field: string): ParsedEntityField {
     if (!field.startsWith(marker)) return null;
     const rest = field.slice(marker.length);
     const sep = rest.indexOf('__');
+    // reject: no '__' found (sep===-1), empty entityCode (sep===0), or empty columnName (sep at end-2)
     if (sep <= 0 || sep === rest.length - 2) return null;
     return {
       kind,
