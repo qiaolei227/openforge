@@ -27,7 +27,7 @@ import { DataTableToolbar } from './data-table-toolbar';
 import { DataTablePagination } from './data-table-pagination';
 
 /* ── Module-level constants ── */
-const POINTER_ACTIVATION_CONSTRAINT = { delay: 150, tolerance: 5 };
+const POINTER_ACTIVATION_CONSTRAINT = { distance: 5 };
 
 /* ── Inline SVG icons ── */
 function ChevronUpIcon() {
@@ -141,6 +141,13 @@ function DraggableHeader({ id, disabled, style, className, children }: Draggable
     transition,
     opacity: isDragging ? 0.4 : 1,
     cursor: disabled ? undefined : 'grab',
+    // Required by dnd-kit to prevent browser default pointer behavior (scrolling, text-select)
+    // from taking over before the sensor detects a drag.
+    touchAction: disabled ? undefined : 'none',
+    userSelect: disabled ? undefined : 'none',
+    // Keep the dragged header above siblings so the transform is visible.
+    position: isDragging ? 'relative' : undefined,
+    zIndex: isDragging ? 10 : undefined,
   };
   return (
     <th
