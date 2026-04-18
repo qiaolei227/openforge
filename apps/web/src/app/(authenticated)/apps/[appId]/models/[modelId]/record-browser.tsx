@@ -22,6 +22,7 @@ import { useActions } from '@/hooks/use-actions';
 import { ActionToolbar } from '@/components/workspace/action-toolbar';
 import { FilterPanel } from '@/components/workspace/filter-panel';
 import { FilterChips } from '@/components/workspace/filter-chips';
+import { ColumnFilterPopover } from '@/components/workspace/column-filter-popover';
 import { sanitizeFilter, type AvailableFields } from '@/lib/filter-sanitize';
 import { DataStatusBadge } from '@/components/workspace/data-status-badge';
 import { useUserListConfig } from '@/hooks/use-user-list-config';
@@ -791,6 +792,16 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     [saveUserConfig],
   );
 
+  const handleQuickColumnFilter = useCallback(
+    (next: FilterGroup) => {
+      setFilter(next);
+      setPendingFilter(next);
+      setActivePresetId(null);
+      setPage(1);
+    },
+    [],
+  );
+
   const handleColumnReorder = useCallback(
     (orderedIds: string[]) => {
       // DataTable hands us the full new ordering of draggable column ids.
@@ -1287,6 +1298,13 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
             onColumnReorder={handleColumnReorder}
             fixedColumnKeys={fixedColumnKeys}
             columnOrder={userConfig.columns}
+            headerFilter={(field) => (
+              <ColumnFilterPopover
+                field={field}
+                filter={filter}
+                onApply={handleQuickColumnFilter}
+              />
+            )}
             headerEndSlot={
               <ColumnSettings
                 fields={fields}

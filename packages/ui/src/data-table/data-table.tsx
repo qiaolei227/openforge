@@ -124,6 +124,10 @@ export interface DataTableProps {
    *  are reordered to match; fixed columns (`_select`, `_row_number`, `_data_status`)
    *  stay at their positions. Columns not in this list are appended in their built order. */
   columnOrder?: string[];
+  /** Optional render prop for an inline quick-filter control on each main-field
+   *  column header (e.g. a funnel popover). Receives the field and returns JSX
+   *  placed after the sort arrow. */
+  headerFilter?: (field: Field) => React.ReactNode;
 }
 
 /* ── DraggableHeader ── file-local, used only when onColumnReorder is set ── */
@@ -202,6 +206,7 @@ export function DataTable({
   onColumnReorder,
   fixedColumnKeys,
   columnOrder,
+  headerFilter,
 }: DataTableProps) {
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [sortField, setSortField] = useState<string | null>(null);
@@ -348,21 +353,24 @@ export function DataTable({
         minSize: colWidth,
         maxSize: colWidth,
         header: () => (
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 hover:text-foreground transition-colors w-full text-left"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSort(field.columnName);
-            }}
-          >
-            <span className="truncate">{colLabel}</span>
-            {sortField === field.columnName ? (
-              sortOrder === 'asc' ? <ChevronUpIcon /> : <ChevronDownIcon />
-            ) : (
-              <ChevronsUpDownIcon />
-            )}
-          </button>
+          <div className="flex items-center gap-0.5 w-full">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 hover:text-foreground transition-colors flex-1 text-left min-w-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSort(field.columnName);
+              }}
+            >
+              <span className="truncate">{colLabel}</span>
+              {sortField === field.columnName ? (
+                sortOrder === 'asc' ? <ChevronUpIcon /> : <ChevronDownIcon />
+              ) : (
+                <ChevronsUpDownIcon />
+              )}
+            </button>
+            {headerFilter?.(field)}
+          </div>
         ),
         cell: ({ row }) => {
           const cellValue = row.original[field.columnName];
@@ -419,7 +427,7 @@ export function DataTable({
     }
 
     return cols;
-  }, [visibleFields, sortField, sortOrder, handleSort, renderCell, page, pageSize, layoutColumnMap, effectiveLinkColumn, onLinkClick, extraColumns, trailingColumns, columnOrder]);
+  }, [visibleFields, sortField, sortOrder, handleSort, renderCell, page, pageSize, layoutColumnMap, effectiveLinkColumn, onLinkClick, extraColumns, trailingColumns, columnOrder, headerFilter]);
 
   const table = useReactTable({
     data,
