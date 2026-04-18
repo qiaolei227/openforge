@@ -788,6 +788,7 @@
     "noResults": "No results found",
     "groupMain": "Main",
     "groupDetailPrefix": "Detail:",
+    "droppedConditions": "Removed {count} filter condition(s)",
     "ops": {
       "eq": "equals",
       "ne": "not equal",

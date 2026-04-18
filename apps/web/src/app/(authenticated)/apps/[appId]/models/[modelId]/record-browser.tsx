@@ -22,6 +22,7 @@ import { useActions } from '@/hooks/use-actions';
 import { ActionToolbar } from '@/components/workspace/action-toolbar';
 import { FilterPanel } from '@/components/workspace/filter-panel';
 import { FilterChips } from '@/components/workspace/filter-chips';
+import { sanitizeFilter, type AvailableFields } from '@/lib/filter-sanitize';
 import { DataStatusBadge } from '@/components/workspace/data-status-badge';
 import { useUserListConfig } from '@/hooks/use-user-list-config';
 import { ColumnSettings } from '@/components/workspace/column-settings';
@@ -136,6 +137,78 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     () => (userConfig.filterPresets ?? []).find((p) => p.id === activePresetId) ?? null,
     [userConfig.filterPresets, activePresetId],
   );
+
+  /* ---------- Entity groups derived from userConfig (for FilterPanel/Chips and sanitize) ---------- */
+
+  // Visible 1:1 entity groups
+  const oneToOneGroups = useMemo(() => {
+    if (!entities) return [];
+    const sel = userConfig.oneToOneFields ?? {};
+    const result: { entityCode: string; entityName: string; fields: Field[] }[] = [];
+    for (const [entityCode, cols] of Object.entries(sel)) {
+      if (!cols?.length) continue;
+      const ent = entities.find((e) => e.code === entityCode && e.entityType === 'one_to_one');
+      if (!ent || !ent.fields) continue;
+      result.push({
+        entityCode,
+        entityName: ent.name,
+        fields: ent.fields.filter((f) => (cols as string[]).includes(f.columnName) && !f.isSystem && !f.deletedAt),
+      });
+    }
+    return result;
+  }, [userConfig.oneToOneFields, entities]);
+
+  // Visible 1:N detail entity
+  const detailGroup = useMemo(() => {
+    const cfg = userConfig.detailEntity;
+    if (!entities || !cfg?.entityCode) return null;
+    const ent = entities.find(
+      (e) => e.code === cfg.entityCode && e.entityType === 'one_to_many',
+    );
+    if (!ent || !ent.fields || !cfg.fields?.length) return null;
+    return {
+      entityCode: cfg.entityCode,
+      entityName: ent.name,
+      fields: ent.fields.filter((f) => cfg.fields.includes(f.columnName) && !f.isSystem && !f.deletedAt),
+    };
+  }, [userConfig.detailEntity, entities]);
+
+  // AvailableFields registry for sanitize
+  const availableFields: AvailableFields = useMemo(() => {
+    const main = new Set<string>(fields.map((f) => f.columnName));
+    // system pseudo-fields always available
+    main.add('data_status');
+    main.add('is_archived');
+    main.add('created_by');
+    main.add('created_at');
+    main.add('updated_at');
+    const oneToOne = new Map<string, Set<string>>();
+    for (const g of oneToOneGroups) {
+      oneToOne.set(g.entityCode, new Set(g.fields.map((f) => f.columnName)));
+    }
+    return {
+      main,
+      oneToOne,
+      detail: detailGroup
+        ? { code: detailGroup.entityCode, fields: new Set(detailGroup.fields.map((f) => f.columnName)) }
+        : undefined,
+    };
+  }, [fields, oneToOneGroups, detailGroup]);
+
+  // Sanitize filter + pendingFilter whenever available columns change
+  useEffect(() => {
+    const { filter: cleaned, droppedCount } = sanitizeFilter(filter, availableFields);
+    if (droppedCount > 0) {
+      setFilter(cleaned);
+      showToast(tFilter('droppedConditions', { count: droppedCount }), 'success');
+    }
+    const { filter: cleanedPending, droppedCount: dp } = sanitizeFilter(pendingFilter, availableFields);
+    if (dp > 0) {
+      setPendingFilter(cleanedPending);
+    }
+    // Intentionally only react to availableFields changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableFields]);
 
   /* ---------- Selection state ---------- */
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -658,10 +731,14 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   }, []);
 
   const handlePresetLoad = useCallback((presetId: string, presetFilter: FilterGroup) => {
-    setFilter(presetFilter);
+    const { filter: cleaned, droppedCount } = sanitizeFilter(presetFilter, availableFields);
+    setFilter(cleaned);
     setActivePresetId(presetId);
     setPage(1);
-  }, []);
+    if (droppedCount > 0) {
+      showToast(tFilter('droppedConditions', { count: droppedCount }), 'success');
+    }
+  }, [availableFields, showToast, tFilter]);
 
   const handlePresetSave = useCallback((preset: FilterPreset) => {
     const existing = userConfig.filterPresets ?? [];
@@ -1046,6 +1123,8 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
               <FilterPanel
                 fields={fields}
                 enableDataStatus={!!model.enableDataStatus}
+                oneToOneGroups={oneToOneGroups}
+                detailGroup={detailGroup}
                 value={pendingFilter}
                 onChange={handleFilterChange}
                 onApply={handleFilterApply}
@@ -1130,6 +1209,8 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
         {/* Filter chips */}
         <FilterChips
           fields={fields}
+          oneToOneGroups={oneToOneGroups}
+          detailGroup={detailGroup}
           value={filter}
           onChange={(newFilter) => {
             setFilter(newFilter);

@@ -788,6 +788,7 @@
     "noResults": "无匹配结果",
     "groupMain": "主字段",
     "groupDetailPrefix": "明细：",
+    "droppedConditions": "已移除 {count} 个相关筛选条件",
     "ops": {
       "eq": "等于",
       "ne": "不等于",
