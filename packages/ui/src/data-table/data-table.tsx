@@ -26,6 +26,9 @@ import { DEFAULT_COLUMN_WIDTH } from '@openforge/render-engine';
 import { DataTableToolbar } from './data-table-toolbar';
 import { DataTablePagination } from './data-table-pagination';
 
+/* ── Module-level constants ── */
+const POINTER_ACTIVATION_CONSTRAINT = { delay: 150, tolerance: 5 };
+
 /* ── Inline SVG icons ── */
 function ChevronUpIcon() {
   return (
@@ -193,7 +196,7 @@ export function DataTable({
   const [searching, setSearching] = useState(false);
 
   const dndSensors = useSensors(useSensor(PointerSensor, {
-    activationConstraint: { delay: 150, tolerance: 5 },
+    activationConstraint: POINTER_ACTIVATION_CONSTRAINT,
   }));
 
   // Clear selection when data changes
