@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo, type ComponentType } from 'react';
 import { Filter } from 'lucide-react';
-import { arrayMove } from '@dnd-kit/sortable';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
@@ -231,8 +230,6 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   const [treeLoading, setTreeLoading] = useState(false);
 
   /* ---------- Column reorder ref-mirror ---------- */
-  const columnsRef = useRef<string[] | undefined>(userConfig.columns);
-  columnsRef.current = userConfig.columns;
 
   /* ---------- Confirm dialog ---------- */
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -795,29 +792,12 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   );
 
   const handleColumnReorder = useCallback(
-    (fromKey: string, toKey: string) => {
-      let current = columnsRef.current;
-      if (!current || current.length === 0) {
-        // Initialize to match what DataTable currently renders:
-        //   1) designer's list-view columns (ordered), OR
-        //   2) all non-system fields in field sortOrder (DataTable's default)
-        const fromDesigner = (designerColumns ?? [])
-          .map((c) => fields.find((f) => f.id === c.fieldId)?.columnName)
-          .filter((x): x is string => !!x);
-        current =
-          fromDesigner.length > 0
-            ? fromDesigner
-            : fields
-                .filter((f) => !f.isSystem && !f.deletedAt)
-                .map((f) => f.columnName);
-      }
-      const fromIdx = current.indexOf(fromKey);
-      const toIdx = current.indexOf(toKey);
-      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
-      const next = arrayMove(current, fromIdx, toIdx);
-      saveUserConfig({ columns: next });
+    (orderedIds: string[]) => {
+      // DataTable hands us the full new ordering of draggable column ids.
+      // Persist directly — becomes the new unified columns array.
+      saveUserConfig({ columns: orderedIds });
     },
-    [designerColumns, fields, saveUserConfig],
+    [saveUserConfig],
   );
 
   const handleColumnsReset = useCallback(() => {

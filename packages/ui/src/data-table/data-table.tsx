@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/core';
 import {
   SortableContext,
+  arrayMove,
   horizontalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
@@ -113,9 +114,9 @@ export interface DataTableProps {
   groupedColumnIds?: string[];
   /** Override row ID (for selection). Default: row.id. */
   getRowId?: (row: Record<string, any>) => string;
-  /** When set, enables press-and-hold drag on header cells to reorder columns.
-   *  Called with the source and destination column ids (as set by ColumnDef.id). */
-  onColumnReorder?: (fromKey: string, toKey: string) => void;
+  /** When set, enables column-header drag to reorder columns.
+   *  Called with the full new ordered list of draggable column ids (excludes fixed columns). */
+  onColumnReorder?: (orderedIds: string[]) => void;
   /** Column ids that should NOT participate in drag reorder
    *  (e.g. `_row_number`, `_data_status`, action columns). */
   fixedColumnKeys?: string[];
@@ -458,7 +459,10 @@ export function DataTable({
           const handleDragEnd = (event: DragEndEvent) => {
             const { active, over } = event;
             if (!over || active.id === over.id) return;
-            onColumnReorder!(String(active.id), String(over.id));
+            const fromIdx = allDraggable.indexOf(String(active.id));
+            const toIdx = allDraggable.indexOf(String(over.id));
+            if (fromIdx < 0 || toIdx < 0) return;
+            onColumnReorder!(arrayMove(allDraggable, fromIdx, toIdx));
           };
 
           const allDraggable = dragEnabled
