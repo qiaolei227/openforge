@@ -7,6 +7,20 @@ import {
   flexRender,
   type ColumnDef,
 } from '@tanstack/react-table';
+import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { Field, FieldType } from '@openforge/shared';
 import { DEFAULT_COLUMN_WIDTH } from '@openforge/render-engine';
 import { DataTableToolbar } from './data-table-toolbar';
@@ -96,6 +110,46 @@ export interface DataTableProps {
   groupedColumnIds?: string[];
   /** Override row ID (for selection). Default: row.id. */
   getRowId?: (row: Record<string, any>) => string;
+  /** When set, enables press-and-hold drag on header cells to reorder columns.
+   *  Called with the source and destination column ids (as set by ColumnDef.id). */
+  onColumnReorder?: (fromKey: string, toKey: string) => void;
+  /** Column ids that should NOT participate in drag reorder
+   *  (e.g. `_row_number`, `_data_status`, action columns). */
+  fixedColumnKeys?: string[];
+}
+
+/* ── DraggableHeader ── file-local, used only when onColumnReorder is set ── */
+interface DraggableHeaderProps {
+  id: string;
+  disabled: boolean;
+  style: React.CSSProperties;
+  className: string;
+  children: React.ReactNode;
+}
+
+function DraggableHeader({ id, disabled, style, className, children }: DraggableHeaderProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+  const combinedStyle: React.CSSProperties = {
+    ...style,
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    cursor: disabled ? undefined : 'grab',
+  };
+  return (
+    <th
+      ref={setNodeRef}
+      style={combinedStyle}
+      className={className}
+      {...(disabled ? {} : attributes)}
+      {...(disabled ? {} : listeners)}
+    >
+      {children}
+    </th>
+  );
 }
 
 export function DataTable({
@@ -130,11 +184,17 @@ export function DataTable({
   getRowGroupKey,
   groupedColumnIds,
   getRowId,
+  onColumnReorder,
+  fixedColumnKeys,
 }: DataTableProps) {
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [searching, setSearching] = useState(false);
+
+  const dndSensors = useSensors(useSensor(PointerSensor, {
+    activationConstraint: { delay: 150, tolerance: 5 },
+  }));
 
   // Clear selection when data changes
   useEffect(() => {
@@ -383,26 +443,71 @@ export function DataTable({
       {/* Table */}
       <div className="flex-1 min-h-0 overflow-auto">
         <table className="w-auto table-fixed text-sm">
-          <thead className="sticky top-0 z-10">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b bg-muted">
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="h-10 px-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap"
-                    style={{ width: header.getSize(), minWidth: header.column.columnDef.minSize, maxWidth: header.column.columnDef.maxSize }}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
+          {(() => {
+            const dragEnabled = !!onColumnReorder;
+
+            const thead = (
+              <thead className="sticky top-0 z-10">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <tr key={headerGroup.id} className="border-b bg-muted">
+                    {headerGroup.headers.map((header) => {
+                      const isFixed = fixedColumnKeys?.includes(header.column.id);
+                      const content = header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext());
+                      const thClassName = "h-10 px-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap";
+                      const thStyle = {
+                        width: header.getSize(),
+                        minWidth: header.column.columnDef.minSize,
+                        maxWidth: header.column.columnDef.maxSize,
+                      };
+                      if (dragEnabled) {
+                        return (
+                          <DraggableHeader
+                            key={header.id}
+                            id={header.column.id}
+                            disabled={!!isFixed}
+                            style={thStyle}
+                            className={thClassName}
+                          >
+                            {content}
+                          </DraggableHeader>
+                        );
+                      }
+                      return (
+                        <th key={header.id} className={thClassName} style={thStyle}>
+                          {content}
+                        </th>
+                      );
+                    })}
+                    {headerEndSlot && (
+                      <th className="h-10 w-10 px-1 text-center bg-muted sticky right-0">{headerEndSlot}</th>
+                    )}
+                  </tr>
                 ))}
-                {headerEndSlot && (
-                  <th className="h-10 w-10 px-1 text-center bg-muted sticky right-0">{headerEndSlot}</th>
-                )}
-              </tr>
-            ))}
-          </thead>
+              </thead>
+            );
+
+            if (!dragEnabled) return thead;
+
+            const handleDragEnd = (event: DragEndEvent) => {
+              const { active, over } = event;
+              if (!over || active.id === over.id) return;
+              onColumnReorder!(String(active.id), String(over.id));
+            };
+
+            const allDraggable = table.getHeaderGroups()
+              .flatMap((g) => g.headers.map((h) => h.column.id))
+              .filter((id) => !fixedColumnKeys?.includes(id));
+
+            return (
+              <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={allDraggable} strategy={horizontalListSortingStrategy}>
+                  {thead}
+                </SortableContext>
+              </DndContext>
+            );
+          })()}
 
           <tbody>
             {/* Loading skeleton */}
