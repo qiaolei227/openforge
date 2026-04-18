@@ -27,6 +27,8 @@ import { DataStatusBadge } from '@/components/workspace/data-status-badge';
 import { useUserListConfig } from '@/hooks/use-user-list-config';
 import { ColumnSettings } from '@/components/workspace/column-settings';
 import type { FilterPreset } from '@/components/workspace/filter-presets';
+import { deriveOneToOneFields, deriveDetailEntity, hasDetailExpansion } from '@/lib/column-config';
+import { parseEntityField } from '@/lib/filter-entity-field';
 import {
   Popover,
   PopoverContent,
@@ -142,36 +144,35 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
 
   // Visible 1:1 entity groups
   const oneToOneGroups = useMemo(() => {
-    if (!entities) return [];
-    const sel = userConfig.oneToOneFields ?? {};
+    const cols = userConfig.columns ?? [];
+    if (!entities || cols.length === 0) return [];
+    const derived = deriveOneToOneFields(cols);
     const result: { entityCode: string; entityName: string; fields: Field[] }[] = [];
-    for (const [entityCode, cols] of Object.entries(sel)) {
-      if (!cols?.length) continue;
+    for (const [entityCode, fieldCols] of Object.entries(derived)) {
       const ent = entities.find((e) => e.code === entityCode && e.entityType === 'one_to_one');
       if (!ent || !ent.fields) continue;
       result.push({
         entityCode,
         entityName: ent.name,
-        fields: ent.fields.filter((f) => (cols as string[]).includes(f.columnName) && !f.isSystem && !f.deletedAt),
+        fields: ent.fields.filter((f) => fieldCols.includes(f.columnName) && !f.isSystem && !f.deletedAt),
       });
     }
     return result;
-  }, [userConfig.oneToOneFields, entities]);
+  }, [userConfig.columns, entities]);
 
   // Visible 1:N detail entity
   const detailGroup = useMemo(() => {
-    const cfg = userConfig.detailEntity;
-    if (!entities || !cfg?.entityCode) return null;
-    const ent = entities.find(
-      (e) => e.code === cfg.entityCode && e.entityType === 'one_to_many',
-    );
-    if (!ent || !ent.fields || !cfg.fields?.length) return null;
+    const cols = userConfig.columns ?? [];
+    const d = deriveDetailEntity(cols);
+    if (!entities || !d) return null;
+    const ent = entities.find((e) => e.code === d.entityCode && e.entityType === 'one_to_many');
+    if (!ent || !ent.fields || d.fields.length === 0) return null;
     return {
-      entityCode: cfg.entityCode,
+      entityCode: d.entityCode,
       entityName: ent.name,
-      fields: ent.fields.filter((f) => cfg.fields.includes(f.columnName) && !f.isSystem && !f.deletedAt),
+      fields: ent.fields.filter((f) => d.fields.includes(f.columnName) && !f.isSystem && !f.deletedAt),
     };
-  }, [userConfig.detailEntity, entities]);
+  }, [userConfig.columns, entities]);
 
   // AvailableFields registry for sanitize
   const availableFields: AvailableFields = useMemo(() => {
@@ -277,15 +278,29 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   }, [views]);
 
   const layoutColumns = useMemo<LayoutColumnConfig[] | undefined>(() => {
-    if (!userConfig.columns?.length) return designerColumns;
-    // User config: ordered fieldId list → LayoutColumnConfig array
-    // Inherit width/align from designer config when available
-    const designerMap = new Map((designerColumns ?? []).map((c) => [c.fieldId, c]));
-    return userConfig.columns.map((fid) => ({
-      fieldId: fid,
-      ...(designerMap.get(fid) ?? {}),
-    }));
-  }, [userConfig.columns, designerColumns]);
+    const unified = userConfig.columns ?? [];
+    if (unified.length === 0) return designerColumns;
+
+    // Only main-field entries (bare columnName) contribute to LayoutColumnConfig.
+    // 1:1 / detail entries render via separate synthetic columns.
+    const designerByFieldId = new Map((designerColumns ?? []).map((c) => [c.fieldId, c]));
+    const mainColumns: LayoutColumnConfig[] = [];
+    for (const key of unified) {
+      const parsed = parseEntityField(key);
+      if (parsed.kind !== 'main') continue;
+      const field = fields.find((f) => f.columnName === parsed.columnName);
+      if (!field) continue;
+      const designerEntry = designerByFieldId.get(field.id);
+      mainColumns.push({
+        fieldId: field.id,
+        label: designerEntry?.label,
+        width: designerEntry?.width,
+        align: designerEntry?.align,
+        fixed: designerEntry?.fixed,
+      });
+    }
+    return mainColumns;
+  }, [userConfig.columns, designerColumns, fields]);
 
   /* ------------------------------------------------------------------ */
   /*  API calls                                                          */
@@ -302,17 +317,12 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     try {
       const sortArr = sort ? [{ field: sort.field, order: sort.order }] : undefined;
       const hasConditions = hasFilterConditions(effectiveFilter);
-      const oneToOnePayload = userConfig.oneToOneFields
-        ? Object.fromEntries(
-            Object.entries(userConfig.oneToOneFields).filter(([, v]) => v.length > 0),
-          )
-        : undefined;
-      const detailPayload =
-        userConfig.detailEntity &&
-        userConfig.detailEntity.entityCode &&
-        userConfig.detailEntity.fields.length > 0
-          ? userConfig.detailEntity
-          : undefined;
+      const cols = userConfig.columns ?? [];
+      const derivedOneToOne = deriveOneToOneFields(cols);
+      const derivedDetail = deriveDetailEntity(cols);
+
+      const oneToOnePayload = Object.keys(derivedOneToOne).length > 0 ? derivedOneToOne : undefined;
+      const detailPayload = derivedDetail ?? undefined;
 
       const { data: resp } = await apiClient.post<QueryResponse>(
         `/apps/${model.app.code}/models/${model.code}/data/query`,
@@ -322,8 +332,7 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
           pageSize,
           sort: sortArr,
           detailEntity: detailPayload,
-          oneToOneFields:
-            oneToOnePayload && Object.keys(oneToOnePayload).length > 0 ? oneToOnePayload : undefined,
+          oneToOneFields: oneToOnePayload,
         },
       );
       setData(resp.data);
@@ -334,7 +343,7 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
       setLoading(false);
       isFirstLoad.current = false;
     }
-  }, [model.app.code, model.code, effectiveFilter, page, pageSize, sort, userConfig.detailEntity, userConfig.oneToOneFields, showToast, t]);
+  }, [model.app.code, model.code, effectiveFilter, page, pageSize, sort, userConfig.columns, showToast, t]);
 
   useEffect(() => {
     fetchData();
@@ -774,18 +783,14 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   }, [handlePresetSave]);
 
   const handleColumnsApply = useCallback(
-    (value: { columns: string[]; oneToOneFields: Record<string, string[]>; detailEntity: { entityCode: string; fields: string[] } | null }) => {
-      saveUserConfig({
-        columns: value.columns,
-        oneToOneFields: Object.keys(value.oneToOneFields).length > 0 ? value.oneToOneFields : undefined,
-        detailEntity: value.detailEntity,
-      });
+    (columns: string[]) => {
+      saveUserConfig({ columns: columns.length > 0 ? columns : undefined });
     },
     [saveUserConfig],
   );
 
   const handleColumnsReset = useCallback(() => {
-    saveUserConfig({ columns: undefined, oneToOneFields: undefined, detailEntity: null });
+    saveUserConfig({ columns: undefined });
   }, [saveUserConfig]);
 
   const handlePageSizeChange = useCallback((size: number) => {
@@ -913,20 +918,14 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   /*  Master-detail expansion — flatten rows when detailEntity is active */
   /* ------------------------------------------------------------------ */
 
-  const detailCfg = userConfig.detailEntity;
-  const isDetailMode = !!(detailCfg && detailCfg.entityCode && detailCfg.fields.length > 0);
-
-  const detailEntityMeta = useMemo(() => {
-    if (!isDetailMode || !detailCfg || !entities) return null;
-    return entities.find((e) => e.code === detailCfg.entityCode && e.entityType === 'one_to_many') ?? null;
-  }, [isDetailMode, detailCfg, entities]);
+  const isDetailMode = hasDetailExpansion(userConfig.columns ?? []);
 
   const displayData = useMemo(() => {
-    if (!isDetailMode || !detailCfg) return data;
+    if (!isDetailMode || !detailGroup) return data;
     const out: Record<string, any>[] = [];
     data.forEach((master, mIdx) => {
       const detail = master.__detail;
-      const childRows: any[] = detail && detail.entityCode === detailCfg.entityCode ? (detail.rows ?? []) : [];
+      const childRows: any[] = detail && detail.entityCode === detailGroup.entityCode ? (detail.rows ?? []) : [];
       if (childRows.length === 0) {
         out.push({
           ...master,
@@ -952,7 +951,7 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
       }
     });
     return out;
-  }, [data, isDetailMode, detailCfg]);
+  }, [data, isDetailMode, detailGroup]);
 
   /* ------------------------------------------------------------------ */
   /*  Extra / trailing columns (data_status, 1:1 fields, detail fields)  */
@@ -974,66 +973,64 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
       });
     }
 
-    // 1:1 entity field columns
-    const oneToOneSel = userConfig.oneToOneFields ?? {};
-    if (entities && Object.keys(oneToOneSel).length > 0) {
-      for (const [entityCode, fieldCols] of Object.entries(oneToOneSel)) {
-        if (!fieldCols.length) continue;
-        const entity = entities.find((e) => e.code === entityCode && e.entityType === 'one_to_one');
-        if (!entity) continue;
-        for (const colName of fieldCols) {
-          const field = entity.fields?.find((f) => f.columnName === colName);
-          if (!field) continue;
-          const colId = `__one__${entityCode}__${colName}`;
-          cols.push({
-            id: colId,
-            size: 150,
-            header: () => (
-              <span className="text-xs font-medium truncate" title={`${entity.name}.${field.name}`}>
-                {`${entity.name}.${field.name}`}
-              </span>
-            ),
-            cell: ({ row }: any) => {
-              const subRecord = row.original.__oneToOne?.[entityCode];
-              if (!subRecord) return <span className="text-muted-foreground">&mdash;</span>;
-              const val = subRecord[colName];
-              if (val === null || val === undefined) return <span className="text-muted-foreground">&mdash;</span>;
-              return renderCell(field, val, subRecord);
-            },
-          });
-        }
+    // 1:1 entity field columns — walk unified columns array in order
+    const unified = userConfig.columns ?? [];
+    for (const key of unified) {
+      const parsed = parseEntityField(key);
+      if (parsed.kind === 'oneToOne' && parsed.entityCode) {
+        const entity = entities?.find((e) => e.code === parsed.entityCode && e.entityType === 'one_to_one');
+        const field = entity?.fields?.find((f) => f.columnName === parsed.columnName);
+        if (!entity || !field) continue;
+        cols.push({
+          id: key,
+          size: 150,
+          header: () => (
+            <span className="text-xs font-medium truncate" title={`${entity.name}.${field.name}`}>
+              {`${entity.name}.${field.name}`}
+            </span>
+          ),
+          cell: ({ row }: any) => {
+            const subRecord = row.original.__oneToOne?.[parsed.entityCode!];
+            if (!subRecord) return <span className="text-muted-foreground">&mdash;</span>;
+            const val = subRecord[parsed.columnName];
+            if (val === null || val === undefined) return <span className="text-muted-foreground">&mdash;</span>;
+            return renderCell(field, val, subRecord);
+          },
+        });
       }
     }
 
     return cols.length > 0 ? cols : undefined;
-  }, [model.enableDataStatus, userConfig.oneToOneFields, entities, t, renderCell]);
+  }, [model.enableDataStatus, userConfig.columns, entities, t, renderCell]);
 
   const trailingColumns = useMemo<ColumnDef<Record<string, any>>[] | undefined>(() => {
-    if (!isDetailMode || !detailCfg || !detailEntityMeta) return undefined;
+    if (!isDetailMode || !detailGroup) return undefined;
     const cols: ColumnDef<Record<string, any>>[] = [];
-    for (const colName of detailCfg.fields) {
-      const field = detailEntityMeta.fields?.find((f) => f.columnName === colName);
+    const unified = userConfig.columns ?? [];
+    for (const key of unified) {
+      const parsed = parseEntityField(key);
+      if (parsed.kind !== 'detail') continue;
+      const field = detailGroup.fields.find((f) => f.columnName === parsed.columnName);
       if (!field) continue;
-      const colId = `__detail__${colName}`;
       cols.push({
-        id: colId,
+        id: key,
         size: 150,
         header: () => (
-          <span className="text-xs font-medium truncate" title={`${detailEntityMeta.name}.${field.name}`}>
-            {`${detailEntityMeta.name}.${field.name}`}
+          <span className="text-xs font-medium truncate" title={`${detailGroup.entityName}.${field.name}`}>
+            {`${detailGroup.entityName}.${field.name}`}
           </span>
         ),
         cell: ({ row }: any) => {
           const child = row.original.__detailRow;
           if (!child) return <span className="text-muted-foreground">&mdash;</span>;
-          const val = child[colName];
+          const val = child[parsed.columnName];
           if (val === null || val === undefined) return <span className="text-muted-foreground">&mdash;</span>;
           return renderCell(field, val, child);
         },
       });
     }
     return cols.length > 0 ? cols : undefined;
-  }, [isDetailMode, detailCfg, detailEntityMeta, renderCell]);
+  }, [isDetailMode, detailGroup, userConfig.columns, renderCell]);
 
   // IDs of columns that should merge (rowSpan) within a master group.
   const groupedColumnIds = useMemo<string[] | undefined>(() => {
@@ -1044,13 +1041,13 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     for (const f of fields) {
       if (!f.isSystem && !f.deletedAt) ids.push(f.columnName);
     }
-    // 1:1 synthetic columns
-    const oneToOneSel = userConfig.oneToOneFields ?? {};
-    for (const [entityCode, cols] of Object.entries(oneToOneSel)) {
-      for (const c of cols) ids.push(`__one__${entityCode}__${c}`);
+    // 1:1 synthetic columns use the encoded key as column id
+    for (const key of userConfig.columns ?? []) {
+      const parsed = parseEntityField(key);
+      if (parsed.kind === 'oneToOne') ids.push(key);
     }
     return ids;
-  }, [isDetailMode, model.enableDataStatus, fields, userConfig.oneToOneFields]);
+  }, [isDetailMode, model.enableDataStatus, fields, userConfig.columns]);
 
   const getRowGroupKey = useMemo(
     () => (isDetailMode ? (row: Record<string, any>) => row.__groupId ?? null : undefined),
@@ -1273,12 +1270,10 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
             headerEndSlot={
               <ColumnSettings
                 fields={fields}
-                userColumns={userConfig.columns}
-                oneToOneFields={userConfig.oneToOneFields}
-                detailEntity={userConfig.detailEntity}
+                columns={userConfig.columns}
+                entities={entities}
                 onApply={handleColumnsApply}
                 onReset={handleColumnsReset}
-                entities={entities}
               />
             }
           />
