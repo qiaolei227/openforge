@@ -445,11 +445,24 @@ export function DataTable({
 
       {/* Table */}
       <div className="flex-1 min-h-0 overflow-auto">
-        <table className="w-auto table-fixed text-sm">
-          {(() => {
-            const dragEnabled = !!onColumnReorder;
+        {(() => {
+          const dragEnabled = !!onColumnReorder;
 
-            const thead = (
+          const handleDragEnd = (event: DragEndEvent) => {
+            const { active, over } = event;
+            if (!over || active.id === over.id) return;
+            onColumnReorder!(String(active.id), String(over.id));
+          };
+
+          const allDraggable = dragEnabled
+            ? table
+                .getHeaderGroups()
+                .flatMap((g) => g.headers.map((h) => h.column.id))
+                .filter((id) => !fixedColumnKeys?.includes(id))
+            : [];
+
+          const tableEl = (
+            <table className="w-auto table-fixed text-sm">
               <thead className="sticky top-0 z-10">
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} className="border-b bg-muted">
@@ -489,98 +502,88 @@ export function DataTable({
                   </tr>
                 ))}
               </thead>
-            );
 
-            if (!dragEnabled) return thead;
-
-            const handleDragEnd = (event: DragEndEvent) => {
-              const { active, over } = event;
-              if (!over || active.id === over.id) return;
-              onColumnReorder!(String(active.id), String(over.id));
-            };
-
-            const allDraggable = table.getHeaderGroups()
-              .flatMap((g) => g.headers.map((h) => h.column.id))
-              .filter((id) => !fixedColumnKeys?.includes(id));
-
-            return (
-              <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={allDraggable} strategy={horizontalListSortingStrategy}>
-                  {thead}
-                </SortableContext>
-              </DndContext>
-            );
-          })()}
-
-          <tbody>
-            {/* Loading skeleton */}
-            {loading && data.length === 0 && (
-              <>
-                {Array.from({ length: 5 }).map((_, rowIdx) => (
-                  <tr key={`skeleton-${rowIdx}`} className="border-b">
-                    {columns.map((col, colIdx) => (
-                      <td key={`skeleton-${rowIdx}-${colIdx}`} className="h-10 px-3">
-                        <div className="h-4 rounded bg-muted animate-pulse" />
-                      </td>
+              <tbody>
+                {/* Loading skeleton */}
+                {loading && data.length === 0 && (
+                  <>
+                    {Array.from({ length: 5 }).map((_, rowIdx) => (
+                      <tr key={`skeleton-${rowIdx}`} className="border-b">
+                        {columns.map((col, colIdx) => (
+                          <td key={`skeleton-${rowIdx}-${colIdx}`} className="h-10 px-3">
+                            <div className="h-4 rounded bg-muted animate-pulse" />
+                          </td>
+                        ))}
+                      </tr>
                     ))}
+                  </>
+                )}
+
+                {/* Empty state */}
+                {!loading && data.length === 0 && (
+                  <tr>
+                    <td colSpan={columns.length} className="h-32 text-center text-muted-foreground">
+                      {t('dataTab.noData')}
+                    </td>
                   </tr>
-                ))}
-              </>
-            )}
+                )}
 
-            {/* Empty state */}
-            {!loading && data.length === 0 && (
-              <tr>
-                <td colSpan={columns.length} className="h-32 text-center text-muted-foreground">
-                  {t('dataTab.noData')}
-                </td>
-              </tr>
-            )}
+                {/* Data rows */}
+                {table.getRowModel().rows.map((row, rowIdx) => {
+                  const gi = groupInfo ? groupInfo[rowIdx] : null;
+                  const isFirstInGroup = gi ? gi.isFirst : true;
+                  // Add thicker divider before a new group (except the very first row)
+                  const isGroupBoundary = gi && isFirstInGroup && rowIdx > 0;
+                  return (
+                    <tr
+                      key={row.id}
+                      className={`hover:bg-muted/50 transition-colors ${
+                        isFirstInGroup ? (isGroupBoundary ? 'border-t-2 border-border' : '') : ''
+                      } ${!gi || gi.isFirst ? 'border-b' : 'border-b border-dashed border-muted/60'} ${
+                        row.original.is_archived ? 'opacity-60' : ''
+                      } ${row.getIsSelected() ? 'bg-muted/30' : ''}`}
+                      onClick={() => onRowClick(row.original)}
+                      onDoubleClick={onRowDoubleClick ? () => onRowDoubleClick(row.original) : undefined}
+                    >
+                      {row.getVisibleCells().map((cell) => {
+                        const colId = cell.column.id;
+                        const isGrouped = groupedColumnSet?.has(colId) ?? false;
+                        // If cell belongs to a grouped column and this isn't the first row in the group, skip it
+                        if (isGrouped && gi && !gi.isFirst) return null;
+                        const rowSpan = isGrouped && gi ? gi.groupSize : undefined;
+                        return (
+                          <td
+                            key={cell.id}
+                            rowSpan={rowSpan}
+                            className={`h-10 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-[300px] ${
+                              isGrouped ? 'align-top pt-2' : ''
+                            }`}
+                            style={{ width: cell.column.getSize(), minWidth: cell.column.columnDef.minSize, maxWidth: cell.column.columnDef.maxSize }}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        );
+                      })}
+                      {headerEndSlot && isFirstInGroup && (
+                        <td className="w-10" rowSpan={gi ? gi.groupSize : undefined} />
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          );
 
-            {/* Data rows */}
-            {table.getRowModel().rows.map((row, rowIdx) => {
-              const gi = groupInfo ? groupInfo[rowIdx] : null;
-              const isFirstInGroup = gi ? gi.isFirst : true;
-              // Add thicker divider before a new group (except the very first row)
-              const isGroupBoundary = gi && isFirstInGroup && rowIdx > 0;
-              return (
-                <tr
-                  key={row.id}
-                  className={`hover:bg-muted/50 transition-colors ${
-                    isFirstInGroup ? (isGroupBoundary ? 'border-t-2 border-border' : '') : ''
-                  } ${!gi || gi.isFirst ? 'border-b' : 'border-b border-dashed border-muted/60'} ${
-                    row.original.is_archived ? 'opacity-60' : ''
-                  } ${row.getIsSelected() ? 'bg-muted/30' : ''}`}
-                  onClick={() => onRowClick(row.original)}
-                  onDoubleClick={onRowDoubleClick ? () => onRowDoubleClick(row.original) : undefined}
-                >
-                  {row.getVisibleCells().map((cell) => {
-                    const colId = cell.column.id;
-                    const isGrouped = groupedColumnSet?.has(colId) ?? false;
-                    // If cell belongs to a grouped column and this isn't the first row in the group, skip it
-                    if (isGrouped && gi && !gi.isFirst) return null;
-                    const rowSpan = isGrouped && gi ? gi.groupSize : undefined;
-                    return (
-                      <td
-                        key={cell.id}
-                        rowSpan={rowSpan}
-                        className={`h-10 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-[300px] ${
-                          isGrouped ? 'align-top pt-2' : ''
-                        }`}
-                        style={{ width: cell.column.getSize(), minWidth: cell.column.columnDef.minSize, maxWidth: cell.column.columnDef.maxSize }}
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    );
-                  })}
-                  {headerEndSlot && isFirstInGroup && (
-                    <td className="w-10" rowSpan={gi ? gi.groupSize : undefined} />
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+          if (!dragEnabled) return tableEl;
+
+          return (
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={allDraggable} strategy={horizontalListSortingStrategy}>
+                {tableEl}
+              </SortableContext>
+            </DndContext>
+          );
+        })()}
       </div>
 
       <DataTablePagination
