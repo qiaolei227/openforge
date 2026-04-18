@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryBuilderService } from './query-builder.service';
+import type { EntityFilterRegistry } from './query-builder.service';
 import { DeleteGuardService } from './delete-guard.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { ChildrenService } from './children.service';
@@ -43,6 +44,8 @@ export class DynamicDataService {
   ) {
     const model = await this.getModelByAppAndCode(appCode, modelCode);
 
+    const entitiesRegistry = this.buildEntityFilterRegistry(model, queryDto);
+
     const { dataSql, countSql, params } = this.queryBuilder.build(
       model.tableName,
       model.fields.map((f) => ({
@@ -54,6 +57,7 @@ export class DynamicDataService {
       orgId,
       model.isTree,
       model.defaultSort as Array<{ field: string; order: 'asc' | 'desc' }> | null,
+      entitiesRegistry,
     );
 
     const [data, countResult] = await Promise.all([
@@ -83,7 +87,17 @@ export class DynamicDataService {
 
     // Resolve 1:N detail rows (single entity, master-detail expand)
     if (data.length > 0 && queryDto.detailEntity?.entityCode) {
-      await this.resolveDetailRows(data, model.id, model.code, queryDto.detailEntity);
+      const detailFilter = this.extractDetailFilter(
+        queryDto.filter,
+        queryDto.detailEntity.entityCode,
+      );
+      await this.resolveDetailRows(
+        data,
+        model.id,
+        model.code,
+        queryDto.detailEntity,
+        detailFilter,
+      );
     }
 
     // Resolve 1:1 entity fields (attach as __oneToOne[entityCode])
@@ -686,6 +700,16 @@ export class DynamicDataService {
         code: modelCode,
         app: { code: appCode },
       },
+      include: {
+        entities: {
+          include: {
+            fields: {
+              where: { deletedAt: null },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+        },
+      },
     });
 
     if (!model) {
@@ -1107,6 +1131,87 @@ export class DynamicDataService {
   // ────────────────────────── Entity Expansion ──────────────────────────
 
   /**
+   * Build an EntityFilterRegistry from the loaded model entities and query DTO.
+   * Used to pass entity metadata into QueryBuilderService.build() so it can
+   * emit EXISTS subqueries for __oneToOne__ / __detail__ prefixed filter fields.
+   */
+  private buildEntityFilterRegistry(
+    model: { code: string; entities: any[] },
+    queryDto: any,
+  ): EntityFilterRegistry {
+    const registry: EntityFilterRegistry = {};
+    const fkColumn = `${model.code}_id`;
+
+    if (queryDto.oneToOneFields) {
+      registry.oneToOne = [];
+      for (const [entityCode, fieldCols] of Object.entries(queryDto.oneToOneFields)) {
+        if (!Array.isArray(fieldCols) || fieldCols.length === 0) continue;
+        const entity = model.entities.find(
+          (e: any) => e.code === entityCode && e.entityType === 'one_to_one',
+        );
+        if (!entity) continue;
+        registry.oneToOne.push({
+          code: entity.code,
+          tableName: entity.tableName,
+          fkColumn,
+          fields: (entity.fields ?? [])
+            .filter((f: any) => (fieldCols as string[]).includes(f.columnName))
+            .map((f: any) => ({ columnName: f.columnName, fieldType: f.fieldType })),
+        });
+      }
+    }
+
+    if (queryDto.detailEntity?.entityCode) {
+      const entity = model.entities.find(
+        (e: any) =>
+          e.code === queryDto.detailEntity.entityCode &&
+          e.entityType === 'one_to_many',
+      );
+      if (entity) {
+        const visible = new Set<string>(queryDto.detailEntity.fields ?? []);
+        registry.detail = {
+          code: entity.code,
+          tableName: entity.tableName,
+          fkColumn,
+          fields: (entity.fields ?? [])
+            .filter((f: any) => visible.has(f.columnName))
+            .map((f: any) => ({ columnName: f.columnName, fieldType: f.fieldType })),
+        };
+      }
+    }
+
+    return registry;
+  }
+
+  /**
+   * Extract conditions referencing a specific detail entity and rewrite their
+   * field names from "__detail__{code}__{col}" to "{col}" for use inside
+   * the detail physical table's WHERE clause. Returns null if no matching
+   * conditions exist (caller should skip detail filtering in that case).
+   */
+  private extractDetailFilter(filter: any, entityCode: string): any {
+    if (!filter || !Array.isArray(filter.conditions)) return null;
+    const marker = `__detail__${entityCode}__`;
+
+    const walk = (group: any): any => {
+      if (!group || !Array.isArray(group.conditions)) return null;
+      const rewritten: any[] = [];
+      for (const cond of group.conditions) {
+        if ('conditions' in cond && 'op' in cond) {
+          const nested = walk(cond);
+          if (nested && nested.conditions.length > 0) rewritten.push(nested);
+        } else if (typeof cond.field === 'string' && cond.field.startsWith(marker)) {
+          rewritten.push({ ...cond, field: cond.field.slice(marker.length) });
+        }
+      }
+      if (rewritten.length === 0) return null;
+      return { op: group.op, conditions: rewritten };
+    };
+
+    return walk(filter);
+  }
+
+  /**
    * Load child rows of a single 1:N entity for each master record.
    * Attaches as `row.__detail = { entityCode, rows: [...] }`.
    * Selected child fields' REFERENCE/USER/ORGANIZATION display values are resolved.
@@ -1116,6 +1221,7 @@ export class DynamicDataService {
     modelId: string,
     modelCode: string,
     detailEntity: { entityCode: string; fields: string[] },
+    detailFilter?: any,
   ) {
     if (!detailEntity.fields?.length) return;
 
@@ -1133,12 +1239,30 @@ export class DynamicDataService {
     const parentIds = rows.map((r) => r.id);
     const fkCol = `${modelCode}_id`;
 
+    let sql = `SELECT * FROM biz."${entity.tableName}" WHERE "${fkCol}" = ANY($1::uuid[])`;
+    const queryParams: any[] = [parentIds];
+
+    if (detailFilter && Array.isArray(detailFilter.conditions) && detailFilter.conditions.length > 0) {
+      const columns = entity.fields.map((f: any) => ({
+        columnName: f.columnName,
+        fieldType: f.fieldType,
+      }));
+      const { sql: filterSql, params: filterParams } = this.queryBuilder.buildFilterOnly(
+        detailFilter,
+        columns,
+        queryParams.length, // offset = 1 ($1 already used)
+      );
+      if (filterSql) {
+        sql += ` AND ${filterSql}`;
+        queryParams.push(...filterParams);
+      }
+    }
+
+    sql += ` ORDER BY "${fkCol}", "created_at" ASC`;
+
     let childRows: any[] = [];
     try {
-      childRows = await this.prisma.$queryRawUnsafe<any[]>(
-        `SELECT * FROM biz."${entity.tableName}" WHERE "${fkCol}" = ANY($1::uuid[]) ORDER BY "${fkCol}", "created_at" ASC`,
-        parentIds,
-      );
+      childRows = await this.prisma.$queryRawUnsafe<any[]>(sql, ...queryParams);
     } catch (err) {
       this.logger.warn(`Failed to load detail rows for entity ${detailEntity.entityCode}: ${err}`);
       return;
