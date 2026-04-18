@@ -1239,29 +1239,29 @@ export class DynamicDataService {
     const parentIds = rows.map((r) => r.id);
     const fkCol = `${modelCode}_id`;
 
-    let sql = `SELECT * FROM biz."${entity.tableName}" WHERE "${fkCol}" = ANY($1::uuid[])`;
-    const queryParams: any[] = [parentIds];
-
-    if (detailFilter && Array.isArray(detailFilter.conditions) && detailFilter.conditions.length > 0) {
-      const columns = entity.fields.map((f: any) => ({
-        columnName: f.columnName,
-        fieldType: f.fieldType,
-      }));
-      const { sql: filterSql, params: filterParams } = this.queryBuilder.buildFilterOnly(
-        detailFilter,
-        columns,
-        queryParams.length, // offset = 1 ($1 already used)
-      );
-      if (filterSql) {
-        sql += ` AND ${filterSql}`;
-        queryParams.push(...filterParams);
-      }
-    }
-
-    sql += ` ORDER BY "${fkCol}", "created_at" ASC`;
-
     let childRows: any[] = [];
     try {
+      let sql = `SELECT * FROM biz."${entity.tableName}" WHERE "${fkCol}" = ANY($1::uuid[])`;
+      const queryParams: any[] = [parentIds];
+
+      if (detailFilter && Array.isArray(detailFilter.conditions) && detailFilter.conditions.length > 0) {
+        const columns = entity.fields.map((f: any) => ({
+          columnName: f.columnName,
+          fieldType: f.fieldType,
+        }));
+        const { sql: filterSql, params: filterParams } = this.queryBuilder.buildFilterOnly(
+          detailFilter,
+          columns,
+          queryParams.length, // offset = 1 ($1 already used)
+        );
+        if (filterSql) {
+          sql += ` AND ${filterSql}`;
+          queryParams.push(...filterParams);
+        }
+      }
+
+      sql += ` ORDER BY "${fkCol}", "created_at" ASC`;
+
       childRows = await this.prisma.$queryRawUnsafe<any[]>(sql, ...queryParams);
     } catch (err) {
       this.logger.warn(`Failed to load detail rows for entity ${detailEntity.entityCode}: ${err}`);
