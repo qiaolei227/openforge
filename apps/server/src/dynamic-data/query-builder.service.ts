@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
+import { parseEntityField } from './filter-entity-field';
 
 // System fields that can be used in queries
 const SYSTEM_COLUMNS = [
@@ -35,6 +36,18 @@ export interface QueryResult {
   params: any[];
 }
 
+export interface EntityFilterMeta {
+  code: string;
+  tableName: string;
+  fkColumn: string;
+  fields: Array<{ columnName: string; fieldType: string }>;
+}
+
+export interface EntityFilterRegistry {
+  oneToOne?: EntityFilterMeta[];
+  detail?: EntityFilterMeta;
+}
+
 @Injectable()
 export class QueryBuilderService {
   /**
@@ -55,6 +68,7 @@ export class QueryBuilderService {
     orgId: string,
     isTree = false,
     defaultSort?: Array<{ field: string; order: 'asc' | 'desc' }> | null,
+    entities?: EntityFilterRegistry,
   ): QueryResult {
     const params: any[] = [];
     const conditions: string[] = [];
@@ -87,7 +101,7 @@ export class QueryBuilderService {
 
     // Parse filter tree
     if (query.filter) {
-      const filterSql = this.buildFilterGroup(query.filter, validColumns, params);
+      const filterSql = this.buildFilterGroup(query.filter, validColumns, params, tableName, entities);
       if (filterSql) conditions.push(filterSql);
     }
 
@@ -121,11 +135,31 @@ export class QueryBuilderService {
     return { dataSql, countSql, params };
   }
 
+  /**
+   * Build a standalone WHERE fragment for use by resolveDetailRows.
+   * paramOffset shifts all $N placeholders so they don't conflict with
+   * placeholders already present in the caller's query (e.g. $1 = parentIds).
+   */
+  buildFilterOnly(
+    filter: any,
+    columns: Array<{ columnName: string; fieldType: string }>,
+    paramOffset: number,
+  ): { sql: string; params: any[] } {
+    const validColumns = columns.map((c) => c.columnName);
+    const local: any[] = [];
+    const sqlRaw = this.buildFilterGroup(filter, validColumns, local);
+    if (paramOffset === 0) return { sql: sqlRaw, params: local };
+    const sql = sqlRaw.replace(/\$(\d+)/g, (_m, n) => `$${Number(n) + paramOffset}`);
+    return { sql, params: local };
+  }
+
   /** Recursively build a filter group (AND/OR) */
   private buildFilterGroup(
     group: any,
     validColumns: string[],
     params: any[],
+    mainTable?: string,
+    entities?: EntityFilterRegistry,
   ): string {
     if (!group || !group.op || !Array.isArray(group.conditions)) {
       return '';
@@ -137,11 +171,11 @@ export class QueryBuilderService {
     for (const condition of group.conditions) {
       if ('conditions' in condition && 'op' in condition) {
         // Nested group
-        const nested = this.buildFilterGroup(condition, validColumns, params);
+        const nested = this.buildFilterGroup(condition, validColumns, params, mainTable, entities);
         if (nested) parts.push(`(${nested})`);
       } else if ('field' in condition) {
         // Leaf condition
-        const sql = this.buildCondition(condition, validColumns, params);
+        const sql = this.buildCondition(condition, validColumns, params, mainTable, entities);
         if (sql) parts.push(sql);
       }
     }
@@ -149,36 +183,93 @@ export class QueryBuilderService {
     return parts.length > 0 ? parts.join(connector) : '';
   }
 
-  /** Build a single filter condition */
+  /** Build a single filter condition, routing by field prefix */
   private buildCondition(
     condition: any,
     validColumns: string[],
     params: any[],
+    mainTable?: string,
+    entities?: EntityFilterRegistry,
   ): string {
-    const { field, op, value } = condition;
+    const parsed = parseEntityField(condition.field);
 
-    // Validate field name against whitelist
-    const columnName = this.resolveColumn(field, validColumns);
+    if (parsed.kind === 'main') {
+      const columnName = this.resolveColumn(parsed.columnName, validColumns);
+      return this.buildLeafSql(`"${columnName}"`, condition.op, condition.value, params);
+    }
 
+    if (!mainTable) {
+      throw new BusinessException(
+        400,
+        ErrorCodes.DATA_VALIDATION_FAILED,
+        'Entity filter requires main table context',
+      );
+    }
+    const entity = this.resolveEntity(parsed.kind as 'oneToOne' | 'detail', parsed.entityCode!, entities);
+    const fieldMeta = entity.fields.find((f) => f.columnName === parsed.columnName);
+    if (!fieldMeta) {
+      throw new BusinessException(
+        400,
+        ErrorCodes.DATA_VALIDATION_FAILED,
+        `Unknown field: ${parsed.columnName} on entity ${parsed.entityCode}`,
+      );
+    }
+    const leaf = this.buildLeafSql(`sub."${parsed.columnName}"`, condition.op, condition.value, params);
+    if (!leaf) return '';
+    return `EXISTS (SELECT 1 FROM biz."${entity.tableName}" AS sub WHERE sub."${entity.fkColumn}" = biz."${mainTable}"."id" AND ${leaf})`;
+  }
+
+  private resolveEntity(
+    kind: 'oneToOne' | 'detail',
+    code: string,
+    entities?: EntityFilterRegistry,
+  ): EntityFilterMeta {
+    if (kind === 'oneToOne') {
+      const match = entities?.oneToOne?.find((e) => e.code === code);
+      if (!match) {
+        throw new BusinessException(
+          400,
+          ErrorCodes.DATA_VALIDATION_FAILED,
+          `Unknown entity: ${code}`,
+        );
+      }
+      return match;
+    }
+    if (entities?.detail?.code === code) return entities.detail;
+    throw new BusinessException(
+      400,
+      ErrorCodes.DATA_VALIDATION_FAILED,
+      `Unknown entity: ${code}`,
+    );
+  }
+
+  /**
+   * Build the SQL fragment for a single operator against an already-quoted column reference.
+   * columnRef examples: `"name"`, `sub."qty"`
+   */
+  private buildLeafSql(
+    columnRef: string,
+    op: string,
+    value: any,
+    params: any[],
+  ): string {
     if (op === 'is_null') {
-      return `"${columnName}" IS NULL`;
+      return `${columnRef} IS NULL`;
     }
     if (op === 'is_not_null') {
-      return `"${columnName}" IS NOT NULL`;
+      return `${columnRef} IS NOT NULL`;
     }
 
     // MULTI_ENUM array operators (PostgreSQL array @>, &&)
     if (op === 'contains' || op === 'contains_all') {
-      // @> checks that the column array contains ALL of the given values
       if (!Array.isArray(value) || value.length === 0) return '';
       params.push(value);
-      return `"${columnName}" @> $${params.length}::text[]`;
+      return `${columnRef} @> $${params.length}::text[]`;
     }
     if (op === 'contains_any') {
-      // && checks that the column array overlaps with (has ANY of) the given values
       if (!Array.isArray(value) || value.length === 0) return '';
       params.push(value);
-      return `"${columnName}" && $${params.length}::text[]`;
+      return `${columnRef} && $${params.length}::text[]`;
     }
 
     if (op === 'in' || op === 'not_in') {
@@ -188,17 +279,17 @@ export class QueryBuilderService {
         return `$${params.length}`;
       });
       const inOp = op === 'in' ? 'IN' : 'NOT IN';
-      return `"${columnName}" ${inOp} (${placeholders.join(', ')})`;
+      return `${columnRef} ${inOp} (${placeholders.join(', ')})`;
     }
 
     if (op === 'like') {
       params.push(`%${value}%`);
-      return `"${columnName}" ILIKE $${params.length}`;
+      return `${columnRef} ILIKE $${params.length}`;
     }
 
     if (op === 'not_like') {
       params.push(`%${value}%`);
-      return `"${columnName}" NOT ILIKE $${params.length}`;
+      return `${columnRef} NOT ILIKE $${params.length}`;
     }
 
     const sqlOp = OP_MAP[op];
@@ -211,7 +302,7 @@ export class QueryBuilderService {
     }
 
     params.push(value);
-    return `"${columnName}" ${sqlOp} $${params.length}`;
+    return `${columnRef} ${sqlOp} $${params.length}`;
   }
 
   /** Build keyword search across all STRING/TEXT fields (excludes UUID reference types) */
