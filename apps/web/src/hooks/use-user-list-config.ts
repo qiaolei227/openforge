@@ -3,16 +3,15 @@ import { apiClient } from '@/lib/api-client';
 
 export interface UserListConfig {
   pageSize?: number;
-  columns?: string[]; // ordered fieldIds (visible only)
+  /** Ordered unified array. Entries are either `columnName`,
+   * `__oneToOne__{entityCode}__{columnName}`, or
+   * `__detail__{entityCode}__{columnName}` — see docs/superpowers/specs/2026-04-19-unified-column-config-design.md */
+  columns?: string[];
   filterPresets?: Array<{
     id: string;
     name: string;
     filter: any;
   }>;
-  /** Selected fields per 1:1 entity (entityCode → ordered fieldColumnNames) */
-  oneToOneFields?: Record<string, string[]>;
-  /** Single 1:N entity to expand as master-detail rows; null/undefined = don't show detail */
-  detailEntity?: { entityCode: string; fields: string[] } | null;
 }
 
 export function useUserListConfig(appCode: string, modelCode: string) {
@@ -27,7 +26,7 @@ export function useUserListConfig(appCode: string, modelCode: string) {
     apiClient
       .get(`/apps/${appCode}/models/${modelCode}/user-config`)
       .then(({ data }) => {
-        if (!cancelled) setConfig(data ?? {});
+        if (!cancelled) setConfig(sanitizeIncoming(data ?? {}));
       })
       .catch(() => {
         // No config yet — use defaults
@@ -53,4 +52,15 @@ export function useUserListConfig(appCode: string, modelCode: string) {
   }, [appCode, modelCode]);
 
   return { config, loading, save, reset };
+}
+
+/**
+ * Strip legacy fields (`oneToOneFields`, `detailEntity`) that may exist in stored
+ * configs from pre-2026-04-19 deployments. Those are now encoded into `columns`
+ * via prefixes. No auto-migration — users re-configure via the column settings panel.
+ */
+function sanitizeIncoming(raw: any): UserListConfig {
+  if (!raw || typeof raw !== 'object') return {};
+  const { oneToOneFields: _o, detailEntity: _d, ...rest } = raw;
+  return rest;
 }
