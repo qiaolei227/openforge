@@ -14,6 +14,10 @@ import { FilterSearchInput } from '@/components/workspace/filter-search-input';
 
 interface ColumnFilterPopoverProps {
   field: Field;
+  /** Override for the filter condition's `field` name. Defaults to `field.columnName`.
+   *  For 1:1 entity columns pass `__oneToOne__{code}__{col}`; for detail columns
+   *  pass `__detail__{code}__{col}`. */
+  fieldKey?: string;
   filter: FilterGroup;
   onApply: (next: FilterGroup) => void;
 }
@@ -45,22 +49,23 @@ function topLevelConditionsForField(
   );
 }
 
-export function ColumnFilterPopover({ field, filter, onApply }: ColumnFilterPopoverProps) {
+export function ColumnFilterPopover({ field, fieldKey, filter, onApply }: ColumnFilterPopoverProps) {
   const t = useTranslations('filter');
   const [open, setOpen] = useState(false);
+  const key = fieldKey ?? field.columnName;
 
   const activeConditions = useMemo(
-    () => topLevelConditionsForField(filter, field.columnName),
-    [filter, field.columnName],
+    () => topLevelConditionsForField(filter, key),
+    [filter, key],
   );
   const isActive = activeConditions.length > 0;
 
   const applyAndClose = useCallback(
     (leaves: FilterCondition[]) => {
-      onApply(replaceColumnConditions(filter, field.columnName, leaves));
+      onApply(replaceColumnConditions(filter, key, leaves));
       setOpen(false);
     },
-    [filter, field.columnName, onApply],
+    [filter, key, onApply],
   );
 
   const clearAndClose = useCallback(() => {
@@ -85,6 +90,7 @@ export function ColumnFilterPopover({ field, filter, onApply }: ColumnFilterPopo
       <PopoverContent align="start" className="p-3 w-64">
         <FilterBody
           field={field}
+          conditionField={key}
           activeConditions={activeConditions}
           onApply={applyAndClose}
           onClear={clearAndClose}
@@ -100,6 +106,9 @@ export function ColumnFilterPopover({ field, filter, onApply }: ColumnFilterPopo
 
 interface FilterBodyProps {
   field: Field;
+  /** The `field` name used when writing FilterCondition leaves. For entity
+   *  columns this is the prefix-encoded key, not `field.columnName`. */
+  conditionField: string;
   activeConditions: FilterCondition[];
   onApply: (leaves: FilterCondition[]) => void;
   onClear: () => void;
@@ -144,7 +153,7 @@ function FilterBody(props: FilterBodyProps) {
 /*  Keyword (STRING / TEXT / AUTO_NUMBER)                              */
 /* ------------------------------------------------------------------ */
 
-function KeywordFilter({ field, activeConditions, onApply, onClear }: FilterBodyProps) {
+function KeywordFilter({ conditionField, activeConditions, onApply, onClear }: FilterBodyProps) {
   const t = useTranslations('filter');
   const seed = activeConditions.find((c) => c.op === 'like')?.value ?? '';
   const [value, setValue] = useState<string>(typeof seed === 'string' ? seed : '');
@@ -152,7 +161,7 @@ function KeywordFilter({ field, activeConditions, onApply, onClear }: FilterBody
   const apply = () => {
     const v = value.trim();
     if (!v) return onClear();
-    onApply([{ field: field.columnName, op: 'like', value: v }]);
+    onApply([{ field: conditionField, op: 'like', value: v }]);
   };
 
   return (
@@ -177,7 +186,7 @@ function KeywordFilter({ field, activeConditions, onApply, onClear }: FilterBody
 /*  NumberRange (INTEGER / DECIMAL)                                     */
 /* ------------------------------------------------------------------ */
 
-function NumberRangeFilter({ field, activeConditions, onApply, onClear }: FilterBodyProps) {
+function NumberRangeFilter({ conditionField, activeConditions, onApply, onClear }: FilterBodyProps) {
   const t = useTranslations('filter');
   const seedMin = activeConditions.find((c) => c.op === 'gte')?.value;
   const seedMax = activeConditions.find((c) => c.op === 'lte')?.value;
@@ -186,8 +195,8 @@ function NumberRangeFilter({ field, activeConditions, onApply, onClear }: Filter
 
   const apply = () => {
     const leaves: FilterCondition[] = [];
-    if (minVal.trim() !== '') leaves.push({ field: field.columnName, op: 'gte', value: Number(minVal) });
-    if (maxVal.trim() !== '') leaves.push({ field: field.columnName, op: 'lte', value: Number(maxVal) });
+    if (minVal.trim() !== '') leaves.push({ field: conditionField, op: 'gte', value: Number(minVal) });
+    if (maxVal.trim() !== '') leaves.push({ field: conditionField, op: 'lte', value: Number(maxVal) });
     if (leaves.length === 0) return onClear();
     onApply(leaves);
   };
@@ -223,7 +232,7 @@ function NumberRangeFilter({ field, activeConditions, onApply, onClear }: Filter
 /* ------------------------------------------------------------------ */
 
 function DateRangeFilter({
-  field,
+  conditionField,
   activeConditions,
   onApply,
   onClear,
@@ -237,8 +246,8 @@ function DateRangeFilter({
 
   const apply = () => {
     const leaves: FilterCondition[] = [];
-    if (fromVal.trim() !== '') leaves.push({ field: field.columnName, op: 'gte', value: fromVal });
-    if (toVal.trim() !== '') leaves.push({ field: field.columnName, op: 'lte', value: toVal });
+    if (fromVal.trim() !== '') leaves.push({ field: conditionField, op: 'gte', value: fromVal });
+    if (toVal.trim() !== '') leaves.push({ field: conditionField, op: 'lte', value: toVal });
     if (leaves.length === 0) return onClear();
     onApply(leaves);
   };
@@ -273,13 +282,13 @@ function DateRangeFilter({
 /*  Boolean                                                             */
 /* ------------------------------------------------------------------ */
 
-function BooleanFilter({ field, activeConditions, onApply, onClear }: FilterBodyProps) {
+function BooleanFilter({ conditionField, activeConditions, onApply, onClear }: FilterBodyProps) {
   const tc = useTranslations('common');
   const seed = activeConditions.find((c) => c.op === 'eq')?.value;
   const current: boolean | null = seed === true ? true : seed === false ? false : null;
 
   const choose = (v: boolean) => {
-    onApply([{ field: field.columnName, op: 'eq', value: v }]);
+    onApply([{ field: conditionField, op: 'eq', value: v }]);
   };
 
   return (
@@ -313,6 +322,7 @@ function BooleanFilter({ field, activeConditions, onApply, onClear }: FilterBody
 
 function EnumFilter({
   field,
+  conditionField,
   activeConditions,
   onApply,
   onClear,
@@ -329,7 +339,7 @@ function EnumFilter({
 
   const apply = () => {
     if (selected.length === 0) return onClear();
-    onApply([{ field: field.columnName, op, value: selected }]);
+    onApply([{ field: conditionField, op, value: selected }]);
   };
 
   return (
@@ -361,6 +371,7 @@ function EnumFilter({
 
 function SearchFilter({
   field,
+  conditionField,
   activeConditions,
   onApply,
   onClear,
@@ -371,7 +382,7 @@ function SearchFilter({
 
   const apply = () => {
     if (value === null || value === undefined || value === '') return onClear();
-    onApply([{ field: field.columnName, op: 'eq', value }]);
+    onApply([{ field: conditionField, op: 'eq', value }]);
   };
 
   return (

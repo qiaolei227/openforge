@@ -1007,9 +1007,17 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
           id: key,
           size: 150,
           header: () => (
-            <span className="text-xs font-medium truncate" title={`${entity.name}.${field.name}`}>
-              {`${entity.name}.${field.name}`}
-            </span>
+            <div className="flex items-center gap-0.5 w-full">
+              <span className="text-xs font-medium truncate flex-1 min-w-0" title={`${entity.name}.${field.name}`}>
+                {`${entity.name}.${field.name}`}
+              </span>
+              <ColumnFilterPopover
+                field={field}
+                fieldKey={key}
+                filter={filter}
+                onApply={handleQuickColumnFilter}
+              />
+            </div>
           ),
           cell: ({ row }: any) => {
             const subRecord = row.original.__oneToOne?.[parsed.entityCode!];
@@ -1023,7 +1031,7 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     }
 
     return cols.length > 0 ? cols : undefined;
-  }, [model.enableDataStatus, userConfig.columns, entities, t, renderCell]);
+  }, [model.enableDataStatus, userConfig.columns, entities, t, renderCell, filter, handleQuickColumnFilter]);
 
   const trailingColumns = useMemo<ColumnDef<Record<string, any>>[] | undefined>(() => {
     if (!isDetailMode || !detailGroup) return undefined;
@@ -1038,9 +1046,17 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
         id: key,
         size: 150,
         header: () => (
-          <span className="text-xs font-medium truncate" title={`${detailGroup.entityName}.${field.name}`}>
-            {`${detailGroup.entityName}.${field.name}`}
-          </span>
+          <div className="flex items-center gap-0.5 w-full">
+            <span className="text-xs font-medium truncate flex-1 min-w-0" title={`${detailGroup.entityName}.${field.name}`}>
+              {`${detailGroup.entityName}.${field.name}`}
+            </span>
+            <ColumnFilterPopover
+              field={field}
+              fieldKey={key}
+              filter={filter}
+              onApply={handleQuickColumnFilter}
+            />
+          </div>
         ),
         cell: ({ row }: any) => {
           const child = row.original.__detailRow;
@@ -1052,7 +1068,7 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
       });
     }
     return cols.length > 0 ? cols : undefined;
-  }, [isDetailMode, detailGroup, userConfig.columns, renderCell]);
+  }, [isDetailMode, detailGroup, userConfig.columns, renderCell, filter, handleQuickColumnFilter]);
 
   // IDs of columns that should merge (rowSpan) within a master group.
   const groupedColumnIds = useMemo<string[] | undefined>(() => {
