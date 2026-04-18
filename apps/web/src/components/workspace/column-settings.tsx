@@ -73,12 +73,26 @@ export function ColumnSettings({
     );
   }, []);
 
-  /** Detail entity — derived from local (first detail entityCode if any). */
-  const currentDetail = useMemo(() => deriveDetailEntity(local), [local]);
+  /** Detail entity — derived from local when any __detail__ entries exist. */
+  const derivedDetail = useMemo(() => deriveDetailEntity(local), [local]);
 
-  /** Switch detail entity: drop all __detail__ entries (user must re-check fields for new entity). */
-  const selectDetailEntity = useCallback((_entityCode: string | null) => {
+  /** Pending selection: user clicked a detail radio but hasn't checked any field yet.
+   *  Cleared when user checks a field (derivedDetail takes over) or clicks "None". */
+  const [pendingDetailCode, setPendingDetailCode] = useState<string | null>(null);
+
+  /** Derived detail for UI (radio + field list rendering). Uses persisted detail
+   *  when any field is checked, otherwise falls back to the pending radio selection. */
+  const currentDetail = derivedDetail
+    ? { entityCode: derivedDetail.entityCode, fields: derivedDetail.fields }
+    : pendingDetailCode
+      ? { entityCode: pendingDetailCode, fields: [] }
+      : null;
+
+  /** Switch detail entity radio. Drops all __detail__ entries and tracks the new
+   *  entity as pending until the user checks at least one of its fields. */
+  const selectDetailEntity = useCallback((entityCode: string | null) => {
     setLocal((prev) => prev.filter((k) => !k.startsWith('__detail__')));
+    setPendingDetailCode(entityCode);
   }, []);
 
   const toggleDetailField = useCallback((entityCode: string, columnName: string) => {
@@ -93,6 +107,8 @@ export function ColumnSettings({
         ? cleaned.filter((k) => k !== key)
         : [...cleaned, key];
     });
+    // Once a field exists, derivedDetail drives the UI; clear pending to avoid staleness.
+    setPendingDetailCode(null);
   }, []);
 
   const handleApply = useCallback(() => {
