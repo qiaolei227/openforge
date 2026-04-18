@@ -176,10 +176,18 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   // AvailableFields registry for sanitize
   const availableFields: AvailableFields = useMemo(() => {
     const main = new Set<string>(fields.map((f) => f.columnName));
-    // system pseudo-fields always available
-    main.add('data_status');
+    // All backend-recognized system columns — must match SYSTEM_COLUMNS in query-builder.service.ts
+    main.add('id');
+    main.add('org_id');
     main.add('is_archived');
+    main.add('data_status');
+    main.add('submitted_by');
+    main.add('submitted_at');
+    main.add('approved_by');
+    main.add('approved_at');
+    main.add('version');
     main.add('created_by');
+    main.add('updated_by');
     main.add('created_at');
     main.add('updated_at');
     const oneToOne = new Map<string, Set<string>>();
@@ -197,14 +205,13 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
 
   // Sanitize filter + pendingFilter whenever available columns change
   useEffect(() => {
-    const { filter: cleaned, droppedCount } = sanitizeFilter(filter, availableFields);
-    if (droppedCount > 0) {
-      setFilter(cleaned);
-      showToast(tFilter('droppedConditions', { count: droppedCount }), 'success');
-    }
-    const { filter: cleanedPending, droppedCount: dp } = sanitizeFilter(pendingFilter, availableFields);
-    if (dp > 0) {
-      setPendingFilter(cleanedPending);
+    const { filter: cleaned, droppedCount: d1 } = sanitizeFilter(filter, availableFields);
+    if (d1 > 0) setFilter(cleaned);
+    const { filter: cleanedPending, droppedCount: d2 } = sanitizeFilter(pendingFilter, availableFields);
+    if (d2 > 0) setPendingFilter(cleanedPending);
+    const total = d1 + d2;
+    if (total > 0) {
+      showToast(tFilter('droppedConditions', { count: total }), 'success');
     }
     // Intentionally only react to availableFields changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
