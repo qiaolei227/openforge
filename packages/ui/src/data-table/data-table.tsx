@@ -120,6 +120,10 @@ export interface DataTableProps {
   /** Column ids that should NOT participate in drag reorder
    *  (e.g. `_row_number`, `_data_status`, action columns). */
   fixedColumnKeys?: string[];
+  /** Visual order of content columns (non-fixed). When provided, content columns
+   *  are reordered to match; fixed columns (`_select`, `_row_number`, `_data_status`)
+   *  stay at their positions. Columns not in this list are appended in their built order. */
+  columnOrder?: string[];
 }
 
 /* ── DraggableHeader ── file-local, used only when onColumnReorder is set ── */
@@ -197,6 +201,7 @@ export function DataTable({
   getRowId,
   onColumnReorder,
   fixedColumnKeys,
+  columnOrder,
 }: DataTableProps) {
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [sortField, setSortField] = useState<string | null>(null);
@@ -230,10 +235,10 @@ export function DataTable({
     }
   }, [loading]);
 
-  // Sort visible fields: use layoutColumns order if provided, else AUTO_NUMBER first then sortOrder
+  // Sort visible fields: layoutColumns === undefined → fallback to all non-system fields;
+  //   layoutColumns === [] → explicit empty, show no main fields (caller's choice).
   const visibleFields = useMemo(() => {
-    if (layoutColumns && layoutColumns.length > 0) {
-      // Map layout column order to fields
+    if (layoutColumns !== undefined) {
       const fieldMap = new Map(fields.map((f) => [f.id, f]));
       return layoutColumns
         .map((lc) => fieldMap.get(lc.fieldId))
@@ -388,8 +393,33 @@ export function DataTable({
       cols.push(...trailingColumns);
     }
 
+    // Apply user-specified visual order to content columns (everything except fixed).
+    // Fixed columns (_select, _row_number, _data_status) keep their positions;
+    // content columns are reordered by `columnOrder`. Items absent from the list
+    // are appended in their built order.
+    if (columnOrder && columnOrder.length > 0) {
+      const FIXED_IDS = new Set(['_select', '_row_number', '_data_status']);
+      const fixedCols = cols.filter((c) => FIXED_IDS.has(String(c.id ?? '')));
+      const contentCols = cols.filter((c) => !FIXED_IDS.has(String(c.id ?? '')));
+      const byId = new Map(contentCols.map((c) => [String(c.id ?? ''), c]));
+      const seen = new Set<string>();
+      const ordered: typeof cols = [];
+      for (const id of columnOrder) {
+        const col = byId.get(id);
+        if (col && !seen.has(id)) {
+          ordered.push(col);
+          seen.add(id);
+        }
+      }
+      for (const col of contentCols) {
+        const id = String(col.id ?? '');
+        if (!seen.has(id)) ordered.push(col);
+      }
+      return [...fixedCols, ...ordered];
+    }
+
     return cols;
-  }, [visibleFields, sortField, sortOrder, handleSort, renderCell, page, pageSize, layoutColumnMap, effectiveLinkColumn, onLinkClick, extraColumns, trailingColumns]);
+  }, [visibleFields, sortField, sortOrder, handleSort, renderCell, page, pageSize, layoutColumnMap, effectiveLinkColumn, onLinkClick, extraColumns, trailingColumns, columnOrder]);
 
   const table = useReactTable({
     data,

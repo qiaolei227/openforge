@@ -57,12 +57,20 @@ export function ColumnSettings({
     [entities],
   );
 
-  /** Local editing copy of the unified columns array. */
-  const [local, setLocal] = useState<string[]>(columns ?? []);
+  /** Local editing copy of the unified columns array. When the caller passes no
+   *  columns, seed from the effective default (all main fields) so the checkbox
+   *  state mirrors what the user currently sees on the table. Otherwise adding
+   *  a 1:1/detail field would accidentally hide all mains on save. */
+  const seedLocal = useCallback(
+    (cols: string[] | undefined) =>
+      cols && cols.length > 0 ? cols : allFields.map((f) => f.columnName),
+    [allFields],
+  );
+  const [local, setLocal] = useState<string[]>(() => seedLocal(columns));
   const [prevColumns, setPrevColumns] = useState(columns);
   if (columns !== prevColumns) {
     setPrevColumns(columns);
-    setLocal(columns ?? []);
+    setLocal(seedLocal(columns));
   }
 
   const has = useCallback((key: string) => local.includes(key), [local]);

@@ -836,10 +836,10 @@
       "reset": "Reset",
       "cancel": "Cancel",
       "apply": "Apply",
-      "masterFields": "Master fields",
-      "oneToOneFields": "1:1 sub-entities",
-      "detailEntity": "Detail (1:N)",
-      "detailNone": "Don't expand detail"
+      "masterFields": "Main fields",
+      "oneToOneFields": "Subtable fields",
+      "detailEntity": "Detail expansion",
+      "detailNone": "Don't expand"
     },
     "unsavedChanges": "You have unsaved changes. Save before closing?",
     "save": "Save",

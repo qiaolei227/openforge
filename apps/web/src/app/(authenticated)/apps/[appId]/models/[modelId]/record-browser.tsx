@@ -1286,6 +1286,7 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
             onPageSizeChange={handlePageSizeChange}
             onColumnReorder={handleColumnReorder}
             fixedColumnKeys={fixedColumnKeys}
+            columnOrder={userConfig.columns}
             headerEndSlot={
               <ColumnSettings
                 fields={fields}

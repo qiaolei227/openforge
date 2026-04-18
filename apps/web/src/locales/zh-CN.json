@@ -837,8 +837,8 @@
       "cancel": "取消",
       "apply": "应用",
       "masterFields": "主字段",
-      "oneToOneFields": "一对一子实体",
-      "detailEntity": "明细（一对多）",
+      "oneToOneFields": "子表字段",
+      "detailEntity": "明细展开",
       "detailNone": "不展开明细"
     },
     "unsavedChanges": "有未保存的修改，是否保存？",
