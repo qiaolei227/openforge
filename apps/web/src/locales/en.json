@@ -763,6 +763,8 @@
   },
   "filter": {
     "title": "Filter",
+    "opAnd": "AND",
+    "opOr": "OR",
     "addCondition": "Add condition",
     "addGroup": "Add group",
     "apply": "Apply",

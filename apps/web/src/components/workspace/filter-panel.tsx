@@ -508,7 +508,7 @@ function FilterGroupEditor({
               : 'bg-orange-500/10 text-orange-600 border-orange-500/30 hover:bg-orange-500/20 dark:text-orange-400',
           )}
         >
-          {group.op === 'and' ? 'AND' : 'OR'}
+          {group.op === 'and' ? t('opAnd') : t('opOr')}
         </button>
 
         {!isRoot && (
