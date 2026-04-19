@@ -115,36 +115,58 @@ interface FilterBodyProps {
 }
 
 function FilterBody(props: FilterBodyProps) {
-  const { field } = props;
+  let field = props.field;
+
+  // LOOKUP: unwrap to resolved target metadata
+  if (field.fieldType === 'LOOKUP') {
+    const rawTargetType = (field.options as any)?._resolvedTargetFieldType;
+    // Filter hits display TEXT for FK targets (REFERENCE/USER/ORGANIZATION) — treat as STRING
+    const effectiveType =
+      rawTargetType === 'REFERENCE' || rawTargetType === 'USER' || rawTargetType === 'ORGANIZATION'
+        ? 'STRING'
+        : rawTargetType;
+    if (!effectiveType) return null; // unresolved — shouldn't happen but be defensive
+    const resolvedOptions = (field.options as any)?._resolvedTargetFieldOptions ?? {};
+
+    // Build a synthetic Field with the effective type so downstream branches work as-is
+    field = {
+      ...field,
+      fieldType: effectiveType as any,
+      options: resolvedOptions,
+    };
+  }
+
   const type = field.fieldType;
+  const mergedProps = { ...props, field };
 
   if (type === 'STRING' || type === 'TEXT' || type === 'RICHTEXT' || type === 'AUTO_NUMBER') {
-    return <KeywordFilter {...props} />;
+    return <KeywordFilter {...mergedProps} />;
   }
   if (type === 'INTEGER' || type === 'DECIMAL') {
-    return <NumberRangeFilter {...props} />;
+    return <NumberRangeFilter {...mergedProps} />;
   }
   if (type === 'DATE') {
-    return <DateRangeFilter {...props} htmlType="date" />;
+    return <DateRangeFilter {...mergedProps} htmlType="date" />;
   }
   if (type === 'DATETIME') {
-    return <DateRangeFilter {...props} htmlType="datetime-local" />;
+    return <DateRangeFilter {...mergedProps} htmlType="datetime-local" />;
   }
   if (type === 'TIME') {
-    return <DateRangeFilter {...props} htmlType="time" />;
+    return <DateRangeFilter {...mergedProps} htmlType="time" />;
   }
   if (type === 'BOOLEAN') {
-    return <BooleanFilter {...props} />;
+    return <BooleanFilter {...mergedProps} />;
   }
   if (type === 'ENUM') {
-    return <EnumFilter {...props} op="in" />;
+    return <EnumFilter {...mergedProps} op="in" />;
   }
   if (type === 'MULTI_ENUM') {
-    return <EnumFilter {...props} op="contains_any" />;
+    return <EnumFilter {...mergedProps} op="contains_any" />;
   }
   if (type === 'REFERENCE' || type === 'USER' || type === 'ORGANIZATION') {
+    // LOOKUP with FK target has already been coerced to STRING above; this branch only runs for NATIVE REFERENCE/USER/ORG
     const inputType = type === 'REFERENCE' ? 'reference' : type === 'USER' ? 'user' : 'organization';
-    return <SearchFilter {...props} inputType={inputType} />;
+    return <SearchFilter {...mergedProps} inputType={inputType} />;
   }
   return null;
 }
