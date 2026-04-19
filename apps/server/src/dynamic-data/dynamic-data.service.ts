@@ -765,10 +765,14 @@ export class DynamicDataService {
    */
   private stripToModelFields(
     data: Record<string, any>,
-    fields: Array<{ columnName: string }>,
+    fields: Array<{ columnName: string; fieldType?: string }>,
     isTree: boolean,
   ): Record<string, any> {
-    const allowed = new Set(fields.map((f) => f.columnName));
+    const allowed = new Set(
+      fields
+        .filter((f) => f.fieldType !== 'LOOKUP')
+        .map((f) => f.columnName),
+    );
     if (isTree) allowed.add(TREE_SYSTEM_FIELD);
     const clean: Record<string, any> = {};
     for (const [key, value] of Object.entries(data)) {
