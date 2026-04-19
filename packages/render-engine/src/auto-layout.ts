@@ -21,6 +21,7 @@ export const DEFAULT_COLUMN_WIDTH: Record<FieldType, number> = {
   FILE: 200,
   IMAGE: 120,
   MULTI_REFERENCE: 200,
+  LOOKUP: 150,
 };
 
 /* ── Column alignment by type ── */

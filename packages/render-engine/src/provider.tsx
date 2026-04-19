@@ -1,8 +1,17 @@
 'use client';
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useMemo, useState, type ReactNode } from 'react';
 import type { Field } from '@openforge/shared';
 import { RenderCtx, ServiceCtx, type RenderMode, type EntityWithFields, type ServiceContextValue, type TranslateFn } from './context';
+
+export type ReferenceRecordCache = Record<string, Record<string, any> | null>;
+
+export interface ReferenceRecordContextValue {
+  cache: ReferenceRecordCache;
+  setReferenceRecord: (fieldName: string, record: Record<string, any> | null) => void;
+}
+
+export const ReferenceRecordCtx = createContext<ReferenceRecordContextValue | null>(null);
 
 export interface RenderProviderProps {
   mode: RenderMode;
@@ -47,6 +56,20 @@ export function RenderProvider({
   []);
   const effectiveOnChildrenChange = onChildrenChange ?? localOnChildrenChange;
 
+  // Local state for reference record cache (used by LOOKUP fields to read target records)
+  const [referenceRecordCache, setReferenceRecordCache] = useState<ReferenceRecordCache>({});
+  const setReferenceRecord = useCallback(
+    (fieldName: string, record: Record<string, any> | null) => {
+      setReferenceRecordCache((prev) => ({ ...prev, [fieldName]: record }));
+    },
+    [],
+  );
+
+  const referenceRecordValue = useMemo<ReferenceRecordContextValue>(
+    () => ({ cache: referenceRecordCache, setReferenceRecord }),
+    [referenceRecordCache, setReferenceRecord],
+  );
+
   // Build a unified field lookup that covers both main-table fields and
   // entity-owned (sub-table) fields. Some callers (e.g. the model detail
   // page) split these into `fields` (main) and `entities[].fields` (sub),
@@ -89,10 +112,12 @@ export function RenderProvider({
   );
 
   return (
-    <RenderCtx.Provider value={renderValue}>
-      <ServiceCtx.Provider value={serviceValue}>
-        {children}
-      </ServiceCtx.Provider>
-    </RenderCtx.Provider>
+    <ReferenceRecordCtx.Provider value={referenceRecordValue}>
+      <RenderCtx.Provider value={renderValue}>
+        <ServiceCtx.Provider value={serviceValue}>
+          {children}
+        </ServiceCtx.Provider>
+      </RenderCtx.Provider>
+    </ReferenceRecordCtx.Provider>
   );
 }

@@ -4,9 +4,9 @@ export type { RenderMode, RenderContextValue, ServiceContextValue, EntityWithFie
 export type { LayoutColumnConfig, ListRendererProps } from './list/list-renderer';
 
 // Provider & Hooks
-export { RenderProvider } from './provider';
-export type { RenderProviderProps } from './provider';
-export { useRenderContext, useServiceContext, useFieldComponent } from './hooks';
+export { RenderProvider, ReferenceRecordCtx } from './provider';
+export type { RenderProviderProps, ReferenceRecordCache, ReferenceRecordContextValue } from './provider';
+export { useRenderContext, useServiceContext, useFieldComponent, useReferenceRecord, useSetReferenceRecord } from './hooks';
 
 // Form
 export { FormRenderer } from './form/form-renderer';
