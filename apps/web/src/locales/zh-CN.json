@@ -353,6 +353,7 @@
     "typeAUTO_NUMBER": "自动编号",
     "typeREFERENCE": "引用",
     "typeMULTI_REFERENCE": "多选引用",
+    "typeLOOKUP": "查找",
     "typeUSER": "用户",
     "typeORGANIZATION": "组织",
     "typeRICHTEXT": "富文本",
@@ -387,7 +388,13 @@
     "backfillDescription": "该字段有 {count} 条数据为空，设为必填前需要为这些记录填充一个值。",
     "backfillValue": "填充值",
     "backfillPlaceholder": "输入要填充的值...",
-    "backfillConfirm": "填充并设为必填"
+    "backfillConfirm": "填充并设为必填",
+    "lookupSourceField": "源字段",
+    "lookupSourceFieldPlaceholder": "选择要跟随的引用字段",
+    "lookupTargetField": "目标字段",
+    "lookupTargetFieldPlaceholder": "选择要带出的字段",
+    "lookupNoSourceAvailable": "请先创建一个引用字段（REFERENCE / USER / ORGANIZATION）",
+    "lookupMustSelectBoth": "请选择源字段和目标字段"
   },
   "config": {
     "title": "平台参数",

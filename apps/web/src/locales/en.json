@@ -353,6 +353,7 @@
     "typeAUTO_NUMBER": "Auto Number",
     "typeREFERENCE": "Reference",
     "typeMULTI_REFERENCE": "Multi Reference",
+    "typeLOOKUP": "Lookup",
     "typeUSER": "User",
     "typeORGANIZATION": "Organization",
     "typeRICHTEXT": "Rich Text",
@@ -387,7 +388,13 @@
     "backfillDescription": "This field has {count} records with empty values. Please provide a value to fill them before setting as required.",
     "backfillValue": "Fill value",
     "backfillPlaceholder": "Enter the value to fill...",
-    "backfillConfirm": "Fill & set required"
+    "backfillConfirm": "Fill & set required",
+    "lookupSourceField": "Source field",
+    "lookupSourceFieldPlaceholder": "Pick the reference field to follow",
+    "lookupTargetField": "Target field",
+    "lookupTargetFieldPlaceholder": "Pick the column to display",
+    "lookupNoSourceAvailable": "Create a REFERENCE / USER / ORGANIZATION field first",
+    "lookupMustSelectBoth": "Please pick both source and target fields"
   },
   "config": {
     "title": "Platform Configuration",
