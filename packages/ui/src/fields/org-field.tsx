@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FieldComponentProps, SystemQueryFn } from './field-props';
+import { useSetReferenceRecord } from '@openforge/render-engine';
 
 export interface OrgFieldExtraProps {
   systemQueryFn: SystemQueryFn;
@@ -82,6 +83,7 @@ function SpinnerIcon() {
 
 export default function OrgField(props: FieldComponentProps & Partial<OrgFieldExtraProps>) {
   const { field, value, onChange, disabled, error, mode, systemQueryFn, displayValue } = props;
+  const setReferenceRecord = useSetReferenceRecord();
 
   const [searchKeyword, setSearchKeyword] = useState('');
   const [dropdownData, setDropdownData] = useState<Record<string, any>[]>([]);
@@ -147,6 +149,7 @@ export default function OrgField(props: FieldComponentProps & Partial<OrgFieldEx
   function handleSelectRecord(record: Record<string, any>) {
     onChange(record.id);
     setDisplayText(record.name || String(record.id));
+    setReferenceRecord(field.columnName, record);
     setSearchKeyword('');
     setDropdownOpen(false);
   }
@@ -154,6 +157,7 @@ export default function OrgField(props: FieldComponentProps & Partial<OrgFieldEx
   function handleClear() {
     onChange(null);
     setDisplayText('');
+    setReferenceRecord(field.columnName, null);
     setSearchKeyword('');
     setDropdownOpen(false);
   }
