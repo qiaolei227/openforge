@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { FieldComponentProps, ApiQueryFn, PickerColumn } from './field-props';
 import ReferencePickerDialog from './reference-picker-dialog';
 import { usePickerColumns } from './use-picker-columns';
+import { useSetReferenceRecord } from '@openforge/render-engine';
 
 export interface RelationPickerExtraProps {
   queryFn: ApiQueryFn;
@@ -70,6 +71,7 @@ function ExternalLinkIcon() {
 
 export default function RelationPicker(props: FieldComponentProps & Partial<RelationPickerExtraProps>) {
   const { field, value, onChange, disabled, error, mode, queryFn, targetAppCode, targetModelCode, targetModelName, displayValue, fetchSchema, t } = props;
+  const setReferenceRecord = useSetReferenceRecord();
 
   const displayField = field.options?.targetDisplayField || 'name';
 
@@ -189,6 +191,7 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
   function handleSelectRecord(record: Record<string, any>) {
     onChange(record.id);
     setDisplayText(record[displayField] ?? String(record.id));
+    setReferenceRecord(field.columnName, record);
     setSearchKeyword('');
     setDropdownOpen(false);
   }
@@ -196,6 +199,7 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
   function handleClear() {
     onChange(null);
     setDisplayText('');
+    setReferenceRecord(field.columnName, null);
     setSearchKeyword('');
     setDropdownOpen(false);
   }
@@ -322,6 +326,7 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
             const df = field.options?.targetDisplayField || 'name';
             onChange(record.id);
             setDisplayText(record[df] ?? record.id);
+            setReferenceRecord(field.columnName, record);
           } : undefined}
           onConfirmMultiple={pickerMode === 'multiple' ? (records) => {
             if (!entityCtx?.onBatchAddRows || records.length === 0) return;
