@@ -28,7 +28,7 @@ export type FieldType =
   | 'STRING' | 'TEXT' | 'RICHTEXT' | 'INTEGER' | 'DECIMAL' | 'BOOLEAN'
   | 'DATE' | 'DATETIME' | 'TIME' | 'ENUM' | 'MULTI_ENUM'
   | 'AUTO_NUMBER' | 'REFERENCE' | 'MULTI_REFERENCE' | 'USER' | 'ORGANIZATION'
-  | 'FILE' | 'IMAGE';
+  | 'FILE' | 'IMAGE' | 'LOOKUP';
 
 export interface FieldOption {
   maxLength?: number;
@@ -51,6 +51,9 @@ export interface FieldOption {
   accept?: string;         // e.g., '.pdf,.doc' or 'image/*'
   maxSize?: number;        // bytes
   maxCount?: number;       // max files
+  // LOOKUP options
+  sourceFieldId?: string;            // id of the REFERENCE/USER/ORGANIZATION field on the same record
+  targetFieldColumnName?: string;    // columnName of the target field on the target model/table
 }
 
 export interface Field {
