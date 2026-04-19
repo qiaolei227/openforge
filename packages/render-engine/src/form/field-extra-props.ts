@@ -53,6 +53,15 @@ export function buildFieldExtraProps(
     if (filesData) extraProps.files = filesData;
   }
 
+  if (field.fieldType === 'LOOKUP') {
+    // Prefer the server-injected _resolvedSourceColumnName; callers can also
+    // pass services.fieldMap to look it up if needed, but options is simpler.
+    const resolvedSourceColumnName = (field.options as any)?._resolvedSourceColumnName;
+    if (resolvedSourceColumnName) {
+      extraProps.sourceColumnName = resolvedSourceColumnName;
+    }
+  }
+
   if (services.t) {
     extraProps.t = services.t;
   }

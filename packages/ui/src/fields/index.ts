@@ -23,6 +23,7 @@ const FIELD_COMPONENTS: Partial<Record<FieldType, () => Promise<{ default: Compo
   FILE: () => import('./file-field'),
   IMAGE: () => import('./image-field'),
   MULTI_REFERENCE: () => import('./multi-relation-picker'),
+  LOOKUP: () => import('./lookup-field'),
 };
 
 export function getFieldComponent(fieldType: FieldType) {

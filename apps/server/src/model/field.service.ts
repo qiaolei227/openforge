@@ -31,13 +31,15 @@ export class FieldService {
   /**
    * 查询模型下的所有字段（仅返回未删除的）
    * ENUM/MULTI_ENUM 字段如果配置了 dictCode，会自动从数据字典解析 choices
+   * LOOKUP 字段会注入 _resolvedTargetFieldType / _resolvedTargetFieldOptions / _resolvedSourceColumnName
    */
   async findByModelId(modelId: string) {
     const fields = await this.prisma.sysField.findMany({
       where: { modelId, deletedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
-    return this.resolveDictChoices(fields);
+    const withDict = await this.resolveDictChoices(fields);
+    return this.resolveLookupTargetMeta(withDict);
   }
 
   /**
@@ -80,6 +82,91 @@ export class FieldService {
         };
       }
       return f;
+    });
+  }
+
+  /**
+   * 为 LOOKUP 字段注入已解析的目标字段元数据，使前端可以按正确类型渲染。
+   * 注入字段（写入 options）：
+   *   _resolvedTargetFieldType     — 目标字段的 fieldType 字符串
+   *   _resolvedTargetFieldOptions  — 目标字段的 options（含 choices / scale 等）
+   *   _resolvedSourceColumnName    — 来源字段的 columnName（前端 useLookupValue 用）
+   */
+  private async resolveLookupTargetMeta(fields: any[]): Promise<any[]> {
+    const lookups = fields.filter((f) => f.fieldType === 'LOOKUP');
+    if (lookups.length === 0) return fields;
+
+    // Gather unique source field ids
+    const srcIds = Array.from(new Set(
+      lookups.map((l) => l.options?.sourceFieldId).filter(Boolean),
+    ));
+    if (srcIds.length === 0) return fields;
+
+    const srcs = await this.prisma.sysField.findMany({ where: { id: { in: srcIds } } });
+    const srcMap = new Map<string, any>();
+    for (const s of srcs) srcMap.set(s.id, s);
+
+    // For REFERENCE sources, gather target model ids
+    const refTargetModelIds = Array.from(new Set(
+      srcs
+        .filter((s) => s.fieldType === 'REFERENCE')
+        .map((s) => (s.options as any)?.targetModelId)
+        .filter(Boolean),
+    ));
+    const targetModels = refTargetModelIds.length > 0
+      ? await this.prisma.sysModel.findMany({
+          where: { id: { in: refTargetModelIds } },
+          include: { fields: true },
+        })
+      : [];
+
+    // Resolve dict choices on target model fields so ENUM/MULTI_ENUM lookups get labels
+    const allTargetFields = targetModels.flatMap((m: any) => m.fields ?? []);
+    const resolvedTargetFields = await this.resolveDictChoices(allTargetFields);
+    const resolvedTargetFieldMap = new Map<string, any>();
+    for (const f of resolvedTargetFields) resolvedTargetFieldMap.set(f.id, f);
+
+    const modelMap = new Map<string, any>();
+    for (const m of targetModels) {
+      modelMap.set(m.id, {
+        ...m,
+        fields: (m.fields ?? []).map((f: any) => resolvedTargetFieldMap.get(f.id) ?? f),
+      });
+    }
+
+    return fields.map((f) => {
+      if (f.fieldType !== 'LOOKUP') return f;
+      const opts = f.options || {};
+      const src = srcMap.get(opts.sourceFieldId);
+      if (!src) return f;
+
+      let resolvedFieldType: string | null = null;
+      let resolvedFieldOptions: any = {};
+
+      if (src.fieldType === 'REFERENCE') {
+        const targetModel = modelMap.get((src.options as any)?.targetModelId);
+        const tgt = targetModel?.fields?.find((x: any) => x.columnName === opts.targetFieldColumnName);
+        if (tgt) {
+          resolvedFieldType = tgt.fieldType;
+          resolvedFieldOptions = tgt.options || {};
+        }
+      } else if (src.fieldType === 'USER') {
+        resolvedFieldType = FieldService.USER_LOOKUP_FIELDS[opts.targetFieldColumnName] ?? null;
+      } else if (src.fieldType === 'ORGANIZATION') {
+        resolvedFieldType = FieldService.ORG_LOOKUP_FIELDS[opts.targetFieldColumnName] ?? null;
+      }
+
+      if (!resolvedFieldType) return f;
+
+      return {
+        ...f,
+        options: {
+          ...opts,
+          _resolvedTargetFieldType: resolvedFieldType,
+          _resolvedTargetFieldOptions: resolvedFieldOptions,
+          _resolvedSourceColumnName: src.columnName,
+        },
+      };
     });
   }
 
