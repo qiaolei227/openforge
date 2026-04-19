@@ -7,13 +7,14 @@ import { DeleteGuardService } from './delete-guard.service';
 import { ChildrenService } from './children.service';
 import { DataStatusService } from './data-status.service';
 import { UserListConfigService } from './user-list-config.service';
+import { LookupResolverService } from './lookup-resolver.service';
 import { ModelModule } from '../model/model.module';
 import { FileModule } from '../file/file.module';
 
 @Module({
   imports: [ModelModule, FileModule],
   controllers: [DynamicDataController, UserListConfigController],
-  providers: [DynamicDataService, QueryBuilderService, DeleteGuardService, ChildrenService, DataStatusService, UserListConfigService],
-  exports: [ChildrenService, DynamicDataService, DataStatusService],
+  providers: [DynamicDataService, QueryBuilderService, DeleteGuardService, ChildrenService, DataStatusService, UserListConfigService, LookupResolverService],
+  exports: [ChildrenService, DynamicDataService, DataStatusService, LookupResolverService],
 })
 export class DynamicDataModule {}
