@@ -274,7 +274,37 @@ export class ModelService {
         AND f.options->>'targetModelId' = ${id}
     `;
 
-    if (dependents.length > 0) {
+    // Scan for LOOKUP fields that indirectly reference this model via a REFERENCE source field
+    const allLookups = await this.prisma.sysField.findMany({
+      where: { fieldType: 'LOOKUP' },
+      select: { id: true, modelId: true, options: true },
+    });
+
+    const lookupReferrers: string[] = [];
+    for (const lookup of allLookups) {
+      const lookupOptions = (lookup.options as any) ?? {};
+      const sourceFieldId = lookupOptions.sourceFieldId;
+      if (!sourceFieldId) continue;
+
+      const sourceField = await this.prisma.sysField.findUnique({
+        where: { id: sourceFieldId },
+        select: { fieldType: true, options: true },
+      });
+      if (!sourceField) continue;
+
+      if (
+        sourceField.fieldType === 'REFERENCE' &&
+        (sourceField.options as any)?.targetModelId === id
+      ) {
+        lookupReferrers.push(`LOOKUP[${lookup.id}]`);
+      }
+    }
+
+    const lookupSummary = lookupReferrers.length > 0
+      ? `Model '${model.name}' is referenced by LOOKUP fields`
+      : null;
+
+    if (dependents.length > 0 || lookupReferrers.length > 0) {
       // Dedupe by source model (one model may have multiple fields pointing here)
       const byModel = new Map<string, { name: string; fields: string[] }>();
       for (const d of dependents) {
@@ -282,13 +312,18 @@ export class ModelService {
         entry.fields.push(d.field_name);
         byModel.set(d.source_model_id, entry);
       }
-      const summary = Array.from(byModel.values())
+      const directSummary = Array.from(byModel.values())
         .map((e) => `${e.name}(${e.fields.join('、')})`)
         .join('；');
+
+      const parts: string[] = [];
+      if (directSummary) parts.push(directSummary);
+      if (lookupSummary) parts.push(lookupSummary);
+
       throw new BusinessException(
         409,
         ErrorCodes.MODEL_HAS_REFERENCES,
-        `Model '${model.name}' is referenced by: ${summary}`,
+        `Model '${model.name}' is referenced by: ${parts.join('；')}`,
       );
     }
 

@@ -24,6 +24,8 @@ describe('ModelService', () => {
       },
       sysField: {
         deleteMany: vi.fn(),
+        findMany: vi.fn(),
+        findUnique: vi.fn(),
       },
       sysMenu: {
         count: vi.fn(),
@@ -85,6 +87,7 @@ describe('ModelService', () => {
       prisma.sysModel.findUnique.mockResolvedValue(mockModel);
       prisma.sysMenu.count.mockResolvedValue(0);
       prisma.$queryRaw.mockResolvedValue([]); // no reference fields
+      prisma.sysField.findMany.mockResolvedValue([]); // no LOOKUP fields
       ddlManager.countRecords.mockResolvedValue(0); // no data records
       ddlManager.dropTable.mockResolvedValue(undefined);
       prisma.sysField.deleteMany.mockResolvedValue({});
@@ -93,6 +96,30 @@ describe('ModelService', () => {
       const result = await service.delete(modelId);
       expect(result).toEqual(mockModel);
       expect(ddlManager.dropTable).toHaveBeenCalledWith(mockModel.tableName);
+    });
+
+    it('rejects delete when LOOKUP fields reference this model via REFERENCE source', async () => {
+      prisma.sysModel.findUnique.mockResolvedValue(mockModel);
+      prisma.sysMenu.count.mockResolvedValue(0);
+      prisma.$queryRaw.mockResolvedValue([]); // no direct REFERENCE/MULTI_REFERENCE dependents
+      // LOOKUP scan: one LOOKUP field exists
+      prisma.sysField.findMany.mockResolvedValueOnce([
+        {
+          id: 'lookup-field-1',
+          modelId: 'some-other-model',
+          options: { sourceFieldId: 'src-ref-field-1', targetFieldColumnName: 'name' },
+        },
+      ]);
+      // source REFERENCE field points to the model being deleted
+      prisma.sysField.findUnique.mockResolvedValueOnce({
+        id: 'src-ref-field-1',
+        fieldType: 'REFERENCE',
+        options: { targetModelId: modelId },
+      });
+
+      await expect(service.delete(modelId)).rejects.toSatisfy(
+        (e: any) => e instanceof BusinessException && (e.getResponse() as any).errorCode === 'MODEL_HAS_REFERENCES',
+      );
     });
   });
 });
