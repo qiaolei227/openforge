@@ -309,6 +309,44 @@ describe('FieldService', () => {
     });
   });
 
+  describe('delete — target field protection (Task 5)', () => {
+    it('throws FIELD_HAS_DEPENDENT_LOOKUPS when a LOOKUP targets this field column', async () => {
+      prisma.sysField.findUnique
+        // the field being deleted
+        .mockResolvedValueOnce({
+          id: 'target-field-1',
+          fieldType: 'STRING',
+          isSystem: false,
+          modelId: 'target-model-1',
+          entityId: null,
+          columnName: 'customer_name',
+          isUnique: false,
+          options: {},
+        });
+      // Task 4: not a REFERENCE/USER/ORG field, skip that check (findMany not called for T4)
+      // Task 5: candidate LOOKUPs with targetFieldColumnName === 'customer_name'
+      prisma.sysField.findMany
+        .mockResolvedValueOnce([
+          {
+            id: 'lookup-1',
+            name: '查找客户名',
+            columnName: 'cust_name_lookup',
+            options: { sourceFieldId: 'src-ref-1', targetFieldColumnName: 'customer_name' },
+          },
+        ]);
+      // source field for the LOOKUP: REFERENCE pointing at target-model-1
+      prisma.sysField.findUnique.mockResolvedValueOnce({
+        id: 'src-ref-1',
+        fieldType: 'REFERENCE',
+        options: { targetModelId: 'target-model-1' },
+      });
+
+      await expect(service.delete('target-field-1')).rejects.toSatisfy(
+        (e: any) => e instanceof BusinessException && (e.getResponse() as any).errorCode === 'FIELD_HAS_DEPENDENT_LOOKUPS',
+      );
+    });
+  });
+
   describe('delete — source field protection (Task 4)', () => {
     it('throws FIELD_HAS_DEPENDENT_LOOKUPS when LOOKUPs depend on a REFERENCE source field', async () => {
       prisma.sysField.findUnique.mockResolvedValueOnce({

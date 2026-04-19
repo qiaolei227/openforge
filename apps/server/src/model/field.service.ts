@@ -572,6 +572,51 @@ export class FieldService {
       }
     }
 
+    // Task 5: Target field deletion protection — if this is a non-system, non-LOOKUP field,
+    // scan for any LOOKUP whose source REFERENCE points to the same model AND whose
+    // targetFieldColumnName matches this field's columnName.
+    if (!field.isSystem && field.fieldType !== 'LOOKUP') {
+      // Find all LOOKUPs that reference this column name as their target
+      const candidateLookups = await this.prisma.sysField.findMany({
+        where: {
+          fieldType: 'LOOKUP',
+          options: { path: ['targetFieldColumnName'], equals: field.columnName },
+        },
+        select: { id: true, name: true, columnName: true, options: true },
+      });
+
+      if (candidateLookups.length > 0) {
+        // For each candidate, check if its source REFERENCE points to this field's model
+        const matchingLookups: Array<{ name: string; columnName: string }> = [];
+        for (const lookup of candidateLookups) {
+          const lookupOptions = (lookup as any).options as any;
+          const sourceFieldId = lookupOptions?.sourceFieldId;
+          if (!sourceFieldId) continue;
+
+          const sourceField = await this.prisma.sysField.findUnique({
+            where: { id: sourceFieldId },
+            select: { fieldType: true, options: true },
+          });
+          if (!sourceField) continue;
+
+          if (
+            sourceField.fieldType === 'REFERENCE' &&
+            (sourceField.options as any)?.targetModelId === field.modelId
+          ) {
+            matchingLookups.push({ name: (lookup as any).name, columnName: (lookup as any).columnName });
+          }
+        }
+
+        if (matchingLookups.length > 0) {
+          throw new BusinessException(
+            409,
+            ErrorCodes.FIELD_HAS_DEPENDENT_LOOKUPS,
+            JSON.stringify(matchingLookups),
+          );
+        }
+      }
+    }
+
     // MULTI_REFERENCE: drop junction table and delete reverse field
     if (field.fieldType === 'MULTI_REFERENCE') {
       const options = field.options as any;
