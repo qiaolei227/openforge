@@ -553,6 +553,25 @@ export class FieldService {
       );
     }
 
+    // Task 4: Source field deletion protection — if this field can be a LOOKUP source,
+    // check whether any LOOKUP fields depend on it as their sourceFieldId.
+    if ((['REFERENCE', 'USER', 'ORGANIZATION'] as string[]).includes(field.fieldType)) {
+      const dependentLookups = await this.prisma.sysField.findMany({
+        where: {
+          fieldType: 'LOOKUP',
+          options: { path: ['sourceFieldId'], equals: field.id },
+        },
+        select: { id: true, name: true, columnName: true },
+      });
+      if (dependentLookups.length > 0) {
+        throw new BusinessException(
+          409,
+          ErrorCodes.FIELD_HAS_DEPENDENT_LOOKUPS,
+          JSON.stringify(dependentLookups.map((d) => ({ name: (d as any).name, columnName: (d as any).columnName }))),
+        );
+      }
+    }
+
     // MULTI_REFERENCE: drop junction table and delete reverse field
     if (field.fieldType === 'MULTI_REFERENCE') {
       const options = field.options as any;

@@ -308,4 +308,53 @@ describe('FieldService', () => {
       ).rejects.toSatisfy((e: any) => e instanceof BusinessException && (e.getResponse() as any).errorCode === 'LOOKUP_TARGET_TYPE_NOT_ALLOWED');
     });
   });
+
+  describe('delete — source field protection (Task 4)', () => {
+    it('throws FIELD_HAS_DEPENDENT_LOOKUPS when LOOKUPs depend on a REFERENCE source field', async () => {
+      prisma.sysField.findUnique.mockResolvedValueOnce({
+        id: 'ref-field-1',
+        fieldType: 'REFERENCE',
+        isSystem: false,
+        modelId: 'model-1',
+        entityId: null,
+        columnName: 'customer_id',
+        options: { targetModelId: 'target-model' },
+      });
+      // dependent LOOKUPs found
+      prisma.sysField.findMany.mockResolvedValueOnce([
+        { id: 'lookup-1', name: '客户名称', columnName: 'customer_name' },
+      ]);
+
+      await expect(service.delete('ref-field-1')).rejects.toSatisfy(
+        (e: any) => e instanceof BusinessException && (e.getResponse() as any).errorCode === 'FIELD_HAS_DEPENDENT_LOOKUPS',
+      );
+    });
+
+    it('allows deletion of REFERENCE field when no LOOKUPs depend on it', async () => {
+      prisma.sysField.findUnique.mockResolvedValueOnce({
+        id: 'ref-field-2',
+        fieldType: 'REFERENCE',
+        isSystem: false,
+        modelId: 'model-1',
+        entityId: null,
+        columnName: 'supplier_id',
+        isUnique: false,
+        options: { targetModelId: 'target-model' },
+      });
+      // no dependent LOOKUPs
+      prisma.sysField.findMany.mockResolvedValueOnce([]);
+      // Task 5: no candidate LOOKUPs by targetFieldColumnName for REFERENCE field
+      // REFERENCE is in the LOOKUP_TARGET blacklist actually – wait, REFERENCE is the source field
+      // Task 5 scan: candidateLookups for columnName 'supplier_id'
+      prisma.sysField.findMany.mockResolvedValueOnce([]);
+      // proceed with delete
+      prisma.sysField.delete.mockResolvedValueOnce({});
+      prisma.sysModel.findUnique.mockResolvedValueOnce({ id: 'model-1', tableName: 'app_model', dataScope: 'shared' });
+      prisma.sysEntity.findUnique.mockResolvedValueOnce(null);
+      ddlManager.dropColumn.mockResolvedValueOnce(undefined);
+
+      await expect(service.delete('ref-field-2')).resolves.toBeUndefined();
+    });
+  });
+
 });
