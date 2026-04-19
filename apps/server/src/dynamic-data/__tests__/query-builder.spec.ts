@@ -183,6 +183,90 @@ describe('QueryBuilderService entity filter', () => {
   });
 });
 
+// ─── LOOKUP JOIN tests (Tasks 11-14) ───────────────────────────────────────
+
+const lookupMetaFixture = [
+  {
+    fieldId: 'f_lkp',
+    lookupColumnName: 'material_name',
+    alias: 'lk_f_lkp',
+    sourceColumnName: 'material_id',
+    firstHopTable: 'biz."app_material"',
+    firstHopColumn: 'name',
+  },
+];
+
+describe('QueryBuilderService LOOKUP JOIN (Task 11)', () => {
+  it('emits LEFT JOIN when filter references a LOOKUP', () => {
+    const { dataSql, params } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_name', fieldType: 'LOOKUP' },
+      ],
+      { filter: { op: 'and', conditions: [{ field: 'material_name', op: 'like', value: '螺丝' }] } },
+      'shared', 'org-1', false, null, undefined,
+      lookupMetaFixture,
+    );
+    expect(dataSql).toContain('LEFT JOIN biz."app_material" AS "lk_f_lkp"');
+    expect(dataSql).toMatch(/ON\s+biz\."app_order_item"\."material_id"\s*=\s*"lk_f_lkp"\."id"/);
+    expect(dataSql).toContain('"lk_f_lkp"."name" ILIKE');
+    expect(params).toContain('%螺丝%');
+  });
+
+  it('does NOT emit JOIN when LOOKUP is not referenced in filter or sort', () => {
+    const { dataSql } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_name', fieldType: 'LOOKUP' },
+      ],
+      { filter: { op: 'and', conditions: [{ field: 'material_id', op: 'eq', value: 'some-uuid' }] } },
+      'shared', 'org-1', false, null, undefined,
+      lookupMetaFixture,
+    );
+    expect(dataSql).not.toContain('LEFT JOIN');
+  });
+
+  it('uses bare SELECT * when no LOOKUPs are active', () => {
+    const { dataSql } = svc.build(
+      'app_order_item',
+      [{ columnName: 'name', fieldType: 'STRING' }],
+      {},
+      'shared', 'org-1',
+    );
+    expect(dataSql).toMatch(/^SELECT \* FROM/);
+  });
+
+  it('uses qualified SELECT when LOOKUP is active', () => {
+    const { dataSql } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_name', fieldType: 'LOOKUP' },
+      ],
+      { filter: { op: 'and', conditions: [{ field: 'material_name', op: 'like', value: 'x' }] } },
+      'shared', 'org-1', false, null, undefined,
+      lookupMetaFixture,
+    );
+    expect(dataSql).toMatch(/SELECT\s+biz\."app_order_item"\.\*/);
+  });
+
+  it('includes LOOKUP JOIN in countSql', () => {
+    const { countSql } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_name', fieldType: 'LOOKUP' },
+      ],
+      { filter: { op: 'and', conditions: [{ field: 'material_name', op: 'like', value: 'x' }] } },
+      'shared', 'org-1', false, null, undefined,
+      lookupMetaFixture,
+    );
+    expect(countSql).toContain('LEFT JOIN biz."app_material" AS "lk_f_lkp"');
+  });
+});
+
 describe('QueryBuilderService.buildFilterOnly', () => {
   it('builds a pure WHERE fragment with no param offset', () => {
     const result = svc.buildFilterOnly(

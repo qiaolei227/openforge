@@ -13,6 +13,34 @@ interface ResolveOptions {
 }
 
 /**
+ * Metadata for a LOOKUP field that requires a LEFT JOIN in the query builder.
+ * The caller prepares this async metadata and passes it synchronously to
+ * QueryBuilderService.build() so the builder stays sync.
+ */
+export interface LookupJoinMeta {
+  /** LOOKUP field id */
+  fieldId: string;
+  /** LOOKUP field's own columnName (used as SELECT alias) */
+  lookupColumnName: string;
+  /** JOIN alias, e.g. `lk_${fieldId}` */
+  alias: string;
+  /** Source FK column on the main table */
+  sourceColumnName: string;
+  /** Fully-quoted first-hop table, e.g. `biz."app_material"` or `public."sys_user"` */
+  firstHopTable: string;
+  /** Target column on the first-hop table — the value we want */
+  firstHopColumn: string;
+  /** Optional second hop when first-hop column's fieldType is REFERENCE/USER/ORG */
+  secondHopAlias?: string;
+  /** Fully-quoted second-hop table */
+  secondHopTable?: string;
+  /** Display column on second-hop table */
+  secondHopColumn?: string;
+  /** The first-hop column whose value we use to join to second hop */
+  secondHopJoinFromColumn?: string;
+}
+
+/**
  * LookupResolverService — Stage B/C of the LOOKUP read path.
  *
  * Stage B: For each LOOKUP field, collect non-null FK values from records,
@@ -30,6 +58,74 @@ export class LookupResolverService {
   private readonly logger = new Logger(LookupResolverService.name);
 
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  /**
+   * Build JOIN metadata for all LOOKUP fields in the given field list.
+   * Resolves target tables asynchronously so QueryBuilderService.build() can stay sync.
+   *
+   * REFERENCE sources → biz."tableName"
+   * USER sources      → public."sys_user"
+   * ORGANIZATION sources → public."sys_org"
+   *
+   * Second-hop support (for LOOKUP targets that are themselves FK fields) is
+   * added in a follow-up commit.
+   */
+  async buildJoinMeta(
+    fields: Array<{ id: string; columnName: string; fieldType: string; options: any }>,
+  ): Promise<LookupJoinMeta[]> {
+    const lookupFields = fields.filter((f) => f.fieldType === 'LOOKUP');
+    if (lookupFields.length === 0) return [];
+
+    const result: LookupJoinMeta[] = [];
+
+    for (const lf of lookupFields) {
+      const sourceFieldId = lf.options?.sourceFieldId;
+      if (!sourceFieldId) continue;
+
+      // Find source field in the same fields array
+      const sourceField = fields.find((f) => f.id === sourceFieldId);
+      if (!sourceField) {
+        this.logger.warn(`[LOOKUP buildJoinMeta] sourceFieldId=${sourceFieldId} not found in fields`);
+        continue;
+      }
+
+      const targetFieldColumnName: string | undefined = lf.options?.targetFieldColumnName;
+      if (!targetFieldColumnName) continue;
+
+      let firstHopTable: string;
+
+      if (sourceField.fieldType === 'REFERENCE') {
+        const targetModelId = (sourceField.options as any)?.targetModelId;
+        if (!targetModelId) continue;
+        const targetModel = await this.prisma.sysModel.findUnique({
+          where: { id: targetModelId },
+          select: { tableName: true },
+        });
+        if (!targetModel) continue;
+        firstHopTable = `biz."${targetModel.tableName}"`;
+      } else if (sourceField.fieldType === 'USER') {
+        firstHopTable = `public."sys_user"`;
+      } else if (sourceField.fieldType === 'ORGANIZATION') {
+        firstHopTable = `public."sys_org"`;
+      } else {
+        this.logger.warn(
+          `[LOOKUP buildJoinMeta] sourceField ${sourceFieldId} has unsupported type ${sourceField.fieldType}`,
+        );
+        continue;
+      }
+
+      result.push({
+        fieldId: lf.id,
+        lookupColumnName: lf.columnName,
+        alias: `lk_${lf.id}`,
+        sourceColumnName: sourceField.columnName,
+        firstHopTable,
+        firstHopColumn: targetFieldColumnName,
+      });
+    }
+
+    return result;
+  }
 
   async resolve(
     records: Record<string, any>[],

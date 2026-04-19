@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
 import { parseEntityField } from './filter-entity-field';
+import type { LookupJoinMeta } from './lookup-resolver.service';
 
 // System fields that can be used in queries
 const SYSTEM_COLUMNS = [
@@ -58,17 +59,22 @@ export class QueryBuilderService {
    * @param query - the query DTO from the request
    * @param dataScope - 'private' or 'shared'
    * @param orgId - current user's organization ID
+   * @param isTree - whether the model is a tree model
+   * @param defaultSort - model-level default sort
+   * @param entities - entity filter registry for EXISTS subqueries
+   * @param lookupMeta - pre-built JOIN metadata for LOOKUP fields (from LookupResolverService.buildJoinMeta)
    * @returns dataSql (with LIMIT/OFFSET), countSql, and params array
    */
   build(
     tableName: string,
-    fields: Array<{ columnName: string; fieldType: string }>,
+    fields: Array<{ id?: string; columnName: string; fieldType: string }>,
     query: any,
     dataScope: string,
     orgId: string,
     isTree = false,
     defaultSort?: Array<{ field: string; order: 'asc' | 'desc' }> | null,
     entities?: EntityFilterRegistry,
+    lookupMeta?: LookupJoinMeta[],
   ): QueryResult {
     const params: any[] = [];
     const conditions: string[] = [];
@@ -77,6 +83,9 @@ export class QueryBuilderService {
       ...(isTree ? ['parent_id'] : []),
       ...fields.map((f) => f.columnName),
     ];
+
+    // Determine which LOOKUP fields are "active" (referenced in filter or sort)
+    const activeLookups = this.collectActiveLookups(query.filter, query.sort, lookupMeta);
 
     // org_id filter for private and distributed models
     if (dataScope === 'private' || dataScope === 'distributed') {
@@ -101,7 +110,7 @@ export class QueryBuilderService {
 
     // Parse filter tree
     if (query.filter) {
-      const filterSql = this.buildFilterGroup(query.filter, validColumns, params, tableName, entities);
+      const filterSql = this.buildFilterGroup(query.filter, validColumns, params, tableName, entities, activeLookups);
       if (filterSql) conditions.push(filterSql);
     }
 
@@ -129,8 +138,18 @@ export class QueryBuilderService {
     params.push(offset);
     const offsetParam = params.length;
 
-    const dataSql = `SELECT * FROM biz."${tableName}" ${whereClause} ${orderBy} LIMIT $${limitParam} OFFSET $${offsetParam}`;
-    const countSql = `SELECT COUNT(*)::int as "total" FROM biz."${tableName}" ${whereClause}`;
+    // Build JOIN clauses and SELECT extensions for active LOOKUPs
+    const joinClauses = this.buildLookupJoins(tableName, activeLookups);
+    const lookupSelects = this.buildLookupSelects(activeLookups);
+
+    const selectClause = lookupSelects.length > 0
+      ? `SELECT biz."${tableName}".*, ${lookupSelects.join(', ')}`
+      : `SELECT *`;
+    const fromClause = `FROM biz."${tableName}"`;
+    const joinClause = joinClauses.length > 0 ? ` ${joinClauses.join(' ')}` : '';
+
+    const dataSql = `${selectClause} ${fromClause}${joinClause} ${whereClause} ${orderBy} LIMIT $${limitParam} OFFSET $${offsetParam}`;
+    const countSql = `SELECT COUNT(*)::int as "total" FROM biz."${tableName}"${joinClause} ${whereClause}`;
 
     return { dataSql, countSql, params };
   }
@@ -167,6 +186,7 @@ export class QueryBuilderService {
     params: any[],
     mainTable?: string,
     entities?: EntityFilterRegistry,
+    lookupMeta?: LookupJoinMeta[],
   ): string {
     if (!group || !group.op || !Array.isArray(group.conditions)) {
       return '';
@@ -178,11 +198,11 @@ export class QueryBuilderService {
     for (const condition of group.conditions) {
       if ('conditions' in condition && 'op' in condition) {
         // Nested group
-        const nested = this.buildFilterGroup(condition, validColumns, params, mainTable, entities);
+        const nested = this.buildFilterGroup(condition, validColumns, params, mainTable, entities, lookupMeta);
         if (nested) parts.push(`(${nested})`);
       } else if ('field' in condition) {
         // Leaf condition
-        const sql = this.buildCondition(condition, validColumns, params, mainTable, entities);
+        const sql = this.buildCondition(condition, validColumns, params, mainTable, entities, lookupMeta);
         if (sql) parts.push(sql);
       }
     }
@@ -197,10 +217,19 @@ export class QueryBuilderService {
     params: any[],
     mainTable?: string,
     entities?: EntityFilterRegistry,
+    lookupMeta?: LookupJoinMeta[],
   ): string {
     const parsed = parseEntityField(condition.field);
 
     if (parsed.kind === 'main') {
+      // Check if this column is a LOOKUP that has been JOINed — rewrite ref to alias
+      const lkp = lookupMeta?.find((m) => m.lookupColumnName === parsed.columnName);
+      if (lkp) {
+        const ref = lkp.secondHopAlias
+          ? `"${lkp.secondHopAlias}"."${lkp.secondHopColumn}"`
+          : `"${lkp.alias}"."${lkp.firstHopColumn}"`;
+        return this.buildLeafSql(ref, condition.op, condition.value, params);
+      }
       const columnName = this.resolveColumn(parsed.columnName, validColumns);
       return this.buildLeafSql(`"${columnName}"`, condition.op, condition.value, params);
     }
@@ -382,5 +411,78 @@ export class QueryBuilderService {
       );
     }
     return fieldName;
+  }
+
+  /**
+   * Collect LOOKUP entries that are actually referenced in filter conditions
+   * so we only JOIN tables that are needed.
+   *
+   * Only plain (main-table) field references are considered —
+   * entity-prefixed fields (__oneToOne__, __detail__) use EXISTS subqueries
+   * and are out of scope for LOOKUP JOINs.
+   */
+  private collectActiveLookups(
+    filter: any,
+    sort: any[] | undefined,
+    lookupMeta?: LookupJoinMeta[],
+  ): LookupJoinMeta[] {
+    if (!lookupMeta || lookupMeta.length === 0) return [];
+
+    const usedColumns = new Set<string>();
+
+    // Walk filter tree and collect plain field references
+    const walkFilter = (group: any) => {
+      if (!group || !Array.isArray(group.conditions)) return;
+      for (const cond of group.conditions) {
+        if ('conditions' in cond && 'op' in cond) {
+          walkFilter(cond);
+        } else if (typeof cond.field === 'string') {
+          // Only plain (main-table) references — no entity prefix
+          if (!cond.field.startsWith('__')) {
+            usedColumns.add(cond.field);
+          }
+        }
+      }
+    };
+    if (filter) walkFilter(filter);
+
+    // Collect sort field references
+    if (sort) {
+      for (const s of sort) {
+        if (typeof s.field === 'string' && !s.field.startsWith('__')) {
+          usedColumns.add(s.field);
+        }
+      }
+    }
+
+    return lookupMeta.filter((m) => usedColumns.has(m.lookupColumnName));
+  }
+
+  /** Build LEFT JOIN SQL clauses for active LOOKUP fields */
+  private buildLookupJoins(tableName: string, activeLookups: LookupJoinMeta[]): string[] {
+    const joins: string[] = [];
+    for (const lkp of activeLookups) {
+      // First hop: main table FK → target table PK
+      joins.push(
+        `LEFT JOIN ${lkp.firstHopTable} AS "${lkp.alias}" ON biz."${tableName}"."${lkp.sourceColumnName}" = "${lkp.alias}"."id"`,
+      );
+      // Second hop (when target field is itself a FK type)
+      if (lkp.secondHopAlias && lkp.secondHopTable && lkp.secondHopJoinFromColumn) {
+        joins.push(
+          `LEFT JOIN ${lkp.secondHopTable} AS "${lkp.secondHopAlias}" ON "${lkp.alias}"."${lkp.secondHopJoinFromColumn}" = "${lkp.secondHopAlias}"."id"`,
+        );
+      }
+    }
+    return joins;
+  }
+
+  /** Build SELECT alias expressions for active LOOKUP fields */
+  private buildLookupSelects(activeLookups: LookupJoinMeta[]): string[] {
+    return activeLookups.map((lkp) => {
+      if (lkp.secondHopAlias && lkp.secondHopColumn) {
+        return `"${lkp.secondHopAlias}"."${lkp.secondHopColumn}" AS "${lkp.lookupColumnName}"`;
+      }
+      return `"${lkp.alias}"."${lkp.firstHopColumn}" AS "${lkp.lookupColumnName}"`;
+    });
   }
 }

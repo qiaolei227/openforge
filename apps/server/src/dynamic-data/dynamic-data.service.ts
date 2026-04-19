@@ -49,9 +49,20 @@ export class DynamicDataService {
 
     const entitiesRegistry = this.buildEntityFilterRegistry(model, queryDto);
 
+    // Pre-build async JOIN metadata for LOOKUP fields so the sync query builder can use it
+    const lookupMeta = await this.lookupResolver.buildJoinMeta(
+      model.fields.map((f) => ({
+        id: (f as any).id,
+        columnName: f.columnName,
+        fieldType: f.fieldType,
+        options: (f as any).options,
+      })),
+    );
+
     const { dataSql, countSql, params } = this.queryBuilder.build(
       model.tableName,
       model.fields.map((f) => ({
+        id: (f as any).id,
         columnName: f.columnName,
         fieldType: f.fieldType,
       })),
@@ -61,6 +72,7 @@ export class DynamicDataService {
       model.isTree,
       model.defaultSort as Array<{ field: string; order: 'asc' | 'desc' }> | null,
       entitiesRegistry,
+      lookupMeta,
     );
 
     const [data, countResult] = await Promise.all([
