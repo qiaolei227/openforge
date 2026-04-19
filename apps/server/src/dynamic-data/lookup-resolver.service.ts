@@ -13,14 +13,17 @@ interface ResolveOptions {
 }
 
 /**
- * LookupResolverService — Stage B of the LOOKUP read path.
+ * LookupResolverService — Stage B/C of the LOOKUP read path.
  *
  * Stage B: For each LOOKUP field, collect non-null FK values from records,
  *          batch-query the target table via an IN query, and write resolved
  *          scalar values back to record[lookup.columnName].
  *
+ * Stage C: If the resolved target field is itself a FK type
+ *          (REFERENCE / USER / ORGANIZATION), perform a second hop to
+ *          replace the raw FK with human-readable display text.
+ *
  * Supports REFERENCE / USER / ORGANIZATION as the source FK field type.
- * Stage C (two-hop display for FK target fields) is handled separately.
  */
 @Injectable()
 export class LookupResolverService {
@@ -69,6 +72,14 @@ export class LookupResolverService {
       arr.push(lf);
       bySourceField.set(sfId, arr);
     }
+
+    // Track LOOKUP fields whose resolved target value is itself a FK type
+    // so Stage C can perform a second display-text hop.
+    type SecondHopMeta = {
+      lookupField: FieldMeta;
+      targetField: any; // { columnName, fieldType, options }
+    };
+    const secondHopQueue: SecondHopMeta[] = [];
 
     for (const [sfId, lfs] of bySourceField) {
       const sourceField = sourceFieldMap.get(sfId);
@@ -154,6 +165,14 @@ export class LookupResolverService {
         const targetColName = lf.options?.targetFieldColumnName;
         if (!targetColName) continue;
 
+        // Check if the target field is itself a FK type — for Stage C
+        let targetFieldMeta: any = null;
+        if (targetModel) {
+          targetFieldMeta = (targetModel.fields as any[]).find(
+            (tf: any) => tf.columnName === targetColName,
+          );
+        }
+
         for (const r of records) {
           if (opts.skipAlreadyResolved && r[lf.columnName] !== undefined) {
             continue;
@@ -171,8 +190,71 @@ export class LookupResolverService {
             r[lf.columnName] = null;
             continue;
           }
+          // Write the raw value; Stage C will overwrite with display text if it's a FK
           r[lf.columnName] = targetRow[targetColName] ?? null;
         }
+
+        // Queue for Stage C if the target field is itself a FK type
+        if (
+          targetFieldMeta &&
+          ['REFERENCE', 'USER', 'ORGANIZATION'].includes(targetFieldMeta.fieldType)
+        ) {
+          secondHopQueue.push({ lookupField: lf, targetField: targetFieldMeta });
+        }
+      }
+    }
+
+    // ─── Stage C — second-hop display resolution for FK target fields ─────────
+    if (secondHopQueue.length === 0) return;
+
+    for (const { lookupField, targetField } of secondHopQueue) {
+      const ft = targetField.fieldType as 'REFERENCE' | 'USER' | 'ORGANIZATION';
+
+      let secondTableExpr: string;
+      let displayColumn: string;
+
+      if (ft === 'REFERENCE') {
+        const secondTargetModelId = (targetField.options as any)?.targetModelId;
+        if (!secondTargetModelId) continue;
+        displayColumn = (targetField.options as any)?.targetDisplayField || 'name';
+        const secondModel = await this.prisma.sysModel.findUnique({
+          where: { id: secondTargetModelId },
+          select: { tableName: true },
+        });
+        if (!secondModel) continue;
+        secondTableExpr = `biz."${secondModel.tableName}"`;
+      } else if (ft === 'USER') {
+        secondTableExpr = `public."sys_user"`;
+        displayColumn = 'name';
+      } else {
+        // ORGANIZATION
+        secondTableExpr = `public."sys_org"`;
+        displayColumn = 'name';
+      }
+
+      // Collect the raw FK values Stage B wrote into record[lookup.columnName]
+      const fkSet2 = new Set<string>();
+      for (const r of records) {
+        const v = r[lookupField.columnName];
+        if (v != null) fkSet2.add(String(v));
+      }
+      if (fkSet2.size === 0) continue;
+
+      const fks2 = [...fkSet2];
+      const placeholders2 = fks2.map((_, i) => `$${i + 1}::uuid`).join(', ');
+
+      const rows2: any[] = await this.prisma.$queryRawUnsafe(
+        `SELECT "id", "${displayColumn}" FROM ${secondTableExpr} WHERE "id" IN (${placeholders2})`,
+        ...fks2,
+      );
+      const displayMap = new Map(
+        rows2.map((r: any) => [String(r.id), r[displayColumn]]),
+      );
+
+      for (const r of records) {
+        const rawFk = r[lookupField.columnName];
+        if (rawFk == null) continue;
+        r[lookupField.columnName] = displayMap.get(String(rawFk)) ?? null;
       }
     }
   }

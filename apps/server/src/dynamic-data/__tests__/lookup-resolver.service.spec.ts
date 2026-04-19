@@ -150,4 +150,64 @@ describe('LookupResolverService', () => {
     expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
     expect(records[0].material_name).toBe('preset');
   });
+
+  // ─── Test 5: two-hop for REFERENCE target ─────────────────────────────────
+  it('should resolve two-hop LOOKUP when target field is REFERENCE', async () => {
+    // LOOKUP: material_supplier_name
+    //   source: material_id (REFERENCE → material)
+    //   target col: default_supplier_id (REFERENCE → supplier, display='name')
+    const records = [
+      { id: 'r1', material_id: 'mat_1' },
+    ];
+    const lookupField: any = {
+      id: 'lf_supplier',
+      columnName: 'material_supplier_name',
+      fieldType: 'LOOKUP',
+      options: {
+        sourceFieldId: 'sf_material_id',
+        targetFieldColumnName: 'default_supplier_id',
+      },
+    };
+    const sourceFieldMeta = {
+      id: 'sf_material_id',
+      columnName: 'material_id',
+      fieldType: 'REFERENCE',
+      options: { targetModelId: 'm_material' },
+    };
+
+    // sysField.findMany returns source field
+    prisma.sysField.findMany.mockResolvedValue([sourceFieldMeta]);
+
+    // sysModel.findUnique called twice:
+    //   1st call → material model (tableName + fields including default_supplier_id)
+    //   2nd call → supplier model (tableName only, for Stage C)
+    prisma.sysModel.findUnique
+      .mockResolvedValueOnce({
+        id: 'm_material',
+        tableName: 'app_material',
+        fields: [
+          {
+            columnName: 'default_supplier_id',
+            fieldType: 'REFERENCE',
+            options: { targetModelId: 'm_supplier', targetDisplayField: 'name' },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        id: 'm_supplier',
+        tableName: 'app_supplier',
+      });
+
+    // $queryRawUnsafe called twice:
+    //   1st → material table: { id: 'mat_1', default_supplier_id: 'sup_1' }
+    //   2nd → supplier table: { id: 'sup_1', name: '海尔供应商' }
+    prisma.$queryRawUnsafe
+      .mockResolvedValueOnce([{ id: 'mat_1', default_supplier_id: 'sup_1' }])
+      .mockResolvedValueOnce([{ id: 'sup_1', name: '海尔供应商' }]);
+
+    await service.resolve(records, [lookupField]);
+
+    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(2);
+    expect(records[0].material_supplier_name).toBe('海尔供应商');
+  });
 });
