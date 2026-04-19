@@ -14,7 +14,7 @@ export class CreateFieldDto {
   columnName!: string;
 
   @IsString()
-  @IsIn(['STRING', 'TEXT', 'RICHTEXT', 'INTEGER', 'DECIMAL', 'BOOLEAN', 'DATE', 'DATETIME', 'TIME', 'ENUM', 'MULTI_ENUM', 'AUTO_NUMBER', 'REFERENCE', 'MULTI_REFERENCE', 'USER', 'ORGANIZATION', 'FILE', 'IMAGE'])
+  @IsIn(['STRING', 'TEXT', 'RICHTEXT', 'INTEGER', 'DECIMAL', 'BOOLEAN', 'DATE', 'DATETIME', 'TIME', 'ENUM', 'MULTI_ENUM', 'AUTO_NUMBER', 'REFERENCE', 'MULTI_REFERENCE', 'USER', 'ORGANIZATION', 'FILE', 'IMAGE', 'LOOKUP'])
   fieldType!: string;
 
   @IsOptional()

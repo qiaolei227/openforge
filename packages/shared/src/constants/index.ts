@@ -15,7 +15,7 @@ export const FIELD_TYPES = [
   'FILE', 'IMAGE',
 ] as const;
 export const REFERENCE_FIELD_TYPES = ['REFERENCE', 'USER', 'ORGANIZATION'] as const;
-export const VIRTUAL_FIELD_TYPES = ['MULTI_REFERENCE'] as const;
+export const VIRTUAL_FIELD_TYPES = ['MULTI_REFERENCE', 'LOOKUP'] as const;
 export const FILE_FIELD_TYPES = ['FILE', 'IMAGE'] as const;
 export function isVirtualFieldType(type: string): boolean {
   return (VIRTUAL_FIELD_TYPES as readonly string[]).includes(type);

@@ -158,6 +158,145 @@ export class FieldService {
   }
 
   /**
+   * Hardcoded whitelists for USER/ORGANIZATION LOOKUP targets.
+   * These are platform sys_user / sys_org columns — not user-defined.
+   */
+  private static readonly USER_LOOKUP_FIELDS: Record<string, string> = {
+    name: 'STRING',
+    username: 'STRING',
+    email: 'STRING',
+    phone: 'STRING',
+    org_id: 'STRING',
+    status: 'STRING',
+  };
+
+  private static readonly ORG_LOOKUP_FIELDS: Record<string, string> = {
+    name: 'STRING',
+    code: 'STRING',
+    parent_id: 'STRING',
+    path: 'STRING',
+  };
+
+  /** Field types that cannot be the target of a LOOKUP */
+  private static readonly LOOKUP_TARGET_BLACKLIST = ['MULTI_REFERENCE', 'FILE', 'IMAGE', 'LOOKUP'] as const;
+
+  /**
+   * Validate LOOKUP options — shared between create and update.
+   * Throws a BusinessException with the appropriate error code on any violation.
+   */
+  private async validateLookupOptions(params: {
+    modelId: string;
+    entityId?: string | null;
+    options: { sourceFieldId?: string; targetFieldColumnName?: string } | null | undefined;
+  }): Promise<void> {
+    const { modelId, entityId, options } = params;
+
+    if (!options?.sourceFieldId || !options?.targetFieldColumnName) {
+      throw new BusinessException(
+        400,
+        ErrorCodes.LOOKUP_SOURCE_FIELD_NOT_FOUND,
+        'LOOKUP requires options.sourceFieldId and options.targetFieldColumnName',
+      );
+    }
+
+    const { sourceFieldId, targetFieldColumnName } = options;
+
+    // Load the source field
+    const sourceField = await this.prisma.sysField.findUnique({ where: { id: sourceFieldId } });
+    if (!sourceField) {
+      throw new BusinessException(
+        400,
+        ErrorCodes.LOOKUP_SOURCE_FIELD_NOT_FOUND,
+        `Source field '${sourceFieldId}' not found`,
+      );
+    }
+
+    // Validate source field type
+    if (!(['REFERENCE', 'USER', 'ORGANIZATION'] as string[]).includes(sourceField.fieldType)) {
+      throw new BusinessException(
+        400,
+        ErrorCodes.LOOKUP_SOURCE_TYPE_INVALID,
+        `Source field type '${sourceField.fieldType}' is not allowed for LOOKUP; must be REFERENCE, USER, or ORGANIZATION`,
+      );
+    }
+
+    // Source field must belong to the same model AND same entity (or both null)
+    const normalizedCurrentEntity = entityId || null;
+    const normalizedSourceEntity = (sourceField as any).entityId || null;
+    if (sourceField.modelId !== modelId || normalizedSourceEntity !== normalizedCurrentEntity) {
+      throw new BusinessException(
+        400,
+        ErrorCodes.LOOKUP_SOURCE_MUST_BE_SAME_RECORD,
+        'Source field must belong to the same model and entity as the LOOKUP field',
+      );
+    }
+
+    const sourceOptions = (sourceField.options as any) ?? {};
+
+    if (sourceField.fieldType === 'REFERENCE') {
+      // For REFERENCE: look up the target model and find the column
+      const targetModelId = sourceOptions.targetModelId;
+      if (!targetModelId) {
+        throw new BusinessException(
+          400,
+          ErrorCodes.LOOKUP_SOURCE_FIELD_NOT_FOUND,
+          'Source REFERENCE field is missing targetModelId',
+        );
+      }
+
+      const targetModel = await this.prisma.sysModel.findUnique({
+        where: { id: targetModelId },
+        include: { fields: { where: { deletedAt: null } } },
+      });
+      if (!targetModel) {
+        throw new BusinessException(
+          400,
+          ErrorCodes.LOOKUP_SOURCE_FIELD_NOT_FOUND,
+          `Target model '${targetModelId}' not found`,
+        );
+      }
+
+      const targetField = (targetModel as any).fields.find(
+        (f: any) => f.columnName === targetFieldColumnName,
+      );
+      if (!targetField) {
+        throw new BusinessException(
+          400,
+          ErrorCodes.LOOKUP_SOURCE_FIELD_NOT_FOUND,
+          `Target field '${targetFieldColumnName}' not found in model '${targetModelId}'`,
+        );
+      }
+
+      // Check target type blacklist
+      if ((FieldService.LOOKUP_TARGET_BLACKLIST as readonly string[]).includes(targetField.fieldType)) {
+        throw new BusinessException(
+          400,
+          ErrorCodes.LOOKUP_TARGET_TYPE_NOT_ALLOWED,
+          `Target field type '${targetField.fieldType}' is not allowed as a LOOKUP target`,
+        );
+      }
+    } else if (sourceField.fieldType === 'USER') {
+      // For USER: check against hardcoded whitelist
+      if (!(targetFieldColumnName in FieldService.USER_LOOKUP_FIELDS)) {
+        throw new BusinessException(
+          400,
+          ErrorCodes.LOOKUP_SOURCE_FIELD_NOT_FOUND,
+          `Column '${targetFieldColumnName}' is not a valid USER lookup target`,
+        );
+      }
+    } else if (sourceField.fieldType === 'ORGANIZATION') {
+      // For ORGANIZATION: check against hardcoded whitelist
+      if (!(targetFieldColumnName in FieldService.ORG_LOOKUP_FIELDS)) {
+        throw new BusinessException(
+          400,
+          ErrorCodes.LOOKUP_SOURCE_FIELD_NOT_FOUND,
+          `Column '${targetFieldColumnName}' is not a valid ORGANIZATION lookup target`,
+        );
+      }
+    }
+  }
+
+  /**
    * 新建字段（元数据 + 即时 DDL）
    */
   async create(modelId: string, dto: CreateFieldDto) {
@@ -199,6 +338,15 @@ export class FieldService {
         ErrorCodes.FIELD_TYPE_NOT_ALLOWED_IN_ENTITY,
         'MULTI_REFERENCE is not allowed on entity (sub-table) fields',
       );
+    }
+
+    // LOOKUP: validate source/target options before persisting
+    if (dto.fieldType === 'LOOKUP') {
+      await this.validateLookupOptions({
+        modelId,
+        entityId: dto.entityId,
+        options: dto.options,
+      });
     }
 
     // 如果未指定 sortOrder，自动排到末尾
@@ -316,6 +464,15 @@ export class FieldService {
           `System field '${field.columnName}' cannot be modified`,
         );
       }
+    }
+
+    // LOOKUP: re-validate options if options are being updated
+    if (field.fieldType === 'LOOKUP' && dto.options !== undefined) {
+      await this.validateLookupOptions({
+        modelId: field.modelId,
+        entityId: (field as any).entityId,
+        options: dto.options,
+      });
     }
 
     const updated = await this.prisma.sysField.update({
