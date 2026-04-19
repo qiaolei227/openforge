@@ -396,6 +396,75 @@ describe('QueryBuilderService two-hop JOIN (Task 13)', () => {
   });
 });
 
+describe('QueryBuilderService LOOKUP SELECT alias (Task 14)', () => {
+  it('selects the LOOKUP column when JOINed so the resolver can skip it', () => {
+    const { dataSql } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_name', fieldType: 'LOOKUP' },
+      ],
+      { filter: { op: 'and', conditions: [{ field: 'material_name', op: 'like', value: 'x' }] } },
+      'shared', 'org-1', false, null, undefined,
+      lookupMetaFixture,
+    );
+    expect(dataSql).toMatch(
+      /SELECT\s+biz\."app_order_item"\.\*,\s*"lk_f_lkp"\."name"\s+AS\s+"material_name"/,
+    );
+  });
+
+  it('selects second-hop column for two-hop LOOKUP', () => {
+    const twoHopMeta = [
+      {
+        fieldId: 'f_lkp',
+        lookupColumnName: 'material_supplier_name',
+        alias: 'lk_f_lkp',
+        sourceColumnName: 'material_id',
+        firstHopTable: 'biz."app_material"',
+        firstHopColumn: 'default_supplier_id',
+        secondHopAlias: 'lk_f_lkp_display',
+        secondHopTable: 'biz."app_supplier"',
+        secondHopColumn: 'name',
+        secondHopJoinFromColumn: 'default_supplier_id',
+      },
+    ];
+    const { dataSql } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_supplier_name', fieldType: 'LOOKUP' },
+      ],
+      { filter: { op: 'and', conditions: [{ field: 'material_supplier_name', op: 'like', value: '海尔' }] } },
+      'shared', 'org-1', false, null, undefined,
+      twoHopMeta,
+    );
+    expect(dataSql).toMatch(
+      /SELECT\s+biz\."app_order_item"\.\*,\s*"lk_f_lkp_display"\."name"\s+AS\s+"material_supplier_name"/,
+    );
+  });
+
+  it('LOOKUP not in filter/sort has undefined value so resolver runs Stage B', () => {
+    // When LOOKUP is NOT JOINed, it won't appear in SELECT, so record[lookupColumnName]
+    // will be undefined after the raw SQL query → resolver's skipAlreadyResolved check
+    // (r[lf.columnName] === undefined) triggers Stage B resolution.
+    const { dataSql } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_name', fieldType: 'LOOKUP' },
+      ],
+      {},
+      'shared', 'org-1', false, null, undefined,
+      lookupMetaFixture,
+    );
+    // No JOIN → bare SELECT *
+    expect(dataSql).toMatch(/^SELECT \* FROM/);
+    expect(dataSql).not.toContain('LEFT JOIN');
+    // material_name won't be in SELECT, so it will be undefined on the raw record
+    expect(dataSql).not.toContain('"material_name"');
+  });
+});
+
 describe('QueryBuilderService.buildFilterOnly', () => {
   it('builds a pure WHERE fragment with no param offset', () => {
     const result = svc.buildFilterOnly(
