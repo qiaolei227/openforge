@@ -108,6 +108,8 @@ function formatLookupValue(
     }
 
     case 'ENUM': {
+      // choices are populated by the server via resolveDictChoices on the target field,
+      // then embedded into _resolvedTargetFieldOptions by resolveLookupTargetMeta.
       const choices: Array<{ value: string; label: string; color?: string }> =
         targetFieldOptions.choices ?? [];
       const choice = choices.find((c) => c.value === String(value));
@@ -120,10 +122,12 @@ function formatLookupValue(
           </span>
         );
       }
+      // No matching choice found (dict not yet loaded or stale) — show raw value
       return <span>{String(value)}</span>;
     }
 
     case 'MULTI_ENUM': {
+      // Same as ENUM: choices resolved server-side and carried in _resolvedTargetFieldOptions
       const choices: Array<{ value: string; label: string; color?: string }> =
         targetFieldOptions.choices ?? [];
       const vals: string[] = Array.isArray(value) ? value : [String(value)];
