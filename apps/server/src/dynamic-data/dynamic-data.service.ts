@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryBuilderService } from './query-builder.service';
 import type { EntityFilterRegistry } from './query-builder.service';
@@ -6,6 +6,7 @@ import { DeleteGuardService } from './delete-guard.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { ChildrenService } from './children.service';
 import { FieldService } from '../model/field.service';
+import { LookupResolverService } from './lookup-resolver.service';
 import {
   RecordCreatedEvent,
   RecordUpdatedEvent,
@@ -32,6 +33,8 @@ export class DynamicDataService {
     private eventBus: EventBusService,
     private childrenService: ChildrenService,
     private fieldService: FieldService,
+    @Inject(LookupResolverService)
+    private readonly lookupResolver: LookupResolverService,
   ) {}
 
   // ────────────────────────── Query ──────────────────────────
@@ -83,6 +86,7 @@ export class DynamicDataService {
     // Batch-resolve display values for REFERENCE/USER/ORGANIZATION fields
     if (data.length > 0) {
       await this.batchResolveDisplayValues(data, model.fields);
+      await this.lookupResolver.resolve(data, model.fields, { skipAlreadyResolved: true });
     }
 
     // Resolve 1:N detail rows (single entity, master-detail expand)
@@ -1280,6 +1284,9 @@ export class DynamicDataService {
         await this.batchResolveDisplayValues(childRows, resolvableFields);
       }
     }
+    if (childRows.length > 0) {
+      await this.lookupResolver.resolve(childRows, entity.fields, { skipAlreadyResolved: true });
+    }
 
     // Group by fk
     const byMaster = new Map<string, any[]>();
@@ -1347,6 +1354,9 @@ export class DynamicDataService {
           await this.batchResolveDisplayValues(childRows, resolvableFields);
         }
       }
+      if (childRows.length > 0) {
+        await this.lookupResolver.resolve(childRows, entity.fields, { skipAlreadyResolved: true });
+      }
 
       const byMaster = new Map<string, any>();
       for (const c of childRows) byMaster.set(c[fkCol], c);
@@ -1379,6 +1389,9 @@ export class DynamicDataService {
       }),
     ]);
 
+    // Resolve LOOKUP fields on the main record
+    await this.lookupResolver.resolve([record], model.fields, { skipAlreadyResolved: true });
+
     if (entities.length > 0) {
       const childrenMeta: Record<string, any> = {};
       for (const entity of entities) {
@@ -1397,6 +1410,7 @@ export class DynamicDataService {
             if (entityRefFields.length > 0) {
               await this.batchResolveDisplayValues(childRows, entityRefFields);
             }
+            await this.lookupResolver.resolve(childRows, entity.fields, { skipAlreadyResolved: true });
           }
         } catch {
           this.logger.warn(`Failed to load children for entity ${entity.code}`);
