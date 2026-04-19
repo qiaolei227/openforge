@@ -267,6 +267,72 @@ describe('QueryBuilderService LOOKUP JOIN (Task 11)', () => {
   });
 });
 
+describe('QueryBuilderService LOOKUP sort + USER/ORG source (Task 12)', () => {
+  it('generates LEFT JOIN and alias-based ORDER BY when sorting by LOOKUP', () => {
+    const { dataSql } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_name', fieldType: 'LOOKUP' },
+      ],
+      { sort: [{ field: 'material_name', order: 'asc' }] },
+      'shared', 'org-1', false, null, undefined,
+      lookupMetaFixture,
+    );
+    expect(dataSql).toContain('LEFT JOIN biz."app_material" AS "lk_f_lkp"');
+    expect(dataSql).toMatch(/ORDER BY\s+"lk_f_lkp"\."name"\s+ASC/i);
+  });
+
+  it('joins public.sys_user for USER source lookup', () => {
+    const userLookupMeta = [
+      {
+        fieldId: 'f_lkp_on',
+        lookupColumnName: 'owner_name',
+        alias: 'lk_f_lkp_on',
+        sourceColumnName: 'owner_id',
+        firstHopTable: 'public."sys_user"',
+        firstHopColumn: 'name',
+      },
+    ];
+    const { dataSql } = svc.build(
+      'app_task',
+      [
+        { columnName: 'owner_id', fieldType: 'USER' },
+        { columnName: 'owner_name', fieldType: 'LOOKUP' },
+      ],
+      { filter: { op: 'and', conditions: [{ field: 'owner_name', op: 'like', value: 'alice' }] } },
+      'shared', 'org-1', false, null, undefined,
+      userLookupMeta,
+    );
+    expect(dataSql).toContain('LEFT JOIN public."sys_user" AS "lk_f_lkp_on"');
+  });
+
+  it('joins public.sys_org for ORGANIZATION source lookup', () => {
+    const orgLookupMeta = [
+      {
+        fieldId: 'f_lkp_org',
+        lookupColumnName: 'dept_name',
+        alias: 'lk_f_lkp_org',
+        sourceColumnName: 'dept_id',
+        firstHopTable: 'public."sys_org"',
+        firstHopColumn: 'name',
+      },
+    ];
+    const { dataSql } = svc.build(
+      'app_employee',
+      [
+        { columnName: 'dept_id', fieldType: 'ORGANIZATION' },
+        { columnName: 'dept_name', fieldType: 'LOOKUP' },
+      ],
+      { sort: [{ field: 'dept_name', order: 'desc' }] },
+      'shared', 'org-1', false, null, undefined,
+      orgLookupMeta,
+    );
+    expect(dataSql).toContain('LEFT JOIN public."sys_org" AS "lk_f_lkp_org"');
+    expect(dataSql).toMatch(/ORDER BY\s+"lk_f_lkp_org"\."name"\s+DESC/i);
+  });
+});
+
 describe('QueryBuilderService.buildFilterOnly', () => {
   it('builds a pure WHERE fragment with no param offset', () => {
     const result = svc.buildFilterOnly(

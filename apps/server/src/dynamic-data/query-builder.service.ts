@@ -126,7 +126,7 @@ export class QueryBuilderService {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // ORDER BY
-    const orderBy = this.buildSort(query.sort, validColumns, defaultSort);
+    const orderBy = this.buildSort(query.sort, validColumns, defaultSort, activeLookups);
 
     // Pagination
     const page = query.page || 1;
@@ -373,12 +373,21 @@ export class QueryBuilderService {
     sort: any[] | undefined,
     validColumns: string[],
     defaultSort?: Array<{ field: string; order: 'asc' | 'desc' }> | null,
+    lookupMeta?: LookupJoinMeta[],
   ): string {
     // User-specified sort takes highest priority
     if (sort && sort.length > 0) {
       const parts = sort.map((s) => {
-        const col = this.resolveColumn(s.field, validColumns);
         const dir = s.order === 'asc' ? 'ASC' : 'DESC';
+        // Check if this is a LOOKUP column — rewrite to alias
+        const lkp = lookupMeta?.find((m) => m.lookupColumnName === s.field);
+        if (lkp) {
+          const ref = lkp.secondHopAlias
+            ? `"${lkp.secondHopAlias}"."${lkp.secondHopColumn}"`
+            : `"${lkp.alias}"."${lkp.firstHopColumn}"`;
+          return `${ref} ${dir}`;
+        }
+        const col = this.resolveColumn(s.field, validColumns);
         return `"${col}" ${dir}`;
       });
       return `ORDER BY ${parts.join(', ')}`;
