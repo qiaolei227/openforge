@@ -67,8 +67,8 @@ export class LookupResolverService {
    * USER sources      → public."sys_user"
    * ORGANIZATION sources → public."sys_org"
    *
-   * Second-hop support (for LOOKUP targets that are themselves FK fields) is
-   * added in a follow-up commit.
+   * When the first-hop target field is itself REFERENCE/USER/ORGANIZATION,
+   * populates the secondHop* fields for a two-hop JOIN.
    */
   async buildJoinMeta(
     fields: Array<{ id: string; columnName: string; fieldType: string; options: any }>,
@@ -93,13 +93,14 @@ export class LookupResolverService {
       if (!targetFieldColumnName) continue;
 
       let firstHopTable: string;
+      let targetModel: any = null;
 
       if (sourceField.fieldType === 'REFERENCE') {
         const targetModelId = (sourceField.options as any)?.targetModelId;
         if (!targetModelId) continue;
-        const targetModel = await this.prisma.sysModel.findUnique({
+        targetModel = await this.prisma.sysModel.findUnique({
           where: { id: targetModelId },
-          select: { tableName: true },
+          include: { fields: true },
         });
         if (!targetModel) continue;
         firstHopTable = `biz."${targetModel.tableName}"`;
@@ -114,14 +115,62 @@ export class LookupResolverService {
         continue;
       }
 
-      result.push({
+      const alias = `lk_${lf.id}`;
+      const meta: LookupJoinMeta = {
         fieldId: lf.id,
         lookupColumnName: lf.columnName,
-        alias: `lk_${lf.id}`,
+        alias,
         sourceColumnName: sourceField.columnName,
         firstHopTable,
         firstHopColumn: targetFieldColumnName,
-      });
+      };
+
+      // Check if target field is itself a FK type — build second hop
+      if (targetModel) {
+        const targetField = (targetModel.fields as any[]).find(
+          (tf: any) => tf.columnName === targetFieldColumnName,
+        );
+        if (
+          targetField &&
+          ['REFERENCE', 'USER', 'ORGANIZATION'].includes(targetField.fieldType)
+        ) {
+          const secondHopAlias = `${alias}_display`;
+          let secondHopTable: string;
+          let secondHopColumn: string;
+
+          if (targetField.fieldType === 'REFERENCE') {
+            const secondTargetModelId = (targetField.options as any)?.targetModelId;
+            if (!secondTargetModelId) {
+              result.push(meta);
+              continue;
+            }
+            secondHopColumn = (targetField.options as any)?.targetDisplayField || 'name';
+            const secondModel = await this.prisma.sysModel.findUnique({
+              where: { id: secondTargetModelId },
+              select: { tableName: true },
+            });
+            if (!secondModel) {
+              result.push(meta);
+              continue;
+            }
+            secondHopTable = `biz."${secondModel.tableName}"`;
+          } else if (targetField.fieldType === 'USER') {
+            secondHopTable = `public."sys_user"`;
+            secondHopColumn = 'name';
+          } else {
+            // ORGANIZATION
+            secondHopTable = `public."sys_org"`;
+            secondHopColumn = 'name';
+          }
+
+          meta.secondHopAlias = secondHopAlias;
+          meta.secondHopTable = secondHopTable;
+          meta.secondHopColumn = secondHopColumn;
+          meta.secondHopJoinFromColumn = targetFieldColumnName;
+        }
+      }
+
+      result.push(meta);
     }
 
     return result;

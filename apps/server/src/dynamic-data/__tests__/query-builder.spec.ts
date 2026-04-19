@@ -333,6 +333,69 @@ describe('QueryBuilderService LOOKUP sort + USER/ORG source (Task 12)', () => {
   });
 });
 
+describe('QueryBuilderService two-hop JOIN (Task 13)', () => {
+  it('generates two-hop JOIN when LOOKUP target is a REFERENCE field', () => {
+    const twoHopMeta = [
+      {
+        fieldId: 'f_lkp',
+        lookupColumnName: 'material_supplier_name',
+        alias: 'lk_f_lkp',
+        sourceColumnName: 'material_id',
+        firstHopTable: 'biz."app_material"',
+        firstHopColumn: 'default_supplier_id',
+        secondHopAlias: 'lk_f_lkp_display',
+        secondHopTable: 'biz."app_supplier"',
+        secondHopColumn: 'name',
+        secondHopJoinFromColumn: 'default_supplier_id',
+      },
+    ];
+    const { dataSql } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_supplier_name', fieldType: 'LOOKUP' },
+      ],
+      { filter: { op: 'and', conditions: [{ field: 'material_supplier_name', op: 'like', value: '海尔' }] } },
+      'shared', 'org-1', false, null, undefined,
+      twoHopMeta,
+    );
+    expect(dataSql).toContain('LEFT JOIN biz."app_material" AS "lk_f_lkp"');
+    expect(dataSql).toContain('LEFT JOIN biz."app_supplier" AS "lk_f_lkp_display"');
+    expect(dataSql).toContain('"lk_f_lkp_display"."name" ILIKE');
+  });
+
+  it('second hop JOIN uses first-hop alias as left side', () => {
+    const twoHopMeta = [
+      {
+        fieldId: 'f_lkp',
+        lookupColumnName: 'material_supplier_name',
+        alias: 'lk_f_lkp',
+        sourceColumnName: 'material_id',
+        firstHopTable: 'biz."app_material"',
+        firstHopColumn: 'default_supplier_id',
+        secondHopAlias: 'lk_f_lkp_display',
+        secondHopTable: 'biz."app_supplier"',
+        secondHopColumn: 'name',
+        secondHopJoinFromColumn: 'default_supplier_id',
+      },
+    ];
+    const { dataSql } = svc.build(
+      'app_order_item',
+      [
+        { columnName: 'material_id', fieldType: 'REFERENCE' },
+        { columnName: 'material_supplier_name', fieldType: 'LOOKUP' },
+      ],
+      { sort: [{ field: 'material_supplier_name', order: 'asc' }] },
+      'shared', 'org-1', false, null, undefined,
+      twoHopMeta,
+    );
+    expect(dataSql).toMatch(
+      /LEFT JOIN biz\."app_supplier" AS "lk_f_lkp_display" ON "lk_f_lkp"\."default_supplier_id" = "lk_f_lkp_display"\."id"/,
+    );
+    expect(dataSql).toMatch(/ORDER BY\s+"lk_f_lkp_display"\."name"\s+ASC/i);
+  });
+});
+
 describe('QueryBuilderService.buildFilterOnly', () => {
   it('builds a pure WHERE fragment with no param offset', () => {
     const result = svc.buildFilterOnly(
