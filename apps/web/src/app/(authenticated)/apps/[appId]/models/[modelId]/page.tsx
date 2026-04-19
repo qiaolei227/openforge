@@ -184,6 +184,8 @@ interface FormData {
     targetModelId?: string;
     targetDisplayField?: string;
     targetDisplayFields?: string[];
+    sourceFieldId?: string | null;
+    targetFieldColumnName?: string | null;
   };
   semantic: string;
   aiHint: string;
@@ -223,7 +225,7 @@ function SortableFieldRow({
   onDelete,
 }: {
   field: Field;
-  renderFieldTypeBadge: (ft: string) => React.ReactNode;
+  renderFieldTypeBadge: (ft: string, field?: Field) => React.ReactNode;
   tFields: (key: string) => string;
   tCommon: (key: string) => string;
   onEdit: () => void;
@@ -247,7 +249,7 @@ function SortableFieldRow({
           {field.columnName}
         </code>
       </td>
-      <td className="p-3">{renderFieldTypeBadge(field.fieldType)}</td>
+      <td className="p-3">{renderFieldTypeBadge(field.fieldType, field)}</td>
       <td className="p-3 text-muted-foreground">
         {field.isRequired ? (
           <span className="text-foreground font-medium">{tFields('yes')}</span>
@@ -472,6 +474,9 @@ export default function ModelDetailPage() {
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [targetModelFields, setTargetModelFields] = useState<Field[]>([]);
   const [loadingTargetFields, setLoadingTargetFields] = useState(false);
+
+  /* ---------- LOOKUP cascading data ---------- */
+  const [lookupTargetFields, setLookupTargetFields] = useState<Array<{ columnName: string; name: string; fieldType: string }>>([]);
 
   /* ---------- Dict selector data ---------- */
   const [availableDicts, setAvailableDicts] = useState<any[]>([]);
@@ -844,6 +849,10 @@ export default function ModelDetailPage() {
     } else {
       setTargetModelFields([]);
     }
+    // LOOKUP: reset target fields (the useEffect will reload them once sourceFieldId + candidates are ready)
+    if (field.fieldType === 'LOOKUP') {
+      setLookupTargetFields([]);
+    }
     // Fetch dict items for ENUM/MULTI_ENUM fields with dictCode
     if ((field.fieldType === 'ENUM' || field.fieldType === 'MULTI_ENUM') && opts.dictCode) {
       // We need dicts to be loaded first, so fetch items directly by finding the dict
@@ -918,6 +927,7 @@ export default function ModelDetailPage() {
       options: newOptions,
     }));
     setTargetModelFields([]);
+    setLookupTargetFields([]);
   };
 
   const handleTargetModelChange = (targetId: string) => {
@@ -951,6 +961,45 @@ export default function ModelDetailPage() {
     }
   };
 
+  /* -- LOOKUP target field loader -- */
+  useEffect(() => {
+    if (formData.fieldType !== 'LOOKUP') {
+      setLookupTargetFields([]);
+      return;
+    }
+    const src = lookupSourceCandidates.find((c) => c.id === formData.options?.sourceFieldId);
+    if (!src) {
+      setLookupTargetFields([]);
+      return;
+    }
+    if (src.fieldType === 'USER') {
+      setLookupTargetFields([
+        { columnName: 'name', name: '姓名', fieldType: 'STRING' },
+        { columnName: 'username', name: '用户名', fieldType: 'STRING' },
+        { columnName: 'email', name: '邮箱', fieldType: 'STRING' },
+        { columnName: 'phone', name: '电话', fieldType: 'STRING' },
+      ]);
+      return;
+    }
+    if (src.fieldType === 'ORGANIZATION') {
+      setLookupTargetFields([
+        { columnName: 'name', name: '名称', fieldType: 'STRING' },
+        { columnName: 'code', name: '编码', fieldType: 'STRING' },
+      ]);
+      return;
+    }
+    if (src.fieldType === 'REFERENCE' && src.targetModelId) {
+      const blacklist = new Set(['MULTI_REFERENCE', 'FILE', 'IMAGE', 'LOOKUP']);
+      apiClient.get(`/models/${src.targetModelId}`).then((r: any) => {
+        const allowed = ((r.data.fields ?? []) as any[])
+          .filter((f: any) => !f.isSystem && !f.entityId && !blacklist.has(f.fieldType))
+          .map((f: any) => ({ columnName: f.columnName as string, name: f.name as string, fieldType: f.fieldType as string }));
+        setLookupTargetFields(allowed);
+      }).catch(() => setLookupTargetFields([]));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.fieldType, formData.options?.sourceFieldId]);
+
   /* -- Column name auto-generation -- */
   const handleNameChange = (name: string) => {
     updateFormField('name', name);
@@ -968,6 +1017,9 @@ export default function ModelDetailPage() {
     }
     if (formData.fieldType === 'REFERENCE') {
       if (!formData.options.targetModelId) return false;
+    }
+    if (formData.fieldType === 'LOOKUP') {
+      if (!formData.options?.sourceFieldId || !formData.options?.targetFieldColumnName) return false;
     }
     return true;
   };
@@ -1082,8 +1134,28 @@ export default function ModelDetailPage() {
     return tFields(key);
   };
 
-  const renderFieldTypeBadge = (fieldType: string) => {
+  const renderFieldTypeBadge = (fieldType: string, field?: Field | null) => {
     const cls = fieldTypeBadgeClass[fieldType] || 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
+    if (fieldType === 'LOOKUP' && field) {
+      const sourceFieldId = field.options?.sourceFieldId as string | undefined;
+      const targetCol = field.options?.targetFieldColumnName as string | undefined;
+      const allFieldPool: Field[] = [
+        ...fields,
+        ...(entities.flatMap((e) => (e.fields as Field[] | undefined) ?? [])),
+      ];
+      const sourceField = sourceFieldId ? allFieldPool.find((f) => f.id === sourceFieldId) : undefined;
+      if (sourceField && targetCol) {
+        const tooltip = `Lookup: ${sourceField.name} (${sourceField.fieldType}) → ${targetCol}`;
+        return (
+          <span className="inline-flex items-center gap-1 text-xs" title={tooltip}>
+            <Badge variant="outline" className={`${cls} border-0 text-xs`}>
+              {getFieldTypeLabel('LOOKUP')}
+            </Badge>
+            <span className="text-muted-foreground truncate max-w-[120px]">{sourceField.name}.{targetCol}</span>
+          </span>
+        );
+      }
+    }
     return (
       <Badge variant="outline" className={`${cls} border-0 text-xs`}>
         {getFieldTypeLabel(fieldType)}
@@ -1164,6 +1236,31 @@ export default function ModelDetailPage() {
     }
     return result;
   }, [views, viewKeyword, viewTypeFilter]);
+
+  /** LOOKUP source candidates: REFERENCE/USER/ORGANIZATION fields on the same holder
+   *  (main model or the entity currently being edited). Excludes system fields. */
+  const lookupSourceCandidates = useMemo(() => {
+    // When editing an existing entity field, its entityId tells us the pool to use
+    const effectiveEntityId = currentEntityId ?? editingField?.entityId ?? null;
+    const pool: Field[] = effectiveEntityId
+      ? (entities.find((e) => e.id === effectiveEntityId)?.fields as Field[] | undefined ?? [])
+      : fields.filter((f) => !f.entityId);
+    return pool
+      .filter((f) => !f.isSystem)
+      .filter((f) => f.fieldType === 'REFERENCE' || f.fieldType === 'USER' || f.fieldType === 'ORGANIZATION')
+      .map((f) => {
+        const tid = (f.options as any)?.targetModelId as string | undefined;
+        const tm = availableModels.find((m) => m.id === tid);
+        return {
+          id: f.id,
+          name: f.name,
+          columnName: f.columnName,
+          fieldType: f.fieldType as 'REFERENCE' | 'USER' | 'ORGANIZATION',
+          targetModelId: tid,
+          targetModelName: tm?.name,
+        };
+      });
+  }, [currentEntityId, editingField, fields, entities, availableModels]);
 
   const handleFieldDragEnd = useCallback(
     async (event: DragEndEvent) => {
@@ -1688,7 +1785,7 @@ export default function ModelDetailPage() {
                               {field.columnName}
                             </code>
                           </td>
-                          <td className="p-3">{renderFieldTypeBadge(field.fieldType)}</td>
+                          <td className="p-3">{renderFieldTypeBadge(field.fieldType, field)}</td>
                           <td className="p-3 text-muted-foreground">
                             {field.isRequired ? (
                               <span className="text-foreground font-medium">{tFields('yes')}</span>
@@ -2385,7 +2482,7 @@ export default function ModelDetailPage() {
                           { label: tFields('groupBasic'), types: ['STRING', 'TEXT', 'RICHTEXT', 'INTEGER', 'DECIMAL', 'BOOLEAN'] },
                           { label: tFields('groupDateTime'), types: ['DATE', 'DATETIME', 'TIME'] },
                           { label: tFields('groupChoice'), types: ['ENUM', 'MULTI_ENUM', 'AUTO_NUMBER'] },
-                          { label: tFields('groupRelation'), types: currentEntityId ? ['REFERENCE'] : ['REFERENCE', 'MULTI_REFERENCE'] },
+                          { label: tFields('groupRelation'), types: currentEntityId ? ['REFERENCE', 'LOOKUP'] : ['REFERENCE', 'MULTI_REFERENCE', 'LOOKUP'] },
                           { label: tFields('groupSystem'), types: ['USER', 'ORGANIZATION'] },
                           { label: tFields('groupFile'), types: ['FILE', 'IMAGE'] },
                         ].map((group, gi) => (
@@ -2411,6 +2508,7 @@ export default function ModelDetailPage() {
             </section>
 
             {/* ===== B. Constraints ===== */}
+            {formData.fieldType !== 'LOOKUP' && (
             <section>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                 {tFields('constraints')}
@@ -2494,6 +2592,7 @@ export default function ModelDetailPage() {
                 )}
               </div>
             </section>
+            )}
 
             {/* ===== C. Type-specific Config ===== */}
             {(formData.fieldType === 'STRING' ||
@@ -2501,7 +2600,8 @@ export default function ModelDetailPage() {
               formData.fieldType === 'ENUM' ||
               formData.fieldType === 'MULTI_ENUM' ||
               formData.fieldType === 'AUTO_NUMBER' ||
-              formData.fieldType === 'REFERENCE') && (
+              formData.fieldType === 'REFERENCE' ||
+              formData.fieldType === 'LOOKUP') && (
               <section>
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                   {tFields('typeConfig')}
@@ -2767,6 +2867,83 @@ export default function ModelDetailPage() {
                           </div>
                         </div>
                       )}
+                    </>
+                  )}
+
+                  {/* LOOKUP: source + target cascading selects */}
+                  {formData.fieldType === 'LOOKUP' && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label>{tFields('lookupSourceField')}</Label>
+                        <Select
+                          value={formData.options.sourceFieldId ?? ''}
+                          onValueChange={(v) => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              options: {
+                                ...prev.options,
+                                sourceFieldId: v || null,
+                                targetFieldColumnName: undefined,
+                              },
+                            }));
+                          }}
+                        >
+                          <SelectTrigger className="w-full bg-background">
+                            <SelectValue placeholder={tFields('lookupSourceFieldPlaceholder')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {lookupSourceCandidates.length === 0 ? (
+                              <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                                {tFields('lookupNoSourceAvailable')}
+                              </div>
+                            ) : (
+                              lookupSourceCandidates.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  <span className="flex items-center gap-1.5">
+                                    {s.name}
+                                    <code className="text-xs text-muted-foreground font-mono">({s.columnName})</code>
+                                    <span className="text-xs text-muted-foreground ml-1">
+                                      → {s.targetModelName ?? s.fieldType}
+                                    </span>
+                                  </span>
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label>{tFields('lookupTargetField')}</Label>
+                        <Select
+                          value={formData.options.targetFieldColumnName ?? ''}
+                          onValueChange={(v) => updateOptions('targetFieldColumnName', v || null)}
+                          disabled={!formData.options.sourceFieldId}
+                        >
+                          <SelectTrigger className="w-full bg-background">
+                            <SelectValue placeholder={tFields('lookupTargetFieldPlaceholder')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {lookupTargetFields.length === 0 ? (
+                              <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                                {formData.options.sourceFieldId
+                                  ? tCommon('loading')
+                                  : tFields('lookupSourceFieldPlaceholder')}
+                              </div>
+                            ) : (
+                              lookupTargetFields.map((f) => (
+                                <SelectItem key={f.columnName} value={f.columnName}>
+                                  <span className="flex items-center gap-1.5">
+                                    {f.name}
+                                    <code className="text-xs text-muted-foreground font-mono">({f.columnName})</code>
+                                    <span className="text-xs text-muted-foreground ml-1">— {f.fieldType}</span>
+                                  </span>
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </>
                   )}
                 </div>
