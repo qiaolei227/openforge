@@ -8,3 +8,4 @@ export { SubTableField } from './fields/sub-table-field';
 export type { ChildrenMeta, SubTableProps } from './fields/sub-table-types';
 export { TreeView, TreeSelect } from './tree-view';
 export type { TreeNode, TreeViewProps, TreeColumn, TreeSelectProps } from './tree-view';
+export { useLookupValue } from './fields/use-lookup-value';
