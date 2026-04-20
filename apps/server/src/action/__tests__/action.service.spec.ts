@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { ActionService } from '../action.service';
@@ -86,5 +87,76 @@ describe('ActionService', () => {
 
     await service.delete('a1');
     expect(prisma.sysAction.delete).toHaveBeenCalledWith({ where: { id: 'a1' } });
+  });
+});
+
+describe('ActionService.syncDistributeAction', () => {
+  let service: ActionService;
+  let prisma: any;
+
+  beforeEach(() => {
+    prisma = {
+      sysAction: { upsert: vi.fn(), deleteMany: vi.fn() },
+    };
+    service = new ActionService(prisma);
+  });
+
+  it('upserts distribute action when dataScope = distributed', async () => {
+    await service.syncDistributeAction('m1', 'distributed');
+    expect(prisma.sysAction.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      where: { modelId_code: { modelId: 'm1', code: 'distribute' } },
+      create: expect.objectContaining({
+        modelId: 'm1',
+        code: 'distribute',
+        category: 'system',
+        actionType: 'builtin',
+      }),
+    }));
+    expect(prisma.sysAction.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('deletes distribute action when dataScope is not distributed', async () => {
+    await service.syncDistributeAction('m1', 'private');
+    expect(prisma.sysAction.deleteMany).toHaveBeenCalledWith({
+      where: { modelId: 'm1', code: 'distribute', category: 'system' },
+    });
+    expect(prisma.sysAction.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('ActionService.generateSystemActions includes distribute for distributed models', () => {
+  let service: ActionService;
+  let prisma: any;
+
+  beforeEach(() => {
+    prisma = {
+      sysModel: { findUnique: vi.fn() },
+      sysAction: {
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
+        upsert: vi.fn(),
+        findFirst: vi.fn(),
+      },
+    };
+    service = new ActionService(prisma);
+  });
+
+  it('includes distribute action in createMany when dataScope=distributed', async () => {
+    prisma.sysModel.findUnique.mockResolvedValue({
+      id: 'm1', dataScope: 'distributed', enableDataStatus: false,
+    });
+    await service.generateSystemActions('m1');
+    const call = prisma.sysAction.createMany.mock.calls[0][0];
+    const codes = call.data.map((a: any) => a.code);
+    expect(codes).toContain('distribute');
+  });
+
+  it('does not include distribute action when dataScope=private', async () => {
+    prisma.sysModel.findUnique.mockResolvedValue({
+      id: 'm1', dataScope: 'private', enableDataStatus: false,
+    });
+    await service.generateSystemActions('m1');
+    const call = prisma.sysAction.createMany.mock.calls[0][0];
+    const codes = call.data.map((a: any) => a.code);
+    expect(codes).not.toContain('distribute');
   });
 });

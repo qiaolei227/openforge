@@ -19,6 +19,10 @@ const DATA_STATUS_ACTIONS = [
   { code: 'unapprove', name: '反审核', icon: 'rotate-ccw',   sortOrder: 5, displayType: 'button', position: 'both' },
 ];
 
+const DISTRIBUTE_ACTIONS = [
+  { code: 'distribute', name: '分配', icon: 'share-2', sortOrder: 9, displayType: 'button', position: 'list' },
+];
+
 @Injectable()
 export class ActionService implements OnApplicationBootstrap {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
@@ -42,6 +46,9 @@ export class ActionService implements OnApplicationBootstrap {
     const allActions = [...BASE_SYSTEM_ACTIONS];
     if (model.enableDataStatus) {
       allActions.push(...DATA_STATUS_ACTIONS);
+    }
+    if ((model as any).dataScope === 'distributed') {
+      allActions.push(...DISTRIBUTE_ACTIONS);
     }
 
     // Child actions that will be linked to their parents
@@ -153,6 +160,31 @@ export class ActionService implements OnApplicationBootstrap {
       const codes = DATA_STATUS_ACTIONS.map((a) => a.code);
       await this.prisma.sysAction.deleteMany({
         where: { modelId, code: { in: codes }, category: 'system' },
+      });
+    }
+  }
+
+  async syncDistributeAction(modelId: string, dataScope: string): Promise<void> {
+    if (dataScope === 'distributed') {
+      const a = DISTRIBUTE_ACTIONS[0];
+      await this.prisma.sysAction.upsert({
+        where: { modelId_code: { modelId, code: a.code } },
+        create: {
+          modelId,
+          code: a.code,
+          name: a.name,
+          icon: a.icon,
+          category: 'system',
+          actionType: 'builtin',
+          displayType: a.displayType,
+          position: a.position,
+          sortOrder: a.sortOrder,
+        },
+        update: {},
+      });
+    } else {
+      await this.prisma.sysAction.deleteMany({
+        where: { modelId, code: 'distribute', category: 'system' },
       });
     }
   }
