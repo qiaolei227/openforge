@@ -2889,7 +2889,14 @@ export default function ModelDetailPage() {
                           }}
                         >
                           <SelectTrigger className="w-full bg-background">
-                            <SelectValue placeholder={tFields('lookupSourceFieldPlaceholder')} />
+                            <SelectValue placeholder={tFields('lookupSourceFieldPlaceholder')}>
+                              {formData.options.sourceFieldId
+                                ? (() => {
+                                    const s = lookupSourceCandidates.find((c) => c.id === formData.options.sourceFieldId);
+                                    return s ? `${s.name} (${s.columnName})` : formData.options.sourceFieldId;
+                                  })()
+                                : null}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {lookupSourceCandidates.length === 0 ? (
@@ -2921,7 +2928,14 @@ export default function ModelDetailPage() {
                           disabled={!formData.options.sourceFieldId}
                         >
                           <SelectTrigger className="w-full bg-background">
-                            <SelectValue placeholder={tFields('lookupTargetFieldPlaceholder')} />
+                            <SelectValue placeholder={tFields('lookupTargetFieldPlaceholder')}>
+                              {formData.options.targetFieldColumnName
+                                ? (() => {
+                                    const f = lookupTargetFields.find((x) => x.columnName === formData.options.targetFieldColumnName);
+                                    return f ? `${f.name} (${f.columnName})` : formData.options.targetFieldColumnName;
+                                  })()
+                                : null}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {lookupTargetFields.length === 0 ? (
