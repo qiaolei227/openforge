@@ -352,6 +352,15 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     fetchData();
   }, [fetchData]);
 
+  /* Re-fetch on org switch so list reflects the newly selected organization's scope */
+  useEffect(() => {
+    function onOrgChanged() {
+      fetchData();
+    }
+    window.addEventListener('orgChanged', onOrgChanged);
+    return () => window.removeEventListener('orgChanged', onOrgChanged);
+  }, [fetchData]);
+
   /* Status counts removed — use filter panel for data_status filtering */
 
   /* ------------------------------------------------------------------ */

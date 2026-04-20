@@ -233,6 +233,22 @@ export function RecordPage({
     fetchRecord();
   }, [fetchRecord]);
 
+  /* Org switch: re-fetch (view/edit) or reset (create). Dirty state was already confirmed
+   * before the switch by OrgSwitcher's pre-switch dialog. */
+  useEffect(() => {
+    function onOrgChanged() {
+      if (isCreate) {
+        setFormData({});
+        setChildrenData({});
+        setFormErrors({});
+      } else {
+        fetchRecord();
+      }
+    }
+    window.addEventListener('orgChanged', onOrgChanged);
+    return () => window.removeEventListener('orgChanged', onOrgChanged);
+  }, [fetchRecord, isCreate]);
+
   /* ---------- Form change handlers ---------- */
   const handleFieldChange = useCallback(
     (columnName: string, value: any) => {
