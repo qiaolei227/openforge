@@ -1072,5 +1072,25 @@
     "total": "{total} total",
     "loading": "Loading...",
     "more": "More ({total} total)"
+  },
+  "distribute": {
+    "title": "Allocate",
+    "previewTitle": "Confirm changes",
+    "selectedRecords": "{count} records selected",
+    "plusMoreRecords": "and {count} more",
+    "plusMoreChanges": "... and {count} more",
+    "group": "Group",
+    "allocatedCount": "{allocated}/{total} allocated",
+    "next": "Next: preview",
+    "back": "Back",
+    "execute": "Execute",
+    "cancel": "Cancel",
+    "willAllocate": "Allocate {count} new",
+    "willRevoke": "Revoke {count}",
+    "revokeAck": "I understand that revoking will archive copies; archived copies are still referenceable historically",
+    "executeDone": "{count} changes completed",
+    "executePartial": "{ok}/{total} succeeded, others failed",
+    "loadStatusFailed": "Failed to load allocation status",
+    "allocate": "Allocate"
   }
 }

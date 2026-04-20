@@ -1072,5 +1072,25 @@
     "total": "共 {total} 条",
     "loading": "加载中...",
     "more": "更多（共 {total} 条）"
+  },
+  "distribute": {
+    "title": "分配",
+    "previewTitle": "确认变更",
+    "selectedRecords": "已选 {count} 条记录",
+    "plusMoreRecords": "等 {count} 条",
+    "plusMoreChanges": "... 还有 {count} 项",
+    "group": "集团",
+    "allocatedCount": "已分配 {allocated}/{total}",
+    "next": "下一步: 预览变更",
+    "back": "返回修改",
+    "execute": "执行变更",
+    "cancel": "取消",
+    "willAllocate": "新增分配 {count} 条",
+    "willRevoke": "撤销分配 {count} 条",
+    "revokeAck": "我已理解撤销分配会归档对应副本，被归档副本仍可被历史引用",
+    "executeDone": "已完成 {count} 项变更",
+    "executePartial": "{ok}/{total} 项成功，其余失败",
+    "loadStatusFailed": "加载分配状态失败",
+    "allocate": "分配"
   }
 }
