@@ -62,6 +62,7 @@ function TabContent({ tab, schema }: { tab: Tab; schema: ModelSchema }) {
       modelId={schema.id}
       modelName={schema.name}
       enableDataStatus={!!schema.enableDataStatus}
+      dataScope={schema.dataScope}
       fields={schema.fields}
       entities={schema.entities}
       views={schema.views}

@@ -1013,6 +1013,7 @@
   "recordPage": {
     "createTitle": "新建{name}",
     "detailTitle": "{name}详情",
+    "detailTab": "详情",
     "save": "保存",
     "saving": "保存中...",
     "createdBy": "创建人",
@@ -1092,6 +1093,44 @@
     "executePartial": "{ok}/{total} 项成功，其余失败",
     "loadStatusFailed": "加载分配状态失败",
     "allocate": "分配",
-    "fieldReadonlyByMaster": "由集团维护，不可编辑"
+    "fieldReadonlyByMaster": "由集团维护，不可编辑",
+    "syncTab": "同步",
+    "copyStatus": "副本状态",
+    "orgColumn": "组织",
+    "statusColumn": "状态",
+    "actionColumn": "操作",
+    "localEdits": "本地化",
+    "noNonRootOrgs": "暂无非集团组织",
+    "statusValue": {
+      "allocated": "已分配",
+      "archived": "已归档",
+      "unallocated": "未分配"
+    },
+    "restore": "恢复",
+    "revoke": "撤销",
+    "copyAllocated": "已分配",
+    "copyRevoked": "已撤销",
+    "operationFailed": "操作失败",
+    "syncActions": "同步动作",
+    "syncActionsHint": "强制覆盖用于把 master 的 editable 字段值写入所有副本；策略回填用于把 readonly 字段值回填到副本。两者均需输入确认词。",
+    "forcePushBtn": "强制覆盖字段...",
+    "backfillBtn": "策略回填...",
+    "forcePushTitle": "强制覆盖副本字段",
+    "forcePushDesc": "选择要覆盖的 editable 字段；所有非归档副本的该字段将被 master 当前值替换。此操作将记入分配日志。",
+    "backfillTitle": "策略回填",
+    "backfillDesc": "选择要回填的字段；所有非归档副本的该字段将被 master 当前值替换。通常用于 editable→readonly 切换后同步本地值。",
+    "noEditableFields": "该模型暂无 editable 字段。",
+    "typeToConfirm": "请输入 {phrase} 以确认",
+    "syncDone": "已覆盖 {affected} 条副本的 {fieldCount} 个字段",
+    "log": "分配日志",
+    "noLogs": "暂无分配记录",
+    "loadMore": "加载更多",
+    "logAction": {
+      "allocate": "分配",
+      "revoke": "撤销分配",
+      "force_push": "强制覆盖",
+      "backfill": "策略回填",
+      "auto_fill": "自动分配"
+    }
   }
 }

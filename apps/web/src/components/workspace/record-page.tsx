@@ -20,12 +20,14 @@ import { useRenderServices } from '@/hooks/use-render-services';
 import { useTabStore } from '@/stores/tab-store';
 import { useToastStore } from '@/stores/toast-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { useOrgStore } from '@/stores/org-store';
 import { useActions } from '@/hooks/use-actions';
 import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage, getApiErrorCode, cn } from '@/lib/utils';
 import { ActionToolbar } from '@/components/workspace/action-toolbar';
 import { DataStatusBadge } from '@/components/workspace/data-status-badge';
 import { getDistributionPolicy } from '@/lib/api/distribution';
+import { SyncTab } from '@/components/distribution/sync-tab';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -37,6 +39,7 @@ interface RecordPageProps {
   modelId: string;
   modelName: string;
   enableDataStatus: boolean;
+  dataScope?: 'private' | 'shared' | 'distributed';
   fields: Field[];
   entities?: EntityWithFields[];
   views?: SysView[];
@@ -109,6 +112,7 @@ export function RecordPage({
   modelId,
   modelName,
   enableDataStatus,
+  dataScope,
   fields,
   entities = [],
   views,
@@ -122,6 +126,9 @@ export function RecordPage({
   const tRecord = useTranslations('recordPage');
 
   const user = useAuthStore((s) => s.user);
+  const isRoot = useOrgStore(
+    (s) => s.accessibleOrgs.find((o) => o.id === s.currentOrgId)?.parentId === null,
+  );
   const { setDirty, updateTitle, closeTab } = useTabStore();
   const { actions } = useActions(modelId);
   const services = useRenderServices(fields, entities);
@@ -135,6 +142,9 @@ export function RecordPage({
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(!isCreate);
   const [saving, setSaving] = useState(false);
+
+  /* ---------- Detail tab switcher (form vs sync) ---------- */
+  const [activeDetailTab, setActiveDetailTab] = useState<'form' | 'sync'>('form');
 
   /* ---------- Distribution policy (readonly columns for copies) ---------- */
   const [readonlyColumns, setReadonlyColumns] = useState<string[]>([]);
@@ -501,6 +511,17 @@ export function RecordPage({
   ]);
 
   /* ------------------------------------------------------------------ */
+  /*  Sync tab visibility                                               */
+  /* ------------------------------------------------------------------ */
+
+  const showSyncTab =
+    !isCreate &&
+    dataScope === 'distributed' &&
+    record != null &&
+    record.master_id === record.id &&
+    (isRoot || !!user?.isAdmin);
+
+  /* ------------------------------------------------------------------ */
   /*  Render                                                             */
   /* ------------------------------------------------------------------ */
 
@@ -584,24 +605,65 @@ export function RecordPage({
         )}
       </div>
 
-      {/* Form body */}
-      <div className="flex-1 overflow-auto">
-        <RenderProvider
-          mode={mode}
-          fields={fields}
-          entities={entities}
-          data={formData}
-          onChange={handleFieldChange}
-          errors={formErrors}
-          t={t}
-          services={services}
-          childrenData={childrenData}
-          onChildrenChange={handleChildrenChange}
-          readonlyColumns={readonlyColumns}
-        >
-          <FormRenderer layout={formLayout} />
-        </RenderProvider>
-      </div>
+      {/* Tab bar — only shown for distributed master records */}
+      {showSyncTab && (
+        <div className="flex items-center gap-4 px-6 border-b bg-muted/20">
+          <button
+            type="button"
+            onClick={() => setActiveDetailTab('form')}
+            className={cn(
+              'py-2 px-1 -mb-px border-b-2 text-sm transition-colors',
+              activeDetailTab === 'form'
+                ? 'border-primary font-medium text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {tRecord('detailTab')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveDetailTab('sync')}
+            className={cn(
+              'py-2 px-1 -mb-px border-b-2 text-sm transition-colors',
+              activeDetailTab === 'sync'
+                ? 'border-primary font-medium text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {t('distribute.syncTab')}
+          </button>
+        </div>
+      )}
+
+      {/* Form body / Sync tab */}
+      {activeDetailTab === 'form' || !showSyncTab ? (
+        <div className="flex-1 overflow-auto">
+          <RenderProvider
+            mode={mode}
+            fields={fields}
+            entities={entities}
+            data={formData}
+            onChange={handleFieldChange}
+            errors={formErrors}
+            t={t}
+            services={services}
+            childrenData={childrenData}
+            onChildrenChange={handleChildrenChange}
+            readonlyColumns={readonlyColumns}
+          >
+            <FormRenderer layout={formLayout} />
+          </RenderProvider>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          <SyncTab
+            appCode={appCode}
+            modelCode={modelCode}
+            recordId={recordId!}
+            modelId={modelId}
+          />
+        </div>
+      )}
 
       {/* System info footer */}
       {!isCreate && record && (

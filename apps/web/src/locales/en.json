@@ -1013,6 +1013,7 @@
   "recordPage": {
     "createTitle": "New {name}",
     "detailTitle": "{name} Detail",
+    "detailTab": "Detail",
     "save": "Save",
     "saving": "Saving...",
     "createdBy": "Created by",
@@ -1092,6 +1093,44 @@
     "executePartial": "{ok}/{total} succeeded, others failed",
     "loadStatusFailed": "Failed to load allocation status",
     "allocate": "Allocate",
-    "fieldReadonlyByMaster": "Maintained by group; not editable on copies"
+    "fieldReadonlyByMaster": "Maintained by group; not editable on copies",
+    "syncTab": "Sync",
+    "copyStatus": "Copy Status",
+    "orgColumn": "Organization",
+    "statusColumn": "Status",
+    "actionColumn": "Action",
+    "localEdits": "Local edits",
+    "noNonRootOrgs": "No non-root organizations",
+    "statusValue": {
+      "allocated": "Allocated",
+      "archived": "Archived",
+      "unallocated": "Unallocated"
+    },
+    "restore": "Restore",
+    "revoke": "Revoke",
+    "copyAllocated": "Allocated",
+    "copyRevoked": "Revoked",
+    "operationFailed": "Operation failed",
+    "syncActions": "Sync Actions",
+    "syncActionsHint": "Force Push writes master editable field values to all copies; Backfill writes readonly field values back to copies. Both require a confirmation phrase.",
+    "forcePushBtn": "Force Push Fields...",
+    "backfillBtn": "Policy Backfill...",
+    "forcePushTitle": "Force Push to Copies",
+    "forcePushDesc": "Select editable fields to push; all non-archived copies will have those fields replaced with the master's current value. This action is recorded in the distribution log.",
+    "backfillTitle": "Policy Backfill",
+    "backfillDesc": "Select fields to backfill; all non-archived copies will have those fields replaced with the master's current value. Typically used after switching a field from editable to readonly.",
+    "noEditableFields": "This model has no editable fields.",
+    "typeToConfirm": "Type {phrase} to confirm",
+    "syncDone": "Pushed {fieldCount} field(s) to {affected} copy/copies",
+    "log": "Distribution Log",
+    "noLogs": "No distribution records yet",
+    "loadMore": "Load more",
+    "logAction": {
+      "allocate": "Allocate",
+      "revoke": "Revoke",
+      "force_push": "Force Push",
+      "backfill": "Backfill",
+      "auto_fill": "Auto Allocate"
+    }
   }
 }
