@@ -215,4 +215,51 @@ describe('DistributedGuard', () => {
       expect(e.getResponse?.().message ?? e.message).toMatch(/规格/);
     }
   });
+
+  // ── Rule 3 (B3): copy delete rejection ──
+
+  it('rejects delete on copy from sub-org', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm', dataScope: 'distributed', tableName: 'app1_items', fields: [],
+    });
+    prisma.$queryRawUnsafe.mockResolvedValue([{ id: 'r1', master_id: 'r0' }]);
+    const ctx = mkCtx('DELETE',
+      { appCode: 'a', modelCode: 'm', id: 'r1' },
+      {},
+      { userId: 'u', orgId: 'sub', isAdmin: false },
+      '/apps/:appCode/models/:modelCode/data/:id',
+    );
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+      errorCode: 'CANNOT_DELETE_COPY',
+    });
+  });
+
+  it('allows delete on master from root org', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm', dataScope: 'distributed', tableName: 'app1_items', fields: [],
+    });
+    prisma.$queryRawUnsafe.mockResolvedValue([{ id: 'r0', master_id: 'r0' }]);
+    const ctx = mkCtx('DELETE',
+      { appCode: 'a', modelCode: 'm', id: 'r0' },
+      {},
+      { userId: 'u', orgId: 'root', isAdmin: false },
+      '/apps/:appCode/models/:modelCode/data/:id',
+    );
+    expect(await guard.canActivate(ctx)).toBe(true);
+  });
+
+  it('admin bypasses copy delete check', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm', dataScope: 'distributed', tableName: 'app1_items', fields: [],
+    });
+    // admin bypass is already handled at the top of canActivate
+    const ctx = mkCtx('DELETE',
+      { appCode: 'a', modelCode: 'm', id: 'r1' },
+      {},
+      { userId: 'u', orgId: 'sub', isAdmin: true },
+      '/apps/:appCode/models/:modelCode/data/:id',
+    );
+    expect(await guard.canActivate(ctx)).toBe(true);
+    expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
+  });
 });

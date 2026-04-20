@@ -88,6 +88,21 @@ export class DistributedGuard implements CanActivate {
       }
     }
 
+    // Rule 3 (B3): copy delete rejection.
+    if (method === 'DELETE' && recordId) {
+      const rows = await this.prisma.$queryRawUnsafe<Array<{ id: string; master_id: string }>>(
+        `SELECT id, master_id FROM biz."${model.tableName}" WHERE id = $1::uuid`,
+        recordId,
+      );
+      if (rows[0] && rows[0].master_id !== rows[0].id) {
+        throw new BusinessException(
+          HttpStatus.FORBIDDEN,
+          ErrorCodes.CANNOT_DELETE_COPY,
+          '',
+        );
+      }
+    }
+
     return true;
   }
 
