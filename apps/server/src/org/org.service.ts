@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { OrgCreatedEvent } from '../event-bus/events';
@@ -15,8 +15,8 @@ export interface OrgQueryParams {
 @Injectable()
 export class OrgService {
   constructor(
-    private prisma: PrismaService,
-    private eventBus: EventBusService,
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(EventBusService) private eventBus: EventBusService,
   ) {}
 
   async findAll(params: OrgQueryParams = {}) {
@@ -151,6 +151,24 @@ export class OrgService {
       ...o,
       __hasChildren: (countMap.get(o.id) ?? 0) > 0,
     }));
+  }
+
+  async getAccessibleOrgs(userId: string, isAdmin: boolean) {
+    if (isAdmin) {
+      return this.prisma.sysOrganization.findMany({
+        orderBy: [{ parentId: 'asc' }, { name: 'asc' }],
+      });
+    }
+    const links = await this.prisma.sysUserOrg.findMany({
+      where: { userId },
+      select: { orgId: true },
+    });
+    const ids = links.map((l: { orgId: string }) => l.orgId);
+    if (ids.length === 0) return [];
+    return this.prisma.sysOrganization.findMany({
+      where: { id: { in: ids } },
+      orderBy: [{ parentId: 'asc' }, { name: 'asc' }],
+    });
   }
 
   private buildTree(orgs: any[], parentId: string | null = null): any[] {

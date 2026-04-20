@@ -4,6 +4,7 @@ import { CreateOrgDto } from './dto/create-org.dto';
 import { UpdateOrgDto } from './dto/update-org.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
+import { Public } from '../common/decorators/public.decorator';
 
 @Controller('orgs')
 export class OrgController {
@@ -38,6 +39,12 @@ export class OrgController {
     @Query('keyword') keyword?: string,
   ) {
     return this.orgService.findChildren(parentId || null, keyword);
+  }
+
+  @Get('accessible')
+  @Public()
+  getAccessible(@CurrentUser() user: any) {
+    return this.orgService.getAccessibleOrgs(user.userId, user.isAdmin);
   }
 
   @Get(':id')
