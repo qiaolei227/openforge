@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
-import { getApiErrorMessage } from '@/lib/utils';
+import { getApiErrorMessage, cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import { useAiStore } from '@/stores/ai-store';
 import {
@@ -87,6 +87,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { fillMissingCopies, getFieldLocalEditsCount, syncMaster } from '@/lib/api/distribution';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -111,6 +112,7 @@ interface ModelItem {
   dataScope: 'private' | 'shared' | 'distributed';
   isTree: boolean;
   enableDataStatus: boolean;
+  autoDistribute: boolean;
   defaultSort?: SortItem[] | null;
   app?: { id?: string; code?: string; name?: string };
 }
@@ -407,8 +409,15 @@ export default function ModelDetailPage() {
   /* ---------- Distribution Policy state ---------- */
   interface DistPolicyItem { fieldId: string; fieldName: string; columnName: string; fieldType: string; editable: boolean }
   const [distPolicies, setDistPolicies] = useState<DistPolicyItem[]>([]);
+  const [savedDistPolicies, setSavedDistPolicies] = useState<DistPolicyItem[]>([]);
   const [distPolicyLoading, setDistPolicyLoading] = useState(false);
   const [distPolicySaving, setDistPolicySaving] = useState(false);
+  const [autoDistributeSaving, setAutoDistributeSaving] = useState(false);
+  const [fillMissingLoading, setFillMissingLoading] = useState(false);
+  const [nonRootOrgCount, setNonRootOrgCount] = useState(0);
+  const [distBackfillDialog, setDistBackfillDialog] = useState<{
+    flippedFields: Array<{ policy: DistPolicyItem; count: number }>;
+  } | null>(null);
 
   /* ---------- Entity UI state ---------- */
   const [expandedEntities, setExpandedEntities] = useState<Set<string>>(new Set());
@@ -580,6 +589,7 @@ export default function ModelDetailPage() {
     try {
       const { data } = await apiClient.get<DistPolicyItem[]>(`/models/${modelId}/distribution-policies`);
       setDistPolicies(data);
+      setSavedDistPolicies(data);
     } catch { /* ignore */ }
     finally { setDistPolicyLoading(false); }
   }, [modelId, model]);
@@ -590,11 +600,21 @@ export default function ModelDetailPage() {
     }
   }, [model, activeTab, fetchDistPolicies]);
 
+  // Fetch non-root org count once when the distribution-policy tab is active
+  useEffect(() => {
+    if (activeTab !== 'distribution-policy' || model?.dataScope !== 'distributed') return;
+    apiClient.get('/orgs', { params: { pageSize: 1000 } }).then((res) => {
+      const items: any[] = res.data?.data ?? res.data?.items ?? [];
+      const nonRoot = items.filter((o: any) => o.parentId !== null).length;
+      setNonRootOrgCount(nonRoot);
+    }).catch(() => setNonRootOrgCount(0));
+  }, [activeTab, model?.dataScope]);
+
   const handleDistPolicyToggle = (fieldId: string) => {
     setDistPolicies((prev) => prev.map((p) => p.fieldId === fieldId ? { ...p, editable: !p.editable } : p));
   };
 
-  const handleDistPolicySave = async () => {
+  async function doSavePolicies() {
     setDistPolicySaving(true);
     try {
       const { data } = await apiClient.put<DistPolicyItem[]>(
@@ -602,11 +622,98 @@ export default function ModelDetailPage() {
         distPolicies.map((p) => ({ fieldId: p.fieldId, editable: p.editable })),
       );
       setDistPolicies(data);
-      showToast(t('common.saveSuccess'), 'success');
-    } catch {
-      showToast(t('common.operationFailed'), 'error');
+      setSavedDistPolicies(data);
+      showToast(tModels('policySaved'), 'success');
+    } catch (e: any) {
+      showToast(getApiErrorMessage(e, tErrors, tCommon('operationFailed')), 'error');
     } finally {
       setDistPolicySaving(false);
+    }
+  }
+
+  const handleDistPolicySave = async () => {
+    // Identify fields flipped editable:true → editable:false relative to savedDistPolicies
+    const flippedToReadonly = distPolicies.filter((p) => {
+      const saved = savedDistPolicies.find((s) => s.fieldId === p.fieldId);
+      return saved?.editable === true && p.editable === false;
+    });
+
+    if (flippedToReadonly.length === 0) {
+      await doSavePolicies();
+      return;
+    }
+
+    // Check local-edits counts in parallel
+    try {
+      const counts = await Promise.all(
+        flippedToReadonly.map(async (p) => ({
+          policy: p,
+          count: (await getFieldLocalEditsCount(model!.app!.code!, model!.code, p.fieldId)).count,
+        })),
+      );
+      const withLocal = counts.filter((c) => c.count > 0);
+      if (withLocal.length === 0) {
+        await doSavePolicies();
+        return;
+      }
+      setDistBackfillDialog({ flippedFields: withLocal });
+    } catch {
+      // If count check fails, just save directly
+      await doSavePolicies();
+    }
+  };
+
+  const confirmDistBackfillSave = async (alsoBackfill: boolean) => {
+    if (!distBackfillDialog) return;
+    const flipped = distBackfillDialog.flippedFields;
+    setDistBackfillDialog(null);
+    await doSavePolicies();
+    if (!alsoBackfill || !model) return;
+    try {
+      const mastersRes = await apiClient.get(
+        `/apps/${model.app!.code}/models/${model.code}/data`,
+        { params: { filter: JSON.stringify({ conditions: [], logic: 'and' }), pageSize: 10000 } },
+      );
+      const masters = (mastersRes.data?.items ?? []).filter((r: any) => r.master_id === r.id);
+      const fieldCols = flipped.map((f) => f.policy.columnName);
+      for (const m of masters) {
+        await syncMaster(model.app!.code!, model.code, m.id, {
+          action: 'backfill',
+          fieldColumns: fieldCols,
+          confirmationPhrase: '策略回填',
+        });
+      }
+      showToast(tModels('backfillDone', { masterCount: masters.length, fieldCount: fieldCols.length }), 'success');
+    } catch (e: any) {
+      showToast(getApiErrorMessage(e, tErrors, tCommon('operationFailed')), 'error');
+    }
+  };
+
+  const handleAutoDistributeToggle = async () => {
+    if (!model) return;
+    const nextVal = !model.autoDistribute;
+    setAutoDistributeSaving(true);
+    try {
+      await apiClient.put(`/models/${modelId}`, { autoDistribute: nextVal });
+      setModel({ ...model, autoDistribute: nextVal });
+      showToast(tCommon('saveSuccess'), 'success');
+    } catch (e: any) {
+      showToast(getApiErrorMessage(e, tErrors, tCommon('operationFailed')), 'error');
+    } finally {
+      setAutoDistributeSaving(false);
+    }
+  };
+
+  const handleFillMissing = async () => {
+    if (!model) return;
+    setFillMissingLoading(true);
+    try {
+      const res = await fillMissingCopies(model.app!.code!, model.code);
+      showToast(tModels('fillMissingDone', { created: res.created, skipped: res.skipped }), 'success');
+    } catch (e: any) {
+      showToast(getApiErrorMessage(e, tErrors, tCommon('operationFailed')), 'error');
+    } finally {
+      setFillMissingLoading(false);
     }
   };
 
@@ -2367,6 +2474,56 @@ export default function ModelDetailPage() {
       {/* Distribution Policy tab content */}
       {activeTab === 'distribution-policy' && model?.dataScope === 'distributed' && (
         <div className="mt-4">
+          {/* ── Auto-distribute section ── */}
+          <div className="mb-6 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold mb-2">{tModels('autoDistribute')}</h3>
+              <label className="inline-flex items-center gap-3 cursor-pointer">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!model?.autoDistribute}
+                  onClick={handleAutoDistributeToggle}
+                  disabled={autoDistributeSaving}
+                  className={cn(
+                    'relative inline-flex items-center justify-start h-5 w-10 rounded-full transition-colors',
+                    model?.autoDistribute ? 'bg-primary' : 'bg-muted-foreground/30',
+                    autoDistributeSaving && 'opacity-50 cursor-not-allowed',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'inline-block w-3.5 h-3.5 rounded-full bg-white shadow transition-transform',
+                      model?.autoDistribute ? 'translate-x-[22px]' : 'translate-x-[3px]',
+                    )}
+                  />
+                </button>
+                <span className="text-sm">{tModels('autoDistributeLabel')}</span>
+              </label>
+              <p className="text-xs text-muted-foreground mt-2 max-w-2xl">
+                {tModels('autoDistributeHint', { count: nonRootOrgCount })}
+              </p>
+            </div>
+
+            {model?.autoDistribute && (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleFillMissing}
+                  disabled={fillMissingLoading}
+                  className={cn(btnOutline, 'h-8 px-3 text-xs gap-1.5')}
+                >
+                  {fillMissingLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {tModels('fillMissingBtn')}
+                </button>
+                <span className="text-xs text-muted-foreground">
+                  {tModels('fillMissingHint')}
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="h-px bg-border mb-6" />
+
           {distPolicyLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -2427,6 +2584,35 @@ export default function ModelDetailPage() {
         </div>
       )}
 
+
+      {/* Distribution policy backfill warning dialog */}
+      <Dialog open={!!distBackfillDialog} onOpenChange={(open) => !open && setDistBackfillDialog(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{tModels('backfillDialogTitle')}</DialogTitle>
+            <DialogDescription>{tModels('backfillDialogDesc')}</DialogDescription>
+          </DialogHeader>
+          {distBackfillDialog && (
+            <ul className="text-sm space-y-1 max-h-40 overflow-y-auto border rounded-md p-2 bg-muted/30">
+              {distBackfillDialog.flippedFields.map((f) => (
+                <li key={f.policy.fieldId} className="flex justify-between">
+                  <span>{f.policy.fieldName}</span>
+                  <span className="text-muted-foreground">{tModels('backfillLocalCount', { count: f.count })}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <DialogFooter>
+            <button className={btnOutline} onClick={() => setDistBackfillDialog(null)}>{tCommon('cancel')}</button>
+            <button className={btnOutline} onClick={() => confirmDistBackfillSave(false)}>
+              {tModels('backfillSaveOnly')}
+            </button>
+            <button className={btnDestructive} onClick={() => confirmDistBackfillSave(true)}>
+              {tModels('backfillSaveAndBackfill')}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Field editor drawer */}
       <Sheet open={drawerOpen} onOpenChange={(open) => { if (!open) handleDrawerClose(); }}>

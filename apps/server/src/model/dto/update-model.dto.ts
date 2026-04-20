@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsIn, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class SortItemDto {
@@ -23,4 +23,8 @@ export class UpdateModelDto {
   @ValidateNested({ each: true })
   @Type(() => SortItemDto)
   defaultSort?: SortItemDto[] | null;
+
+  @IsOptional()
+  @IsBoolean()
+  autoDistribute?: boolean;
 }

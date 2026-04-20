@@ -235,6 +235,7 @@ export class ModelService {
               ? Prisma.JsonNull
               : (dto.defaultSort as unknown as Prisma.InputJsonValue),
         }),
+        ...(dto.autoDistribute !== undefined && { autoDistribute: dto.autoDistribute }),
       },
     });
   }
