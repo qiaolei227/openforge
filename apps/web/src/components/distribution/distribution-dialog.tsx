@@ -47,11 +47,11 @@ export function DistributionDialog({
     [orgs],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [statusMap, setStatusMap] = useState<Record<string, CopyStatusEntry[]>>({});
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'edit' | 'preview'>('edit');
-  const [checkedOrgs, setCheckedOrgs] = useState<Set<string>>(new Set());
+  // Tri-state user intent: 'yes' = fill all / 'no' = clear all / absent = preserve current
+  const [intent, setIntent] = useState<Map<string, 'yes' | 'no'>>(new Map());
   const [ackRevoke, setAckRevoke] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -67,18 +67,9 @@ export function DistributionDialog({
     getDistributionStatus(appCode, modelCode, recordIds)
       .then((status) => {
         setStatusMap(status);
-        // Derive initial checked set: org is checked iff ALL records are actively allocated to it
-        const initial = new Set<string>();
-        for (const org of orgs) {
-          if (rootOrgIds.has(org.id)) continue;
-          if (records.length === 0) continue;
-          const allAllocated = records.every((r) => {
-            const entries = status[r.id] ?? [];
-            return entries.some((e) => e.orgId === org.id && !e.isArchived);
-          });
-          if (allAllocated) initial.add(org.id);
-        }
-        setCheckedOrgs(new Set(initial));
+        // Reset intent — derived state from statusMap is used for display;
+        // the diff is empty until user clicks a checkbox
+        setIntent(new Map());
       })
       .catch(() => {
         showToast(t('loadStatusFailed'), 'error');
@@ -87,7 +78,10 @@ export function DistributionDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, appCode, modelCode, recordIds.join(',')]);
 
-  // Compute tri-state per org based on current checkedOrgs + live statusMap
+  // Compute tri-state per org:
+  //   - explicit intent 'yes' → checked
+  //   - explicit intent 'no'  → unchecked
+  //   - no intent: derive from statusMap (all allocated → checked, some → indeterminate, none → unchecked)
   const statePerOrg = useMemo<Record<string, OrgCheckState>>(() => {
     const res: Record<string, OrgCheckState> = {};
     for (const org of orgs) {
@@ -95,23 +89,33 @@ export function DistributionDialog({
         res[org.id] = 'unchecked';
         continue;
       }
-      if (checkedOrgs.has(org.id)) {
+      const explicit = intent.get(org.id);
+      if (explicit === 'yes') {
         res[org.id] = 'checked';
+        continue;
+      }
+      if (explicit === 'no') {
+        res[org.id] = 'unchecked';
+        continue;
+      }
+      if (records.length === 0) {
+        res[org.id] = 'unchecked';
+        continue;
+      }
+      const allocatedCount = records.filter((r) => {
+        const entries = statusMap[r.id] ?? [];
+        return entries.some((e) => e.orgId === org.id && !e.isArchived);
+      }).length;
+      if (allocatedCount === records.length) {
+        res[org.id] = 'checked';
+      } else if (allocatedCount > 0) {
+        res[org.id] = 'indeterminate';
       } else {
-        // Indeterminate: some records already allocated (but user hasn't checked the org)
-        const allocatedCount = records.filter((r) => {
-          const entries = statusMap[r.id] ?? [];
-          return entries.some((e) => e.orgId === org.id && !e.isArchived);
-        }).length;
-        if (allocatedCount > 0 && allocatedCount < records.length) {
-          res[org.id] = 'indeterminate';
-        } else {
-          res[org.id] = 'unchecked';
-        }
+        res[org.id] = 'unchecked';
       }
     }
     return res;
-  }, [orgs, records, statusMap, checkedOrgs, rootOrgIds]);
+  }, [orgs, records, statusMap, intent, rootOrgIds]);
 
   // Count per org for display (always from statusMap, unaffected by checkedOrgs)
   const countPerOrg = useMemo(() => {
@@ -127,7 +131,7 @@ export function DistributionDialog({
     return res;
   }, [orgs, records, statusMap, rootOrgIds]);
 
-  // Compute diff between desired state (checkedOrgs) and actual state (statusMap)
+  // Diff: only orgs with explicit intent produce changes. Orgs without intent are preserved.
   const diff = useMemo(() => {
     const allocate: Array<{
       recordId: string;
@@ -142,42 +146,37 @@ export function DistributionDialog({
       orgName: string;
     }> = [];
     const byOrgId = new Map(orgs.map((o) => [o.id, o]));
-    for (const org of orgs) {
-      if (rootOrgIds.has(org.id)) continue;
-      const wantChecked = checkedOrgs.has(org.id);
+    for (const [orgId, decision] of intent.entries()) {
+      if (rootOrgIds.has(orgId)) continue;
+      const orgName = byOrgId.get(orgId)?.name ?? orgId;
       for (const r of records) {
         const hasActive = (statusMap[r.id] ?? []).some(
-          (e) => e.orgId === org.id && !e.isArchived,
+          (e) => e.orgId === orgId && !e.isArchived,
         );
-        if (wantChecked && !hasActive) {
-          allocate.push({
-            recordId: r.id,
-            recordName: r.displayName,
-            orgId: org.id,
-            orgName: byOrgId.get(org.id)?.name ?? org.id,
-          });
+        if (decision === 'yes' && !hasActive) {
+          allocate.push({ recordId: r.id, recordName: r.displayName, orgId, orgName });
         }
-        if (!wantChecked && hasActive) {
-          revoke.push({
-            recordId: r.id,
-            recordName: r.displayName,
-            orgId: org.id,
-            orgName: byOrgId.get(org.id)?.name ?? org.id,
-          });
+        if (decision === 'no' && hasActive) {
+          revoke.push({ recordId: r.id, recordName: r.displayName, orgId, orgName });
         }
       }
     }
     return { allocate, revoke };
-  }, [orgs, records, statusMap, checkedOrgs, rootOrgIds]);
+  }, [orgs, records, statusMap, intent, rootOrgIds]);
 
   const hasChanges = diff.allocate.length + diff.revoke.length > 0;
   const requireAck = diff.revoke.length > 0;
 
+  // Click cycle: the current displayed state (statePerOrg) dictates next intent.
+  //   - 'checked'        (either explicit 'yes' or derived from full allocation) → click → 'no' (revoke all)
+  //   - 'indeterminate'  (partial) → click → 'yes' (fill gaps)
+  //   - 'unchecked'      (explicit 'no' or empty) → click → 'yes' (allocate all)
   function onToggle(orgId: string) {
-    setCheckedOrgs((prev) => {
-      const next = new Set(prev);
-      if (next.has(orgId)) next.delete(orgId);
-      else next.add(orgId);
+    const current = statePerOrg[orgId];
+    const nextDecision: 'yes' | 'no' = current === 'checked' ? 'no' : 'yes';
+    setIntent((prev) => {
+      const next = new Map(prev);
+      next.set(orgId, nextDecision);
       return next;
     });
   }
