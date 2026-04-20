@@ -136,6 +136,72 @@ export class DistributionService {
     return { results, summary };
   }
 
+  async getDistributionStatus(
+    appCode: string,
+    modelCode: string,
+    recordIds: string[],
+  ): Promise<Record<string, Array<{ orgId: string; copyId: string; isArchived: boolean; hasLocalEdits: boolean }>>> {
+    const model = await this.prisma.sysModel.findFirst({
+      where: { code: modelCode, app: { code: appCode } },
+      select: {
+        id: true,
+        dataScope: true,
+        tableName: true,
+        fields: { select: { id: true, columnName: true } },
+      },
+    });
+
+    if (!model || model.dataScope !== 'distributed') {
+      throw new BusinessException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        ErrorCodes.MODEL_NOT_DISTRIBUTED,
+        '',
+      );
+    }
+
+    const result: Record<string, Array<{ orgId: string; copyId: string; isArchived: boolean; hasLocalEdits: boolean }>> = {};
+    for (const id of recordIds) result[id] = [];
+    if (recordIds.length === 0) return result;
+
+    const policies = await this.prisma.sysDistributionPolicy.findMany({
+      where: { modelId: model.id },
+      select: { fieldId: true, editable: true },
+    });
+    const editableFieldIds = new Set(
+      policies.filter((p: any) => p.editable).map((p: any) => p.fieldId),
+    );
+    const editableCols = (model.fields as Array<{ id: string; columnName: string }>)
+      .filter((f) => editableFieldIds.has(f.id))
+      .map((f) => f.columnName);
+
+    const rows = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT * FROM biz."${model.tableName}" WHERE master_id = ANY($1::uuid[])`,
+      recordIds,
+    );
+
+    const byMaster: Record<string, any> = {};
+    for (const row of rows) {
+      if (row.master_id === row.id) byMaster[row.id] = row;
+    }
+
+    for (const row of rows) {
+      if (row.master_id === row.id) continue;
+      const master = byMaster[row.master_id];
+      const hasLocalEdits = master
+        ? editableCols.some((col) => row[col] !== master[col])
+        : false;
+      if (!result[row.master_id]) result[row.master_id] = [];
+      result[row.master_id].push({
+        orgId: row.org_id,
+        copyId: row.id,
+        isArchived: row.is_archived,
+        hasLocalEdits,
+      });
+    }
+
+    return result;
+  }
+
   private async allocate(
     model: any,
     recordId: string,

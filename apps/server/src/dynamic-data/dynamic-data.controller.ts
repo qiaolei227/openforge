@@ -5,6 +5,7 @@ import {
   Put,
   Delete,
   Param,
+  Query,
   Body,
   Request,
   Inject,
@@ -74,6 +75,20 @@ export class DynamicDataController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.dynamicDataService.getSchema(appCode, modelCode, user);
+  }
+
+  @Get('distribution-status')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'view',
+  )
+  distributionStatus(
+    @Param('appCode') appCode: string,
+    @Param('modelCode') modelCode: string,
+    @Query('recordIds') recordIds: string,
+  ) {
+    const ids = (recordIds ?? '').split(',').filter(Boolean);
+    return this.distributionService.getDistributionStatus(appCode, modelCode, ids);
   }
 
   @Get(':id')

@@ -179,4 +179,47 @@ describe('DistributionService', () => {
 
     expect(res.results[0].errorCode).toBe('CANNOT_ALLOCATE_TO_ROOT');
   });
+
+  // B6: getDistributionStatus tests
+  it('returns distribution status with hasLocalEdits flag', async () => {
+    prisma.sysDistributionPolicy = { findMany: vi.fn().mockResolvedValue([
+      { fieldId: 'f1', editable: false },
+      { fieldId: 'f2', editable: true },
+    ]) };
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm1', dataScope: 'distributed', tableName: 'app1_items', enableDataStatus: false,
+      fields: [{ id: 'f1', columnName: 'spec' }, { id: 'f2', columnName: 'remark' }],
+    });
+    // one query returning master + two copies
+    prisma.$queryRawUnsafe.mockResolvedValueOnce([
+      { id: 'm1', master_id: 'm1', org_id: 'root', is_archived: false, spec: 'A', remark: 'R' },
+      { id: 'c1', master_id: 'm1', org_id: 'sub1', is_archived: false, spec: 'A', remark: 'LOCAL' },
+      { id: 'c2', master_id: 'm1', org_id: 'sub2', is_archived: true,  spec: 'A', remark: 'R' },
+    ]);
+
+    const res = await service.getDistributionStatus('a', 'm', ['m1']);
+    expect(res['m1']).toHaveLength(2);
+    expect(res['m1']).toEqual(expect.arrayContaining([
+      expect.objectContaining({ orgId: 'sub1', copyId: 'c1', isArchived: false, hasLocalEdits: true }),
+      expect.objectContaining({ orgId: 'sub2', copyId: 'c2', isArchived: true, hasLocalEdits: false }),
+    ]));
+  });
+
+  it('getDistributionStatus returns empty array for unknown recordId', async () => {
+    prisma.sysDistributionPolicy = { findMany: vi.fn().mockResolvedValue([]) };
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm1', dataScope: 'distributed', tableName: 'app1_items', enableDataStatus: false,
+      fields: [],
+    });
+    prisma.$queryRawUnsafe.mockResolvedValueOnce([]);
+    const res = await service.getDistributionStatus('a', 'm', ['unknown']);
+    expect(res['unknown']).toEqual([]);
+  });
+
+  it('getDistributionStatus throws MODEL_NOT_DISTRIBUTED on private model', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({ id: 'm', dataScope: 'private', tableName: 't', fields: [] });
+    await expect(service.getDistributionStatus('a', 'm', ['r1'])).rejects.toMatchObject({
+      errorCode: 'MODEL_NOT_DISTRIBUTED',
+    });
+  });
 });
