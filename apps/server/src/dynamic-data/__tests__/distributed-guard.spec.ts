@@ -6,8 +6,14 @@ describe('DistributedGuard', () => {
   let guard: DistributedGuard;
   let prisma: any;
 
-  function mkCtx(method: string, params: any, body: any, user: any) {
-    const req = { method, params, body, user };
+  function mkCtx(method: string, params: any, body: any, user: any, routePath?: string) {
+    const req = {
+      method,
+      params,
+      body,
+      user,
+      route: { path: routePath ?? '/apps/:appCode/models/:modelCode/data' },
+    };
     return { switchToHttp: () => ({ getRequest: () => req }) } as any;
   }
 
@@ -70,6 +76,32 @@ describe('DistributedGuard', () => {
       { userId: 'u', orgId: 'sub', isAdmin: true },
     );
     expect(await guard.canActivate(ctx)).toBe(true);
+  });
+
+  it('allows POST /query (list search) from non-root user on distributed model', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({ id: 'm', dataScope: 'distributed' });
+    const ctx = mkCtx('POST',
+      { appCode: 'a', modelCode: 'm' },
+      { filter: {} },
+      { userId: 'u', orgId: 'sub', isAdmin: false },
+      '/apps/:appCode/models/:modelCode/data/query',
+    );
+    expect(await guard.canActivate(ctx)).toBe(true);
+    expect(prisma.sysOrganization.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects POST /batch (batch create) from non-root user on distributed model', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({ id: 'm', dataScope: 'distributed' });
+    prisma.sysOrganization.findUnique.mockResolvedValue({ id: 'sub', parentId: 'root' });
+    const ctx = mkCtx('POST',
+      { appCode: 'a', modelCode: 'm' },
+      { records: [] },
+      { userId: 'u', orgId: 'sub', isAdmin: false },
+      '/apps/:appCode/models/:modelCode/data/batch',
+    );
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+      errorCode: 'CANNOT_CREATE_COPY_DIRECTLY',
+    });
   });
 
   it('does not intercept update (PUT) operations in B1', async () => {

@@ -20,8 +20,12 @@ export class DistributedGuard implements CanActivate {
     if (!model || model.dataScope !== 'distributed') return true;
     if (user?.isAdmin) return true;
 
-    // Rule 1 (B1): non-root create master rejection
-    if (method === 'POST' && !recordId) {
+    // Rule 1 (B1): non-root create master rejection.
+    // Only apply to actual master-create paths (bare POST /data and POST /data/batch).
+    // Other POST routes on the same controller (/query, /distribute, /distribution-status,
+    // /:id/sync, /fill-missing-copies) are not master-creates and have their own semantics
+    // and permission checks.
+    if (method === 'POST' && !recordId && this.isMasterCreatePath(req)) {
       const isRoot = await this.isRootOrg(user.orgId);
       if (!isRoot) {
         throw new BusinessException(
@@ -33,6 +37,12 @@ export class DistributedGuard implements CanActivate {
     }
     // Rules 2 and 3 come in B2/B3 tasks
     return true;
+  }
+
+  private isMasterCreatePath(req: any): boolean {
+    const routePath: string | undefined = req.route?.path;
+    if (!routePath) return true; // fallback (tests without express route): assume bare create
+    return /\/data$/.test(routePath) || /\/data\/batch$/.test(routePath);
   }
 
   private async isRootOrg(orgId: string | undefined | null): Promise<boolean> {
