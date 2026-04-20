@@ -293,4 +293,25 @@ export class DynamicDataController {
       confirmationPhrase: body.confirmationPhrase,
     });
   }
+
+  @Get(':id/distribution-log')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'view',
+  )
+  distributionLog(
+    @Param('appCode') appCode: string,
+    @Param('modelCode') modelCode: string,
+    @Param('id') id: string,
+    @Query('page') page: string = '1',
+    @Query('pageSize') pageSize: string = '20',
+  ) {
+    return this.distributionService.getDistributionLog(
+      appCode,
+      modelCode,
+      id,
+      Number(page) || 1,
+      Number(pageSize) || 20,
+    );
+  }
 }

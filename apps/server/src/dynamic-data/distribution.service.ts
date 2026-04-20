@@ -202,6 +202,37 @@ export class DistributionService {
     return result;
   }
 
+  async getDistributionLog(
+    appCode: string,
+    modelCode: string,
+    recordId: string,
+    page: number = 1,
+    pageSize: number = 20,
+  ) {
+    const model = await this.prisma.sysModel.findFirst({
+      where: { code: modelCode, app: { code: appCode } },
+      select: { id: true },
+    });
+    if (!model) {
+      throw new BusinessException(HttpStatus.NOT_FOUND, ErrorCodes.MODEL_NOT_FOUND, '');
+    }
+    const safePage = Math.max(1, Math.floor(page));
+    const safePageSize = Math.min(200, Math.max(1, Math.floor(pageSize)));
+    const skip = (safePage - 1) * safePageSize;
+    const [items, total] = await Promise.all([
+      this.prisma.sysDistributionLog.findMany({
+        where: { modelId: model.id, recordId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: safePageSize,
+      }),
+      this.prisma.sysDistributionLog.count({
+        where: { modelId: model.id, recordId },
+      }),
+    ]);
+    return { items, total, page: safePage, pageSize: safePageSize };
+  }
+
   private async allocate(
     model: any,
     recordId: string,

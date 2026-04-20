@@ -222,4 +222,45 @@ describe('DistributionService', () => {
       errorCode: 'MODEL_NOT_DISTRIBUTED',
     });
   });
+
+  it('getDistributionLog returns paginated results sorted desc by createdAt', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({ id: 'm1' });
+    prisma.sysDistributionLog = {
+      findMany: vi.fn().mockResolvedValue([
+        { id: 'l1', createdAt: new Date() },
+        { id: 'l2', createdAt: new Date() },
+      ]),
+      count: vi.fn().mockResolvedValue(42),
+    };
+    const res = await service.getDistributionLog('a', 'm', 'r1', 2, 10);
+    expect(prisma.sysDistributionLog.findMany).toHaveBeenCalledWith({
+      where: { modelId: 'm1', recordId: 'r1' },
+      orderBy: { createdAt: 'desc' },
+      skip: 10,
+      take: 10,
+    });
+    expect(res).toEqual({ items: expect.any(Array), total: 42, page: 2, pageSize: 10 });
+  });
+
+  it('getDistributionLog clamps page >= 1 and pageSize between 1 and 200', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({ id: 'm1' });
+    prisma.sysDistributionLog = {
+      findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+    };
+    await service.getDistributionLog('a', 'm', 'r1', 0, 500);
+    expect(prisma.sysDistributionLog.findMany).toHaveBeenCalledWith({
+      where: { modelId: 'm1', recordId: 'r1' },
+      orderBy: { createdAt: 'desc' },
+      skip: 0,
+      take: 200,
+    });
+  });
+
+  it('getDistributionLog throws MODEL_NOT_FOUND when model does not exist', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue(null);
+    await expect(service.getDistributionLog('a', 'm', 'r1')).rejects.toMatchObject({
+      errorCode: 'MODEL_NOT_FOUND',
+    });
+  });
 });
