@@ -85,7 +85,45 @@ export class OrgService {
       org.id,
     ));
 
-    return org;
+    const autoDistributeModels: Array<{
+      appCode: string;
+      modelCode: string;
+      modelName: string;
+      pendingCount: number;
+    }> = [];
+
+    // Only compute pending allocation for non-root orgs (root is the source, not a target)
+    if (org.parentId !== null) {
+      const candidates = await this.prisma.sysModel.findMany({
+        where: { autoDistribute: true, dataScope: 'distributed' },
+        select: {
+          code: true,
+          name: true,
+          tableName: true,
+          app: { select: { code: true } },
+        },
+      });
+      for (const m of candidates) {
+        try {
+          const rows = await this.prisma.$queryRawUnsafe<Array<{ c: bigint }>>(
+            `SELECT COUNT(*)::int AS c FROM biz."${m.tableName}" WHERE master_id = id AND is_archived = false`,
+          );
+          const pendingCount = Number(rows[0]?.c ?? 0);
+          if (pendingCount > 0) {
+            autoDistributeModels.push({
+              appCode: m.app.code,
+              modelCode: m.code,
+              modelName: m.name,
+              pendingCount,
+            });
+          }
+        } catch {
+          // Table might not exist yet (DDL inconsistency) — skip silently
+        }
+      }
+    }
+
+    return { org, autoDistributeModels };
   }
 
   async update(id: string, dto: UpdateOrgDto) {

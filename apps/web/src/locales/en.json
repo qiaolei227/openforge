@@ -118,7 +118,8 @@
     "statusActive": "Active",
     "statusDisabled": "Disabled",
     "parentOrg": "Parent Organization",
-    "noParent": "None (top level)"
+    "noParent": "None (top level)",
+    "autoDistributePending": "{count} record(s) pending distribution ({models}) — go to the model to fill in missing allocations"
   },
   "user": {
     "title": "Users",

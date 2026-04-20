@@ -118,7 +118,8 @@
     "statusActive": "正常",
     "statusDisabled": "禁用",
     "parentOrg": "上级组织",
-    "noParent": "无（顶级组织）"
+    "noParent": "无（顶级组织）",
+    "autoDistributePending": "该组织下有 {count} 条待分配记录（{models}），可前往对应模型补充分配"
   },
   "user": {
     "title": "用户管理",

@@ -217,8 +217,16 @@ export default function OrgsPage() {
     setFormSubmitting(true);
     try {
       if (dialogMode === 'create') {
-        await apiClient.post('/orgs', { name: formName, code: formCode, parentId: formParentId || null });
+        const { data: created } = await apiClient.post<{
+          org: Org;
+          autoDistributeModels: Array<{ appCode: string; modelCode: string; modelName: string; pendingCount: number }>;
+        }>('/orgs', { name: formName, code: formCode, parentId: formParentId || null });
         showToast(tOrg('createSuccess'), 'success');
+        if (created.autoDistributeModels?.length > 0) {
+          const totalPending = created.autoDistributeModels.reduce((s, m) => s + m.pendingCount, 0);
+          const modelNames = created.autoDistributeModels.map((m) => m.modelName).join('、');
+          showToast(tOrg('autoDistributePending', { count: totalPending, models: modelNames }), 'success');
+        }
       } else if (dialogMode === 'edit' && editingOrg) {
         await apiClient.put(`/orgs/${editingOrg.id}`, { name: formName, parentId: formParentId || null });
         showToast(tOrg('updateSuccess'), 'success');
