@@ -154,6 +154,7 @@ model SysModel {
   semantic         String?  @db.Text
   aiHint      String?  @map("ai_hint") @db.Text
   defaultSort  Json?    @map("default_sort") @db.JsonB
+  autoDistribute Boolean @default(false) @map("auto_distribute")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -232,6 +233,24 @@ model SysDistributionPolicy {
 
   @@unique([modelId, fieldId])
   @@map("sys_distribution_policy")
+}
+
+model SysDistributionLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  modelId       String   @map("model_id") @db.Uuid
+  recordId      String   @map("record_id") @db.Uuid
+  action        String   @db.VarChar(20)
+  sourceOrgId   String?  @map("source_org_id") @db.Uuid
+  targetOrgId   String?  @map("target_org_id") @db.Uuid
+  fieldColumn   String?  @map("field_column") @db.VarChar(64)
+  beforeValue   Json?    @map("before_value")
+  afterValue    Json?    @map("after_value")
+  operatorId    String   @map("operator_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([modelId, recordId])
+  @@index([operatorId, createdAt])
+  @@map("sys_distribution_log")
 }
 
 model SysView {
