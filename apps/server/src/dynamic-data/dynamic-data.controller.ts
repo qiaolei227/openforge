@@ -8,6 +8,7 @@ import {
   Body,
   Request,
   Inject,
+  UseGuards,
 } from '@nestjs/common';
 import { DynamicDataService } from './dynamic-data.service';
 import { DataStatusService } from './data-status.service';
@@ -18,7 +19,9 @@ import { RequestUser } from '../common/interfaces/request-context';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
+import { DistributedGuard } from './distributed.guard';
 
+@UseGuards(DistributedGuard)
 @Controller('apps/:appCode/models/:modelCode/data')
 export class DynamicDataController {
   constructor(
