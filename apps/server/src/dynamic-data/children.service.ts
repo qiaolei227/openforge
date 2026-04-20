@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
-import { SYSTEM_FIELDS } from '@openforge/shared';
+import { SYSTEM_FIELDS, isVirtualFieldType } from '@openforge/shared';
 
 const SYSTEM_FIELDS_SET = new Set<string>(SYSTEM_FIELDS);
 
@@ -88,9 +88,13 @@ export class ChildrenService {
       }
     }
 
+    // Virtual field types (MULTI_REFERENCE, LOOKUP) have no physical columns on
+    // the child table — they must NOT reach INSERT/UPDATE. `findById` hydrates
+    // child rows with resolved LOOKUP values for display, so the payload can
+    // legitimately contain keys like `material_name`; strip them here.
     const writableColumns = childFields
       .filter((f: any) => !f.isSystem && !f.deletedAt)
-      .filter((f: any) => f.fieldType !== 'MULTI_REFERENCE')
+      .filter((f: any) => !isVirtualFieldType(f.fieldType))
       .map((f: any) => f.columnName);
 
     for (let idx = 0; idx < records.length; idx++) {
@@ -179,7 +183,7 @@ export class ChildrenService {
   ) {
     const errors: Array<{ field: string; code: string; name: string }> = [];
     const writableFields = childFields.filter(
-      (f: any) => !f.isSystem && !f.deletedAt && f.fieldType !== 'MULTI_REFERENCE' && f.fieldType !== 'AUTO_NUMBER',
+      (f: any) => !f.isSystem && !f.deletedAt && !isVirtualFieldType(f.fieldType) && f.fieldType !== 'AUTO_NUMBER',
     );
 
     for (const field of writableFields) {

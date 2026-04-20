@@ -58,7 +58,7 @@ describe('LookupResolverService', () => {
 
   // ─── Test 2: batch resolve single scalar LOOKUP across 4 records ───────────
   it('should batch-resolve a scalar LOOKUP across 4 records with one IN query', async () => {
-    const records = [
+    const records: any[] = [
       { id: 'r1', material_id: 'mat_1' },
       { id: 'r2', material_id: 'mat_2' },
       { id: 'r3', material_id: 'mat_1' }, // duplicate FK → same IN query
@@ -96,7 +96,7 @@ describe('LookupResolverService', () => {
 
   // ─── Test 3: dangling FK ──────────────────────────────────────────────────
   it('should set LOOKUP to null and warn on dangling FK', async () => {
-    const records = [{ id: 'r1', material_id: 'missing_id' }];
+    const records: any[] = [{ id: 'r1', material_id: 'missing_id' }];
     const lookupField = makeLookupField();
     const sourceFieldMeta = {
       id: 'sf_material_id',
@@ -127,7 +127,7 @@ describe('LookupResolverService', () => {
 
   // ─── Test 4: skipAlreadyResolved=true ────────────────────────────────────
   it('should skip resolution when skipAlreadyResolved=true and values are already set', async () => {
-    const records = [
+    const records: any[] = [
       { id: 'r1', material_id: 'mat_1', material_name: 'preset' },
     ];
     const lookupField = makeLookupField();
@@ -156,7 +156,7 @@ describe('LookupResolverService', () => {
     // LOOKUP: material_supplier_name
     //   source: material_id (REFERENCE → material)
     //   target col: default_supplier_id (REFERENCE → supplier, display='name')
-    const records = [
+    const records: any[] = [
       { id: 'r1', material_id: 'mat_1' },
     ];
     const lookupField: any = {
