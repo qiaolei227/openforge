@@ -7,6 +7,12 @@ import { useSetReferenceRecord } from '@openforge/render-engine';
 export interface OrgFieldExtraProps {
   systemQueryFn: SystemQueryFn;
   displayValue?: string;
+  /**
+   * Optional callback that hands the full picked record up to the parent so
+   * it can persist id, display, and any sibling LOOKUP-target columns. Falls
+   * back to plain `onChange(id)` when absent.
+   */
+  onPickRecord?: (record: Record<string, any> | null) => void;
 }
 
 const INPUT_BASE =
@@ -82,7 +88,7 @@ function SpinnerIcon() {
 }
 
 export default function OrgField(props: FieldComponentProps & Partial<OrgFieldExtraProps>) {
-  const { field, value, onChange, disabled, error, mode, systemQueryFn, displayValue } = props;
+  const { field, value, onChange, disabled, error, mode, systemQueryFn, displayValue, onPickRecord } = props;
   const setReferenceRecord = useSetReferenceRecord();
 
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -147,15 +153,24 @@ export default function OrgField(props: FieldComponentProps & Partial<OrgFieldEx
   }
 
   function handleSelectRecord(record: Record<string, any>) {
-    onChange(record.id);
-    setDisplayText(record.name || String(record.id));
+    const display = record.name || String(record.id);
+    if (onPickRecord) {
+      onPickRecord(record);
+    } else {
+      onChange(record.id);
+    }
+    setDisplayText(display);
     setReferenceRecord(field.columnName, record);
     setSearchKeyword('');
     setDropdownOpen(false);
   }
 
   function handleClear() {
-    onChange(null);
+    if (onPickRecord) {
+      onPickRecord(null);
+    } else {
+      onChange(null);
+    }
     setDisplayText('');
     setReferenceRecord(field.columnName, null);
     setSearchKeyword('');
@@ -196,7 +211,7 @@ export default function OrgField(props: FieldComponentProps & Partial<OrgFieldEx
           <>
             <input
               type="text"
-              className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+              className="flex-1 min-w-0 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
               value={searchKeyword}
               onChange={(e) => handleInputChange(e.target.value)}
               disabled={disabled}

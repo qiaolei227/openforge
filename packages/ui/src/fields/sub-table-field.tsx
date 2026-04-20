@@ -2,10 +2,55 @@
 
 import { useState, useMemo, useCallback, useEffect, type ComponentType } from 'react';
 import type { Field, FieldType } from '@openforge/shared';
+import { isVirtualFieldType } from '@openforge/shared';
 import { DEFAULT_COLUMN_WIDTH } from '@openforge/render-engine';
 import type { SubTableProps } from './sub-table-types';
 import type { FieldComponentProps } from './field-props';
 import { getFieldComponent } from './index';
+import { getRecordDisplay } from './get-record-display';
+
+/**
+ * Build a row-patch from a picked record for a REFERENCE/USER/ORG field:
+ * - writes `{columnName}` = record.id
+ * - writes `{columnName}__display` = computed display
+ * - writes any sibling LOOKUP columns whose `sourceFieldId === sourceField.id`
+ *   from `record[targetFieldColumnName]` — this is what makes LOOKUP columns
+ *   (e.g. `material_name`) populate immediately after the user picks a
+ *   material in the same row, which the cache-based hook cannot do once more
+ *   than one row is involved.
+ */
+function buildRowPatchForRecord(
+  sourceField: Field,
+  record: Record<string, any> | null,
+  allFields: Field[],
+): Record<string, any> {
+  const columnName = sourceField.columnName;
+  if (record == null) {
+    const patch: Record<string, any> = {
+      [columnName]: null,
+      [`${columnName}__display`]: null,
+    };
+    for (const f of allFields) {
+      if (f.fieldType !== 'LOOKUP') continue;
+      if ((f.options as any)?.sourceFieldId !== sourceField.id) continue;
+      patch[f.columnName] = null;
+    }
+    return patch;
+  }
+
+  const patch: Record<string, any> = {
+    [columnName]: record.id,
+    [`${columnName}__display`]: getRecordDisplay(sourceField, record),
+  };
+  for (const f of allFields) {
+    if (f.fieldType !== 'LOOKUP') continue;
+    if ((f.options as any)?.sourceFieldId !== sourceField.id) continue;
+    const targetCol = (f.options as any)?.targetFieldColumnName;
+    if (!targetCol) continue;
+    patch[f.columnName] = record[targetCol] ?? null;
+  }
+  return patch;
+}
 
 /* ── Inline Icons (monochrome stroke SVG per CLAUDE.md) ── */
 
@@ -87,6 +132,26 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
     );
   }, [meta.targetFields, meta.fkColumnName]);
 
+  // Pre-compute column widths once so <colgroup>, table width, and each cell
+  // agree on the same pixel values. Relying on Tailwind's `table-fixed` + `w-auto`
+  // alone proved unstable: adding a new row or toggling between the "empty" and
+  // "populated" tbody made the browser re-measure columns against cell content
+  // (REFERENCE empty-state <input> has an intrinsic min-width > colgroup). Pin
+  // the table to a specific pixel width so layout is purely math-driven.
+  const CHECKBOX_COL_W = 40;
+  const ROWNUM_COL_W = 40;
+  const fieldColWidths = useMemo(
+    () => visibleFields.map((f) => DEFAULT_COLUMN_WIDTH[f.fieldType as FieldType] ?? 150),
+    [visibleFields],
+  );
+  const tableWidth = useMemo(
+    () =>
+      (isEditable ? CHECKBOX_COL_W : 0) +
+      ROWNUM_COL_W +
+      fieldColWidths.reduce((a, b) => a + b, 0),
+    [isEditable, fieldColWidths],
+  );
+
   const handleCellChange = useCallback(
     (rowIndex: number, columnName: string, value: any) => {
       const newRows = [...rows];
@@ -99,6 +164,10 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
   const handleAddRow = useCallback(() => {
     const emptyRow: Record<string, any> = {};
     for (const f of visibleFields) {
+      // Virtual fields (LOOKUP, MULTI_REFERENCE) have no physical column — do
+      // not seed them into the row, or the server INSERT will try to write
+      // a non-existent column (e.g. LOOKUP `material_name`).
+      if (isVirtualFieldType(f.fieldType)) continue;
       emptyRow[f.columnName] = f.defaultValue ?? null;
     }
     onChange([...rows, emptyRow]);
@@ -118,6 +187,7 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
     const record = rows[0] ?? (() => {
       const emptyRow: Record<string, any> = {};
       for (const f of visibleFields) {
+        if (isVirtualFieldType(f.fieldType)) continue;
         emptyRow[f.columnName] = f.defaultValue ?? null;
       }
       // Defer the onChange to avoid updating state during render
@@ -133,6 +203,17 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
         <div className="grid grid-cols-2 gap-4 p-4">
           {visibleFields.map((field) => {
             const fullWidth = field.fieldType === 'RICHTEXT' || field.fieldType === 'TEXT';
+            const base = buildFieldExtraProps?.(field, record) ?? {};
+            if (
+              field.fieldType === 'REFERENCE' ||
+              field.fieldType === 'USER' ||
+              field.fieldType === 'ORGANIZATION'
+            ) {
+              base.onPickRecord = (picked: Record<string, any> | null) => {
+                const patch = buildRowPatchForRecord(field, picked, meta.targetFields);
+                onChange([{ ...(rows[0] ?? record), ...patch }]);
+              };
+            }
             return (
               <div key={field.id} className={fullWidth ? 'col-span-2' : ''}>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -144,7 +225,7 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
                   value={record[field.columnName]}
                   onChange={(val) => handleCellChange(0, field.columnName, val)}
                   disabled={!isEditable}
-                  extraProps={buildFieldExtraProps?.(field, record)}
+                  extraProps={base}
                 />
               </div>
             );
@@ -154,29 +235,48 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
     );
   }
 
-  // SubTable mode: inject entityContext for REFERENCE fields
+  // SubTable mode: inject entityContext and onPickRecord so REFERENCE/USER/ORG
+  // picks update the row with id, __display, AND any sibling LOOKUP-target
+  // values. LOOKUP in a sub-table cannot rely on the global reference-record
+  // cache (only one entry per column name → can't disambiguate per row), so
+  // we bake the resolved values into the row's own data.
   const buildCellExtraProps = useCallback(
     (field: Field, row: Record<string, any>, rowIndex: number) => {
       const base = buildFieldExtraProps?.(field, row) ?? {};
+
+      if (
+        field.fieldType === 'REFERENCE' ||
+        field.fieldType === 'USER' ||
+        field.fieldType === 'ORGANIZATION'
+      ) {
+        base.onPickRecord = (record: Record<string, any> | null) => {
+          const patch = buildRowPatchForRecord(field, record, meta.targetFields);
+          const updated = [...rows];
+          updated[rowIndex] = { ...updated[rowIndex], ...patch };
+          onChange(updated);
+        };
+      }
+
       if (field.fieldType === 'REFERENCE') {
         base.entityContext = {
           existingIds: [],
           /**
-           * Receives ALL selected records as partial row data.
-           * Assigns sequentially starting from the current row:
-           * fills existing rows in order, appends new rows only
-           * when past the end.
+           * Receives ALL selected records. Assigns sequentially starting from
+           * the current row: fills existing rows in order, appends new rows
+           * only when past the end. Each row gets id + __display + any
+           * LOOKUP-target columns that resolve from the picked record.
            */
-          onBatchAddRows: (mappedRows: Record<string, any>[]) => {
+          onBatchAddRecords: (records: Record<string, any>[], sourceField: Field) => {
             const updated = [...rows];
             const newRows: Record<string, any>[] = [];
 
-            for (let i = 0; i < mappedRows.length; i++) {
+            for (let i = 0; i < records.length; i++) {
+              const patch = buildRowPatchForRecord(sourceField, records[i], meta.targetFields);
               const targetIdx = rowIndex + i;
               if (targetIdx < updated.length) {
-                updated[targetIdx] = { ...updated[targetIdx], ...mappedRows[i] };
+                updated[targetIdx] = { ...updated[targetIdx], ...patch };
               } else {
-                newRows.push(mappedRows[i]);
+                newRows.push(patch);
               }
             }
 
@@ -186,7 +286,7 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
       }
       return base;
     },
-    [buildFieldExtraProps, rows, onChange],
+    [buildFieldExtraProps, rows, onChange, meta.targetFields],
   );
 
   // SubTable mode: editable grid
@@ -251,11 +351,28 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
 
       {/* Table */}
       <div className="max-h-[480px] overflow-auto">
-        <table className="w-auto table-fixed text-sm">
+        <table
+          className="table-fixed text-sm"
+          style={{ width: tableWidth, minWidth: tableWidth }}
+        >
+          {/*
+           * <colgroup> + an explicit pixel-width <table> is the combination that
+           * reliably prevents column re-measurement when rows transition between
+           * the empty-state (colSpan row) and populated state, or when the
+           * REFERENCE cell swaps between <input> (min-content intrinsic width)
+           * and <span> (truncate). Everything downstream reads these widths.
+           */}
+          <colgroup>
+            {isEditable && <col style={{ width: CHECKBOX_COL_W }} />}
+            <col style={{ width: ROWNUM_COL_W }} />
+            {visibleFields.map((field, i) => (
+              <col key={field.id} style={{ width: fieldColWidths[i] }} />
+            ))}
+          </colgroup>
           <thead className="sticky top-0 z-10">
             <tr>
               {isEditable && (
-                <th className="border-b bg-muted px-2 py-2 text-center" style={{ width: 40, minWidth: 40, maxWidth: 40 }}>
+                <th className="border-b bg-muted px-2 py-2 text-center">
                   <input
                     type="checkbox"
                     checked={rows.length > 0 && selectedRows.size === rows.length}
@@ -264,20 +381,16 @@ export function SubTableField({ meta, rows, onChange, mode, disabled, t, buildFi
                   />
                 </th>
               )}
-              <th className="border-b bg-muted px-2 py-2 text-center text-muted-foreground" style={{ width: 40, minWidth: 40, maxWidth: 40 }}>#</th>
-              {visibleFields.map((field) => {
-                const colW = DEFAULT_COLUMN_WIDTH[field.fieldType as FieldType] ?? 150;
-                return (
-                  <th
-                    key={field.id}
-                    className="border-b bg-muted px-3 py-2 text-left font-medium text-muted-foreground truncate"
-                    style={{ width: colW, minWidth: colW, maxWidth: colW }}
-                  >
-                    {field.name}
-                    {field.isRequired && <span className="ml-0.5 text-destructive">*</span>}
-                  </th>
-                );
-              })}
+              <th className="border-b bg-muted px-2 py-2 text-center text-muted-foreground">#</th>
+              {visibleFields.map((field) => (
+                <th
+                  key={field.id}
+                  className="border-b bg-muted px-3 py-2 text-left font-medium text-muted-foreground truncate"
+                >
+                  {field.name}
+                  {field.isRequired && <span className="ml-0.5 text-destructive">*</span>}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>

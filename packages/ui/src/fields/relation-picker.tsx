@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import type { Field } from '@openforge/shared';
 import type { FieldComponentProps, ApiQueryFn, PickerColumn } from './field-props';
 import ReferencePickerDialog from './reference-picker-dialog';
 import { usePickerColumns } from './use-picker-columns';
@@ -15,10 +16,21 @@ export interface RelationPickerExtraProps {
   displayValue?: string;
   fetchSchema?: (appCode: string, modelCode: string) => Promise<any>;
   t?: (key: string, values?: Record<string, any>) => string;
+  /**
+   * Optional callback that hands the full picked record up to the parent so
+   * it can persist `{columnName}`, `{columnName}__display`, AND any sibling
+   * LOOKUP-target columns (needed for row-scoped lookup in sub-tables). Falls
+   * back to plain `onChange(id)` when not supplied.
+   */
+  onPickRecord?: (record: Record<string, any> | null) => void;
   /** Entity context for subtable multi-select (injected by buildFieldExtraProps) */
   entityContext?: {
     existingIds: string[];
-    onBatchAddRows?: (rows: Record<string, any>[]) => void;
+    /**
+     * Receives the full picked records so the subtable can extract id, display,
+     * and LOOKUP-target values per field when distributing across rows.
+     */
+    onBatchAddRecords?: (records: Record<string, any>[], sourceField: Field) => void;
   };
 }
 
@@ -70,7 +82,7 @@ function ExternalLinkIcon() {
 }
 
 export default function RelationPicker(props: FieldComponentProps & Partial<RelationPickerExtraProps>) {
-  const { field, value, onChange, disabled, error, mode, queryFn, targetAppCode, targetModelCode, targetModelName, displayValue, fetchSchema, t } = props;
+  const { field, value, onChange, disabled, error, mode, queryFn, targetAppCode, targetModelCode, targetModelName, displayValue, fetchSchema, t, onPickRecord } = props;
   const setReferenceRecord = useSetReferenceRecord();
 
   const displayField = field.options?.targetDisplayField || 'name';
@@ -189,15 +201,24 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
   }
 
   function handleSelectRecord(record: Record<string, any>) {
-    onChange(record.id);
-    setDisplayText(record[displayField] ?? String(record.id));
+    const display = record[displayField] ?? String(record.id);
+    if (onPickRecord) {
+      onPickRecord(record);
+    } else {
+      onChange(record.id);
+    }
+    setDisplayText(display);
     setReferenceRecord(field.columnName, record);
     setSearchKeyword('');
     setDropdownOpen(false);
   }
 
   function handleClear() {
-    onChange(null);
+    if (onPickRecord) {
+      onPickRecord(null);
+    } else {
+      onChange(null);
+    }
     setDisplayText('');
     setReferenceRecord(field.columnName, null);
     setSearchKeyword('');
@@ -245,10 +266,11 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
           </>
         ) : (
           <>
-            {/* Search input */}
+            {/* Search input — min-w-0 lets it shrink below intrinsic 20-char width
+                inside a fixed-width sub-table cell instead of forcing overflow. */}
             <input
               type="text"
-              className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+              className="flex-1 min-w-0 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
               value={searchKeyword}
               onChange={(e) => handleInputChange(e.target.value)}
               onBlur={handleInputBlur}
@@ -324,23 +346,23 @@ export default function RelationPicker(props: FieldComponentProps & Partial<Rela
           excludeIds={entityCtx?.existingIds ?? []}
           onConfirmSingle={pickerMode === 'single' ? (record) => {
             const df = field.options?.targetDisplayField || 'name';
-            onChange(record.id);
-            setDisplayText(record[df] ?? record.id);
+            const display = record[df] ?? String(record.id);
+            if (onPickRecord) {
+              onPickRecord(record);
+            } else {
+              onChange(record.id);
+            }
+            setDisplayText(display);
             setReferenceRecord(field.columnName, record);
           } : undefined}
           onConfirmMultiple={pickerMode === 'multiple' ? (records) => {
-            if (!entityCtx?.onBatchAddRows || records.length === 0) return;
-            const df = field.options?.targetDisplayField || 'name';
-            const columnName = field.columnName;
-            // Map ALL records to row data — onBatchAddRows handles filling
-            // the current row (first) and appending new rows (rest) in one call.
-            const mapped = records.map((r) => ({
-              [columnName]: r.id,
-              [`${columnName}__display`]: r[df] ?? r.id,
-            }));
-            entityCtx.onBatchAddRows(mapped);
+            if (!entityCtx?.onBatchAddRecords || records.length === 0) return;
+            // Hand the full records upstream — the sub-table extracts id,
+            // display, and any sibling LOOKUP-target columns per row.
+            entityCtx.onBatchAddRecords(records, field);
             // Update local display for the current cell
-            setDisplayText(records[0][df] ?? records[0].id);
+            const df = field.options?.targetDisplayField || 'name';
+            setDisplayText(records[0][df] ?? String(records[0].id));
           } : undefined}
           t={t ?? ((k: string) => k)}
         />

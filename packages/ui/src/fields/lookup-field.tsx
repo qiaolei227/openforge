@@ -191,8 +191,19 @@ export default function LookupField(
 
   const hookValue = useLookupValue(resolvedSourceColumnName, targetFieldColumnName);
 
-  // edit mode uses live hook value; view/preview/list mode uses server-provided prop value
-  const value = mode === 'edit' ? hookValue : valueProp;
+  // Edit mode: prefer the per-row value when it has been populated (the
+  // sub-table writes LOOKUP-target values directly onto each row when a
+  // REFERENCE is picked, since the global reference-record cache cannot
+  // disambiguate multiple rows). Fall back to hookValue for the main-form
+  // case where row data is initially unpopulated and the cache fills in
+  // after the user picks. View/preview/list: trust the server-provided
+  // prop value.
+  const value =
+    mode === 'edit'
+      ? (valueProp !== null && valueProp !== undefined && valueProp !== ''
+          ? valueProp
+          : hookValue)
+      : valueProp;
 
   const formatted = formatLookupValue(value, targetFieldType, targetFieldOptions);
   const isEmpty = value === null || value === undefined || value === '';
