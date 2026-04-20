@@ -18,8 +18,10 @@ import {
 import type { Field, FieldType, LayoutConfig, LayoutNode, QueryResponse, BatchResponse, SysView, FilterGroup, SortItem } from '@openforge/shared';
 import { useTabStore } from '@/stores/tab-store';
 import { useAuthStore } from '@/stores/auth-store';
+import { useOrgStore } from '@/stores/org-store';
 import { useActions } from '@/hooks/use-actions';
 import { ActionToolbar } from '@/components/workspace/action-toolbar';
+import { DistributionDialog } from '@/components/distribution/distribution-dialog';
 import { FilterPanel } from '@/components/workspace/filter-panel';
 import { FilterChips } from '@/components/workspace/filter-chips';
 import { ColumnFilterPopover } from '@/components/workspace/column-filter-popover';
@@ -60,6 +62,7 @@ interface RecordBrowserProps {
     isTree?: boolean;
     enableDataStatus?: boolean;
     defaultSort?: SortItem[] | null;
+    dataScope?: 'private' | 'shared' | 'distributed';
     app: { code: string };
   };
   fields: Field[];
@@ -108,6 +111,13 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   const { openDetailTab, openCreateTab } = useTabStore();
   const { actions } = useActions(model.id);
   const { config: userConfig, save: saveUserConfig } = useUserListConfig(model.app.code, model.code);
+
+  /* ---------- Org-scope derived state (for distributed-model access control) ---------- */
+  const currentOrg = useOrgStore((s) => s.accessibleOrgs.find((o) => o.id === s.currentOrgId) ?? null);
+  const isRootOrg = currentOrg?.parentId === null;
+  const isDistributedModel = model.dataScope === 'distributed';
+  // Non-admin non-root users viewing a distributed model are looking at copies — restrict mutative actions
+  const viewingCopies = isDistributedModel && !isRootOrg && !user?.isAdmin;
 
   /* ---------- Data state ---------- */
   const [data, setData] = useState<Record<string, any>[]>([]);
@@ -239,6 +249,10 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
     ids: string[];
   } | null>(null);
   const [confirmSubmitting, setConfirmSubmitting] = useState(false);
+
+  /* ---------- Distribution dialog ---------- */
+  const [distOpen, setDistOpen] = useState(false);
+  const [distRecords, setDistRecords] = useState<Array<{ id: string; displayName: string }>>([]);
 
   /* ---------- Toast ---------- */
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -726,12 +740,29 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
           });
           break;
         }
+        case 'distribute': {
+          if (records.length === 0) {
+            showToast(t('dataTab.noEligibleRecords'), 'error');
+            break;
+          }
+          const displayFieldName =
+            fields.find((f) => f.columnName === 'name')?.columnName ||
+            fields[0]?.columnName ||
+            'id';
+          const recs = records.map((r) => ({
+            id: r.id,
+            displayName: String(r[displayFieldName] ?? r.id),
+          }));
+          setDistRecords(recs);
+          setDistOpen(true);
+          break;
+        }
         default:
           // Custom actions — future extension
           break;
       }
     },
-    [handleCreate, handleOpenRecord, handleStatusChange, t],
+    [handleCreate, handleOpenRecord, handleStatusChange, showToast, t, fields],
   );
 
   /* ------------------------------------------------------------------ */
@@ -1108,6 +1139,17 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
   }, [model.enableDataStatus]);
 
   /* ------------------------------------------------------------------ */
+  /*  Filtered actions (hide create+delete when viewing copies)         */
+  /* ------------------------------------------------------------------ */
+
+  const filteredActions = useMemo(() => {
+    if (!viewingCopies) return actions;
+    // Non-root users viewing distributed-model copies: hide create and delete.
+    // Keep: edit, archive/unarchive, submit/withdraw, approve/unapprove, distribute, etc.
+    return actions.filter((a) => a.code !== 'create' && a.code !== 'delete');
+  }, [actions, viewingCopies]);
+
+  /* ------------------------------------------------------------------ */
   /*  Render                                                             */
   /* ------------------------------------------------------------------ */
 
@@ -1194,7 +1236,7 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
           </Popover>
 
           <ActionToolbar
-            actions={actions}
+            actions={filteredActions}
             selectedRecords={selectedRecords}
             enableDataStatus={!!model.enableDataStatus}
             position="list"
@@ -1342,6 +1384,20 @@ export default function RecordBrowser({ model, fields: allFields, entities, tabI
           />
         )}
       </div>
+
+      {/* Distribution Dialog */}
+      {distOpen && (
+        <DistributionDialog
+          open={distOpen}
+          onClose={() => setDistOpen(false)}
+          onSuccess={() => {
+            fetchData();
+          }}
+          appCode={model.app.code}
+          modelCode={model.code}
+          records={distRecords}
+        />
+      )}
 
       {/* Confirm Dialog */}
       {confirmDialog && (

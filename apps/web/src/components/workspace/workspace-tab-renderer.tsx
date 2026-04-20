@@ -23,6 +23,7 @@ interface ModelSchema {
   tableName: string;
   isTree?: boolean;
   enableDataStatus?: boolean;
+  dataScope?: 'private' | 'shared' | 'distributed';
   app: { id: string; code: string; name: string };
   fields: Field[];
   entities?: EntityWithFields[];
@@ -44,6 +45,7 @@ function TabContent({ tab, schema }: { tab: Tab; schema: ModelSchema }) {
           tableName: schema.tableName,
           isTree: schema.isTree,
           enableDataStatus: schema.enableDataStatus,
+          dataScope: schema.dataScope,
           app: { code: schema.app.code },
         }}
         fields={schema.fields}
