@@ -7,6 +7,8 @@ import { HttpException } from '@nestjs/common';
  * 前端根据 errorCode 映射本地化提示，不依赖 message 文本。
  */
 export class BusinessException extends HttpException {
+  readonly errorCode: string;
+
   constructor(
     statusCode: number,
     errorCode: string,
@@ -14,5 +16,6 @@ export class BusinessException extends HttpException {
     extra?: Record<string, any>,
   ) {
     super({ statusCode, errorCode, message, ...extra }, statusCode);
+    this.errorCode = errorCode;
   }
 }
