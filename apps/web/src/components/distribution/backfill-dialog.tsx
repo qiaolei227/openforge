@@ -17,6 +17,7 @@ import { useToastStore } from '@/stores/toast-store';
 import {
   getDistributionPolicy,
   syncMaster,
+  SYNC_PHRASES,
   type DistributionPolicyItem,
 } from '@/lib/api/distribution';
 
@@ -29,7 +30,7 @@ interface Props {
   modelId: string;
 }
 
-const PHRASE = '策略回填';
+const PHRASE = SYNC_PHRASES.backfill;
 
 export function BackfillDialog({
   open,

@@ -14,13 +14,9 @@ interface OrgState {
   accessibleOrgs: Org[];
   currentOrgId: string | null;
   loading: boolean;
-  /** Derived: the currently selected org, or null */
   currentOrg: () => Org | null;
-  /** Derived: true when current org is a root (parentId === null) */
   isRootOrg: () => boolean;
-  /** Change the active org — writes localStorage + window global + emits 'orgChanged' */
   setCurrentOrg: (orgId: string) => void;
-  /** Load accessible orgs from server and hydrate currentOrgId from localStorage */
   refresh: (userId: string) => Promise<void>;
 }
 
@@ -28,10 +24,13 @@ function storageKey(userId: string) {
   return `openforge:currentOrgId:${userId}`;
 }
 
-function writeGlobal(orgId: string | null) {
-  if (typeof window !== 'undefined') {
-    (window as unknown as { __openforgeCurrentOrgId?: string | null }).__openforgeCurrentOrgId = orgId;
-  }
+// Module-scoped mirror of the store's currentOrgId so non-React callers
+// (axios interceptor, ad-hoc utils) can read the active org without going
+// through the React runtime. Kept in sync by setCurrentOrg and refresh.
+let currentOrgIdRef: string | null = null;
+
+export function getCurrentOrgId(): string | null {
+  return currentOrgIdRef;
 }
 
 function dispatchOrgChanged(orgId: string) {
@@ -60,7 +59,7 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     if (!accessibleOrgs.some((o) => o.id === orgId)) return;
     if (orgId === currentOrgId) return;
     set({ currentOrgId: orgId });
-    writeGlobal(orgId);
+    currentOrgIdRef = orgId;
     dispatchOrgChanged(orgId);
   },
 
@@ -82,7 +81,7 @@ export const useOrgStore = create<OrgState>((set, get) => ({
       }
 
       set({ accessibleOrgs: orgs, currentOrgId: nextId });
-      writeGlobal(nextId);
+      currentOrgIdRef = nextId;
       if (typeof window !== 'undefined' && nextId) {
         localStorage.setItem(storageKey(userId), nextId);
       }
@@ -92,11 +91,6 @@ export const useOrgStore = create<OrgState>((set, get) => ({
   },
 }));
 
-/**
- * Mount this hook in a top-level component (e.g. AppShell) to persist the
- * current org to localStorage scoped by user id. Called automatically on
- * refresh(); this hook only handles user-initiated setCurrentOrg.
- */
 export function subscribeOrgPersistence(userId: string): () => void {
   if (typeof window === 'undefined') return () => {};
   const unsub = useOrgStore.subscribe((state) => {

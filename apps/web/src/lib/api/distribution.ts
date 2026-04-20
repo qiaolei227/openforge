@@ -3,6 +3,12 @@ import { apiClient } from '@/lib/api-client';
 export type DistAction = 'allocate' | 'revoke';
 export type SyncAction = 'force_push' | 'backfill';
 
+/** Confirmation phrases shared with the backend (apps/server/.../sync.service.ts). */
+export const SYNC_PHRASES: Record<SyncAction, string> = {
+  force_push: '强制覆盖',
+  backfill: '策略回填',
+};
+
 export interface CopyStatusEntry {
   orgId: string;
   copyId: string;

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from './auth';
+import { getCurrentOrgId } from '@/stores/org-store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -13,11 +14,9 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  if (typeof window !== 'undefined') {
-    const currentOrgId = (window as any).__openforgeCurrentOrgId;
-    if (currentOrgId) {
-      config.headers['X-Current-Org-Id'] = currentOrgId;
-    }
+  const currentOrgId = getCurrentOrgId();
+  if (currentOrgId) {
+    config.headers['X-Current-Org-Id'] = currentOrgId;
   }
   return config;
 });

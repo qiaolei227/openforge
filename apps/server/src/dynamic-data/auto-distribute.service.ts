@@ -81,23 +81,28 @@ export class AutoDistributeService {
       `SELECT id FROM biz."${model.tableName}" WHERE master_id = id AND is_archived = false`,
     );
 
+    const masterIds = masters.map((m) => m.id);
+    if (masterIds.length === 0) return { created: 0, skipped: 0 };
+
+    const statusByMaster = await this.distribution.getDistributionStatus(
+      appCode,
+      modelCode,
+      masterIds,
+    );
+
     let created = 0;
     let skipped = 0;
-
     for (const master of masters) {
-      const status = await this.distribution.getDistributionStatus(appCode, modelCode, [master.id]);
       const allocated = new Set(
-        (status[master.id] ?? [])
+        (statusByMaster[master.id] ?? [])
           .filter((c: any) => !c.isArchived)
           .map((c: any) => c.orgId),
       );
       const missing = nonRootOrgs.filter((o) => !allocated.has(o.id));
-
       if (missing.length === 0) {
         skipped++;
         continue;
       }
-
       const res = await this.distribution.applyChanges(appCode, modelCode, {
         user,
         recordIds: [master.id],

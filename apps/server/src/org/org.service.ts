@@ -103,24 +103,26 @@ export class OrgService {
           app: { select: { code: true } },
         },
       });
-      for (const m of candidates) {
-        try {
-          const rows = await this.prisma.$queryRawUnsafe<Array<{ c: bigint }>>(
-            `SELECT COUNT(*)::int AS c FROM biz."${m.tableName}" WHERE master_id = id AND is_archived = false`,
-          );
-          const pendingCount = Number(rows[0]?.c ?? 0);
-          if (pendingCount > 0) {
-            autoDistributeModels.push({
-              appCode: m.app.code,
-              modelCode: m.code,
-              modelName: m.name,
-              pendingCount,
-            });
-          }
-        } catch {
-          // Table might not exist yet (DDL inconsistency) — skip silently
+      const counts = await Promise.all(
+        candidates.map((m) =>
+          this.prisma
+            .$queryRawUnsafe<Array<{ c: bigint }>>(
+              `SELECT COUNT(*)::int AS c FROM biz."${m.tableName}" WHERE master_id = id AND is_archived = false`,
+            )
+            .then((rows) => Number(rows[0]?.c ?? 0))
+            .catch(() => 0),
+        ),
+      );
+      candidates.forEach((m, i) => {
+        if (counts[i] > 0) {
+          autoDistributeModels.push({
+            appCode: m.app.code,
+            modelCode: m.code,
+            modelName: m.name,
+            pendingCount: counts[i],
+          });
         }
-      }
+      });
     }
 
     return { org, autoDistributeModels };

@@ -87,7 +87,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { fillMissingCopies, getFieldLocalEditsCount, syncMaster } from '@/lib/api/distribution';
+import { fillMissingCopies, getFieldLocalEditsCount, syncMaster, SYNC_PHRASES } from '@/lib/api/distribution';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -680,7 +680,7 @@ export default function ModelDetailPage() {
         await syncMaster(model.app!.code!, model.code, m.id, {
           action: 'backfill',
           fieldColumns: fieldCols,
-          confirmationPhrase: '策略回填',
+          confirmationPhrase: SYNC_PHRASES.backfill,
         });
       }
       showToast(tModels('backfillDone', { masterCount: masters.length, fieldCount: fieldCols.length }), 'success');

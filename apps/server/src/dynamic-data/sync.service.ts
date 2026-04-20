@@ -3,10 +3,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
 
-const PHRASES: Record<string, string> = {
+export const SYNC_PHRASES = {
   force_push: '强制覆盖',
   backfill: '策略回填',
-};
+} as const;
 
 export interface SyncArgs {
   user: { userId: string; orgId: string; isAdmin: boolean };
@@ -42,7 +42,7 @@ export class SyncService {
       );
     }
 
-    if (PHRASES[args.action] !== args.confirmationPhrase) {
+    if (SYNC_PHRASES[args.action] !== args.confirmationPhrase) {
       throw new BusinessException(
         HttpStatus.BAD_REQUEST,
         ErrorCodes.CONFIRMATION_MISMATCH,
@@ -122,34 +122,38 @@ export class SyncService {
       recordId,
     );
 
-    let affected = 0;
+    const setClauses = args.fieldColumns.map((c, i) => `"${c}" = $${i + 1}`).join(', ');
+    const values = args.fieldColumns.map((c) => master[c]);
+    const logEntries: any[] = [];
+    await Promise.all(
+      copies.map((copy) =>
+        this.prisma.$executeRawUnsafe(
+          `UPDATE biz."${model.tableName}" SET ${setClauses}, updated_at = now(), updated_by = $${args.fieldColumns.length + 1}::uuid WHERE id = $${args.fieldColumns.length + 2}::uuid`,
+          ...values,
+          args.user.userId,
+          copy.id,
+        ),
+      ),
+    );
     for (const copy of copies) {
-      const setClauses = args.fieldColumns.map((c, i) => `"${c}" = $${i + 1}`).join(', ');
-      const values = args.fieldColumns.map((c) => master[c]);
-      await this.prisma.$executeRawUnsafe(
-        `UPDATE biz."${model.tableName}" SET ${setClauses}, updated_at = now(), updated_by = $${args.fieldColumns.length + 1}::uuid WHERE id = $${args.fieldColumns.length + 2}::uuid`,
-        ...values,
-        args.user.userId,
-        copy.id,
-      );
       for (const col of args.fieldColumns) {
-        await this.prisma.sysDistributionLog.create({
-          data: {
-            modelId: model.id,
-            recordId,
-            action: args.action,
-            sourceOrgId: args.user.orgId,
-            targetOrgId: copy.org_id,
-            fieldColumn: col,
-            beforeValue: { value: copy[col] },
-            afterValue: { value: master[col] },
-            operatorId: args.user.userId,
-          },
+        logEntries.push({
+          modelId: model.id,
+          recordId,
+          action: args.action,
+          sourceOrgId: args.user.orgId,
+          targetOrgId: copy.org_id,
+          fieldColumn: col,
+          beforeValue: { value: copy[col] },
+          afterValue: { value: master[col] },
+          operatorId: args.user.userId,
         });
       }
-      affected++;
+    }
+    if (logEntries.length > 0) {
+      await this.prisma.sysDistributionLog.createMany({ data: logEntries });
     }
 
-    return { affected, fieldCount: args.fieldColumns.length };
+    return { affected: copies.length, fieldCount: args.fieldColumns.length };
   }
 }

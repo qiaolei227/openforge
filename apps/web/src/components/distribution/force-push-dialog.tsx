@@ -17,6 +17,7 @@ import { useToastStore } from '@/stores/toast-store';
 import {
   getDistributionPolicy,
   syncMaster,
+  SYNC_PHRASES,
   type DistributionPolicyItem,
 } from '@/lib/api/distribution';
 
@@ -29,7 +30,7 @@ interface Props {
   modelId: string;
 }
 
-const PHRASE = '强制覆盖';
+const PHRASE = SYNC_PHRASES.force_push;
 
 export function ForcePushDialog({
   open,

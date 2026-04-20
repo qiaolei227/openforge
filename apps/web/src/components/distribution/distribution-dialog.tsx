@@ -189,28 +189,22 @@ export function DistributionDialog({
     for (const a of diff.allocate) byRecord[a.recordId].push({ orgId: a.orgId, action: 'allocate' });
     for (const a of diff.revoke) byRecord[a.recordId].push({ orgId: a.orgId, action: 'revoke' });
 
+    const pending = Object.entries(byRecord).filter(([, c]) => c.length > 0);
+    const settled = await Promise.allSettled(
+      pending.map(([recordId, changes]) => distribute(appCode, modelCode, [recordId], changes)),
+    );
+
     let total = 0;
     let ok = 0;
-    let firstErr: { code?: string; msg?: string } | null = null;
-
-    for (const [recordId, changes] of Object.entries(byRecord)) {
-      if (changes.length === 0) continue;
-      try {
-        const res = await distribute(appCode, modelCode, [recordId], changes);
-        total += res.results.length;
-        ok += res.summary.succeeded;
-        if (!firstErr) {
-          const firstFail = res.results.find((r) => r.status === 'failed');
-          if (firstFail) firstErr = { code: firstFail.errorCode, msg: firstFail.errorMessage };
-        }
-      } catch (e: unknown) {
+    settled.forEach((s, i) => {
+      const changes = pending[i][1];
+      if (s.status === 'fulfilled') {
+        total += s.value.results.length;
+        ok += s.value.summary.succeeded;
+      } else {
         total += changes.length;
-        if (!firstErr) {
-          const errMsg = e instanceof Error ? e.message : 'Unknown error';
-          firstErr = { msg: errMsg };
-        }
       }
-    }
+    });
 
     setSubmitting(false);
 

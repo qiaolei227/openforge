@@ -10,7 +10,7 @@ describe('SyncService', () => {
       sysModel: { findFirst: vi.fn() },
       sysOrganization: { findUnique: vi.fn().mockResolvedValue({ id: 'root', parentId: null }) },
       sysDistributionPolicy: { findMany: vi.fn() },
-      sysDistributionLog: { create: vi.fn() },
+      sysDistributionLog: { create: vi.fn(), createMany: vi.fn() },
       $queryRawUnsafe: vi.fn(),
       $executeRawUnsafe: vi.fn().mockResolvedValue(1),
     };
@@ -74,9 +74,10 @@ describe('SyncService', () => {
     expect(res.affected).toBe(2);
     expect(res.fieldCount).toBe(1);
     expect(prisma.$executeRawUnsafe).toHaveBeenCalledTimes(2);
-    expect(prisma.sysDistributionLog.create).toHaveBeenCalledTimes(2);
-    const logCall = prisma.sysDistributionLog.create.mock.calls[0][0];
-    expect(logCall.data).toMatchObject({
+    expect(prisma.sysDistributionLog.createMany).toHaveBeenCalledTimes(1);
+    const batchCall = prisma.sysDistributionLog.createMany.mock.calls[0][0];
+    expect(batchCall.data).toHaveLength(2);
+    expect(batchCall.data[0]).toMatchObject({
       action: 'force_push',
       fieldColumn: 'remark',
       sourceOrgId: 'root',
@@ -95,8 +96,8 @@ describe('SyncService', () => {
       user: rootUser, action: 'backfill', fieldColumns: ['spec'], confirmationPhrase: '策略回填',
     });
     expect(res.affected).toBe(1);
-    expect(prisma.sysDistributionLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ action: 'backfill', fieldColumn: 'spec' }),
+    expect(prisma.sysDistributionLog.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ action: 'backfill', fieldColumn: 'spec' })],
     });
   });
 

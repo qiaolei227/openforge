@@ -116,9 +116,10 @@ describe('AutoDistributeService', () => {
     prisma.sysModel.findFirst.mockResolvedValue({ id: 'm', dataScope: 'distributed', tableName: 't' });
     prisma.sysOrganization.findMany.mockResolvedValue([{ id: 'sub1' }]);
     prisma.$queryRawUnsafe.mockResolvedValue([{ id: 'r1' }, { id: 'r2' }]);
-    distribution.getDistributionStatus
-      .mockResolvedValueOnce({ r1: [{ orgId: 'sub1', copyId: 'c1', isArchived: false, hasLocalEdits: false }] })
-      .mockResolvedValueOnce({ r2: [{ orgId: 'sub1', copyId: 'c2', isArchived: false, hasLocalEdits: false }] });
+    distribution.getDistributionStatus.mockResolvedValue({
+      r1: [{ orgId: 'sub1', copyId: 'c1', isArchived: false, hasLocalEdits: false }],
+      r2: [{ orgId: 'sub1', copyId: 'c2', isArchived: false, hasLocalEdits: false }],
+    });
     const res = await service.fillMissing('a', 'items', { userId: 'u', orgId: 'root', isAdmin: false });
     expect(distribution.applyChanges).not.toHaveBeenCalled();
     expect(res).toEqual({ created: 0, skipped: 2 });

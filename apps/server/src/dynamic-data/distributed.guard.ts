@@ -25,11 +25,6 @@ export class DistributedGuard implements CanActivate {
     if (!model || model.dataScope !== 'distributed') return true;
     if (user?.isAdmin) return true;
 
-    // Rule 1 (B1): non-root create master rejection.
-    // Only apply to actual master-create paths (bare POST /data and POST /data/batch).
-    // Other POST routes on the same controller (/query, /distribute, /distribution-status,
-    // /:id/sync, /fill-missing-copies) are not master-creates and have their own semantics
-    // and permission checks.
     if (method === 'POST' && !recordId && this.isMasterCreatePath(req)) {
       const isRoot = await this.isRootOrg(user.orgId);
       if (!isRoot) {
@@ -41,8 +36,6 @@ export class DistributedGuard implements CanActivate {
       }
     }
 
-    // Rule 2 (B2): readonly field write rejection on copies.
-    // Only applies to PUT/PATCH on an existing record (has :id, is a direct record update path).
     if (
       (method === 'PUT' || method === 'PATCH') &&
       recordId &&
@@ -50,25 +43,23 @@ export class DistributedGuard implements CanActivate {
     ) {
       const body = req.body ?? {};
       const bodyKeys = Object.keys(body);
-      if (bodyKeys.length === 0) return true; // no field writes (archive/status subroutes)
+      if (bodyKeys.length === 0) return true;
 
-      const fieldRows: Array<{ id: string; columnName: string; name: string }> =
-        model.fields ?? [];
-      if (fieldRows.length === 0) return true; // model has no user fields
+      const fieldRows = model.fields ?? [];
+      if (fieldRows.length === 0) return true;
 
-      const policies = await this.prisma.sysDistributionPolicy.findMany({
-        where: { modelId: model.id },
-        select: { fieldId: true, editable: true },
-      });
-
-      // Check if the record is a copy (master_id !== id)
-      const rows = await this.prisma.$queryRawUnsafe<Array<{ id: string; master_id: string }>>(
-        `SELECT id, master_id FROM biz."${model.tableName}" WHERE id = $1::uuid`,
-        recordId,
-      );
-      if (!rows[0]) return true; // record not found → let service raise 404
-      const isCopy = rows[0].master_id !== rows[0].id;
-      if (!isCopy) return true; // master record: root-org can always edit its own fields
+      const [policies, rows] = await Promise.all([
+        this.prisma.sysDistributionPolicy.findMany({
+          where: { modelId: model.id },
+          select: { fieldId: true, editable: true },
+        }),
+        this.prisma.$queryRawUnsafe<Array<{ id: string; master_id: string }>>(
+          `SELECT id, master_id FROM biz."${model.tableName}" WHERE id = $1::uuid`,
+          recordId,
+        ),
+      ]);
+      if (!rows[0]) return true;
+      if (rows[0].master_id === rows[0].id) return true;
 
       const editableSet = new Set(
         policies.filter((p) => p.editable).map((p) => p.fieldId),
@@ -77,7 +68,7 @@ export class DistributedGuard implements CanActivate {
 
       for (const key of bodyKeys) {
         const f = fieldByCol.get(key);
-        if (!f) continue; // unknown / system field — not our concern
+        if (!f) continue;
         if (!editableSet.has(f.id)) {
           throw new BusinessException(
             HttpStatus.UNPROCESSABLE_ENTITY,
@@ -88,7 +79,6 @@ export class DistributedGuard implements CanActivate {
       }
     }
 
-    // Rule 3 (B3): copy delete rejection.
     if (method === 'DELETE' && recordId) {
       const rows = await this.prisma.$queryRawUnsafe<Array<{ id: string; master_id: string }>>(
         `SELECT id, master_id FROM biz."${model.tableName}" WHERE id = $1::uuid`,
@@ -108,19 +98,13 @@ export class DistributedGuard implements CanActivate {
 
   private isMasterCreatePath(req: any): boolean {
     const routePath: string | undefined = req.route?.path;
-    if (!routePath) return true; // fallback (tests without express route): assume bare create
+    if (!routePath) return true;
     return /\/data$/.test(routePath) || /\/data\/batch$/.test(routePath);
   }
 
-  /**
-   * Returns true when the route is a direct record update (PUT/PATCH /:id),
-   * and false for sub-routes like /:id/archive, /:id/status, /:id/sync
-   * which do not perform user-field writes.
-   */
   private isRecordUpdatePath(req: any): boolean {
     const routePath: string | undefined = req.route?.path;
-    if (!routePath) return true; // fallback: assume direct update
-    // Exclude known sub-routes that aren't user-field writes
+    if (!routePath) return true;
     if (/\/:id\/(archive|status|sync)/.test(routePath)) return false;
     return /\/:id$/.test(routePath);
   }
