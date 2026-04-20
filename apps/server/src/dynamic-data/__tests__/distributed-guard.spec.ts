@@ -113,4 +113,106 @@ describe('DistributedGuard', () => {
     );
     expect(await guard.canActivate(ctx)).toBe(true);
   });
+
+  // ── Rule 2 (B2): readonly field write rejection on copies ──
+
+  it('rejects update on copy readonly field from sub-org', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm', dataScope: 'distributed', tableName: 'app1_items',
+      fields: [
+        { id: 'f1', columnName: 'spec', name: '规格' },
+        { id: 'f2', columnName: 'remark', name: '备注' },
+      ],
+    });
+    prisma.sysOrganization.findUnique.mockResolvedValue({ id: 'sub', parentId: 'root' });
+    prisma.sysDistributionPolicy.findMany.mockResolvedValue([
+      { fieldId: 'f1', editable: false },
+      { fieldId: 'f2', editable: true },
+    ]);
+    prisma.$queryRawUnsafe.mockResolvedValue([{ id: 'r1', master_id: 'r0' }]);
+    const ctx = mkCtx('PUT',
+      { appCode: 'a', modelCode: 'm', id: 'r1' },
+      { spec: 'new', remark: 'ok' },
+      { userId: 'u', orgId: 'sub', isAdmin: false },
+      '/apps/:appCode/models/:modelCode/data/:id',
+    );
+    await expect(guard.canActivate(ctx)).rejects.toMatchObject({
+      errorCode: 'FIELD_READONLY_BY_MASTER',
+    });
+  });
+
+  it('allows update of editable field on copy from sub-org', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm', dataScope: 'distributed', tableName: 'app1_items',
+      fields: [{ id: 'f2', columnName: 'remark', name: '备注' }],
+    });
+    prisma.sysOrganization.findUnique.mockResolvedValue({ id: 'sub', parentId: 'root' });
+    prisma.sysDistributionPolicy.findMany.mockResolvedValue([{ fieldId: 'f2', editable: true }]);
+    prisma.$queryRawUnsafe.mockResolvedValue([{ id: 'r1', master_id: 'r0' }]);
+    const ctx = mkCtx('PUT',
+      { appCode: 'a', modelCode: 'm', id: 'r1' },
+      { remark: 'hello' },
+      { userId: 'u', orgId: 'sub', isAdmin: false },
+      '/apps/:appCode/models/:modelCode/data/:id',
+    );
+    expect(await guard.canActivate(ctx)).toBe(true);
+  });
+
+  it('allows master update of readonly field from root org', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm', dataScope: 'distributed', tableName: 'app1_items',
+      fields: [{ id: 'f1', columnName: 'spec', name: '规格' }],
+    });
+    prisma.sysOrganization.findUnique.mockResolvedValue({ id: 'root', parentId: null });
+    prisma.sysDistributionPolicy.findMany.mockResolvedValue([{ fieldId: 'f1', editable: false }]);
+    prisma.$queryRawUnsafe.mockResolvedValue([{ id: 'r0', master_id: 'r0' }]);
+    const ctx = mkCtx('PUT',
+      { appCode: 'a', modelCode: 'm', id: 'r0' },
+      { spec: 'new' },
+      { userId: 'u', orgId: 'root', isAdmin: false },
+      '/apps/:appCode/models/:modelCode/data/:id',
+    );
+    expect(await guard.canActivate(ctx)).toBe(true);
+  });
+
+  it('skips row lookup on archive subroute (is_archived-only write)', async () => {
+    // PUT /:id/archive is its own endpoint; body has no field writes, guard should pass through
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm', dataScope: 'distributed', tableName: 'app1_items',
+      fields: [],
+    });
+    const ctx = mkCtx('PUT',
+      { appCode: 'a', modelCode: 'm', id: 'r1' },
+      {},
+      { userId: 'u', orgId: 'sub', isAdmin: false },
+      '/apps/:appCode/models/:modelCode/data/:id/archive',
+    );
+    // empty body or non-field keys → no readonly violation; row lookup not needed
+    expect(await guard.canActivate(ctx)).toBe(true);
+  });
+
+  it('throws readonly error with fieldName in message payload', async () => {
+    prisma.sysModel.findFirst.mockResolvedValue({
+      id: 'm', dataScope: 'distributed', tableName: 'app1_items',
+      fields: [{ id: 'f1', columnName: 'spec', name: '规格' }],
+    });
+    prisma.sysOrganization.findUnique.mockResolvedValue({ id: 'sub', parentId: 'root' });
+    prisma.sysDistributionPolicy.findMany.mockResolvedValue([{ fieldId: 'f1', editable: false }]);
+    prisma.$queryRawUnsafe.mockResolvedValue([{ id: 'r1', master_id: 'r0' }]);
+    const ctx = mkCtx('PUT',
+      { appCode: 'a', modelCode: 'm', id: 'r1' },
+      { spec: 'x' },
+      { userId: 'u', orgId: 'sub', isAdmin: false },
+      '/apps/:appCode/models/:modelCode/data/:id',
+    );
+    try {
+      await guard.canActivate(ctx);
+      throw new Error('should have thrown');
+    } catch (e: any) {
+      expect(e.errorCode).toBe('FIELD_READONLY_BY_MASTER');
+      // message field holds a JSON string with fieldName
+      // (the frontend's getApiErrorMessage interpolates {fieldName} from it)
+      expect(e.getResponse?.().message ?? e.message).toMatch(/规格/);
+    }
+  });
 });
