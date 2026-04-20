@@ -8,6 +8,7 @@ import { ChildrenService } from './children.service';
 import { FieldService } from '../model/field.service';
 import { LookupResolverService } from './lookup-resolver.service';
 import { ReadonlyPropagationService } from './readonly-propagation.service';
+import { AutoDistributeService } from './auto-distribute.service';
 import {
   RecordCreatedEvent,
   RecordUpdatedEvent,
@@ -38,6 +39,8 @@ export class DynamicDataService {
     private readonly lookupResolver: LookupResolverService,
     @Inject(ReadonlyPropagationService)
     private readonly readonlyPropagation: ReadonlyPropagationService,
+    @Inject(AutoDistributeService)
+    private readonly autoDistribute: AutoDistributeService,
   ) {}
 
   // ────────────────────────── Query ──────────────────────────
@@ -263,6 +266,7 @@ export class DynamicDataService {
       this.eventBus.emit('record.created', new RecordCreatedEvent(
         userId, orgId, { modelCode, recordId: result.id },
       ));
+      await this.triggerAutoDistribute(model, result, appCode, modelCode, userId, orgId);
       return result;
     }
 
@@ -273,6 +277,7 @@ export class DynamicDataService {
     this.eventBus.emit('record.created', new RecordCreatedEvent(
       userId, orgId, { modelCode, recordId: created.id },
     ));
+    await this.triggerAutoDistribute(model, created, appCode, modelCode, userId, orgId);
     return created;
   }
 
@@ -1419,6 +1424,34 @@ export class DynamicDataService {
         row.__oneToOne[entityCode] = byMaster.get(row.id) ?? null;
       }
     }
+  }
+
+  /**
+   * Fire-and-forget auto-distribute hook called after a master record is created.
+   * Fetches autoDistribute flag separately to avoid widening getModelByAppAndCode's select.
+   */
+  private async triggerAutoDistribute(
+    model: { id: string; dataScope: string },
+    row: any,
+    appCode: string,
+    modelCode: string,
+    userId: string,
+    orgId: string,
+  ): Promise<void> {
+    if (model.dataScope !== 'distributed') return;
+    if (!row || row.master_id !== row.id) return;
+
+    const extra = await this.prisma.sysModel.findUnique({
+      where: { id: model.id },
+      select: { autoDistribute: true },
+    });
+    const autoDistribute = extra?.autoDistribute ?? false;
+
+    await this.autoDistribute.onMasterCreated(
+      { id: model.id, autoDistribute, dataScope: model.dataScope, appCode, modelCode },
+      row.id,
+      { userId, orgId, isAdmin: false },
+    );
   }
 
   private async enrichRecord(
