@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { DynamicDataService } from './dynamic-data.service';
 import { DataStatusService } from './data-status.service';
+import { DistributionService } from './distribution.service';
 import { QueryDto } from './dto/query.dto';
 import { BatchDto } from './dto/batch.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -27,6 +28,7 @@ export class DynamicDataController {
   constructor(
     @Inject(DynamicDataService) private dynamicDataService: DynamicDataService,
     @Inject(DataStatusService) private dataStatusService: DataStatusService,
+    @Inject(DistributionService) private distributionService: DistributionService,
   ) {}
 
   @Post('query')
@@ -220,5 +222,23 @@ export class DynamicDataController {
       user.userId,
       user.orgId,
     );
+  }
+
+  @Post('distribute')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'distribute',
+  )
+  distribute(
+    @Param('appCode') appCode: string,
+    @Param('modelCode') modelCode: string,
+    @Body() body: { recordIds: string[]; changes: Array<{ orgId: string; action: 'allocate' | 'revoke' }> },
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.distributionService.applyChanges(appCode, modelCode, {
+      user,
+      recordIds: body.recordIds,
+      changes: body.changes,
+    });
   }
 }
