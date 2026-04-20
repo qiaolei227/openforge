@@ -1,5 +1,6 @@
 'use client';
 
+import { Lock } from 'lucide-react';
 import type { LayoutNode, Field } from '@openforge/shared';
 import { useRenderContext, useServiceContext, useFieldComponent } from '../hooks';
 import { buildFieldExtraProps } from './field-extra-props';
@@ -21,7 +22,7 @@ interface FieldNodeProps {
 }
 
 export function FieldNode({ node, field: fieldProp }: FieldNodeProps) {
-  const { mode, fields, fieldMap, data, onChange, errors, t } = useRenderContext();
+  const { mode, fields, fieldMap, data, onChange, errors, t, readonlyColumns } = useRenderContext();
   const services = useServiceContext();
 
   const field = fieldProp ?? fieldMap.get(node.props?.fieldId ?? '');
@@ -33,7 +34,8 @@ export function FieldNode({ node, field: fieldProp }: FieldNodeProps) {
   const value = data[columnName] ?? field.defaultValue ?? '';
   const error = errors[columnName];
   const isView = mode === 'view';
-  const disabled = isView || field.fieldType === 'AUTO_NUMBER';
+  const lockedByMaster = (readonlyColumns ?? []).includes(columnName);
+  const disabled = isView || field.fieldType === 'AUTO_NUMBER' || lockedByMaster;
   const fieldMode = isView ? 'view' : 'edit';
 
   const viewRequired = node.props?.required;
@@ -83,13 +85,18 @@ export function FieldNode({ node, field: fieldProp }: FieldNodeProps) {
       style={{ gridColumn: span > 1 ? `span ${span}` : undefined }}
     >
       <label
-        className={`block text-sm font-medium ${
+        className={`flex items-center gap-1 text-sm font-medium ${
           isView ? 'text-muted-foreground' : 'text-foreground'
         }`}
       >
-        {field.name}
+        <span>{field.name}</span>
         {!isView && isRequired && field.fieldType !== 'AUTO_NUMBER' && (
-          <span className="ml-0.5 text-red-500">*</span>
+          <span className="text-red-500">*</span>
+        )}
+        {lockedByMaster && (
+          <span title={t('distribute.fieldReadonlyByMaster')} className="inline-flex shrink-0">
+            <Lock className="w-3 h-3 opacity-60" />
+          </span>
         )}
       </label>
       {Comp ? (

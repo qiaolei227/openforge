@@ -1091,6 +1091,7 @@
     "executeDone": "{count} changes completed",
     "executePartial": "{ok}/{total} succeeded, others failed",
     "loadStatusFailed": "Failed to load allocation status",
-    "allocate": "Allocate"
+    "allocate": "Allocate",
+    "fieldReadonlyByMaster": "Maintained by group; not editable on copies"
   }
 }

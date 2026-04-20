@@ -19,6 +19,9 @@ export interface RenderContextValue {
   onChange: (columnName: string, value: any) => void;
   errors: Record<string, string>;
   t: TranslateFn;
+  /** Column names that should render as read-only (regardless of mode).
+   *  Used by P2.2 distributed-copy view to lock readonly fields. */
+  readonlyColumns?: string[];
 }
 
 export interface ServiceContextValue {

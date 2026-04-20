@@ -1091,6 +1091,7 @@
     "executeDone": "已完成 {count} 项变更",
     "executePartial": "{ok}/{total} 项成功，其余失败",
     "loadStatusFailed": "加载分配状态失败",
-    "allocate": "分配"
+    "allocate": "分配",
+    "fieldReadonlyByMaster": "由集团维护，不可编辑"
   }
 }

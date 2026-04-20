@@ -24,6 +24,9 @@ export interface RenderProviderProps {
   services?: Omit<ServiceContextValue, 'childrenData' | 'onChildrenChange'>;
   childrenData?: Record<string, Record<string, any>[]>;
   onChildrenChange?: (entityCode: string, rows: Record<string, any>[]) => void;
+  /** Column names that should render as read-only regardless of form mode.
+   *  Used by P2.2 distributed-copy view to lock fields not editable on copies. */
+  readonlyColumns?: string[];
   children: ReactNode;
 }
 
@@ -38,6 +41,7 @@ export function RenderProvider({
   services = {},
   childrenData,
   onChildrenChange,
+  readonlyColumns,
   children,
 }: RenderProviderProps) {
   // Local state for form data (preview/create without external state)
@@ -97,8 +101,9 @@ export function RenderProvider({
       onChange: effectiveOnChange,
       errors,
       t,
+      readonlyColumns,
     }),
-    [mode, fields, entities, fieldMap, effectiveData, effectiveOnChange, errors, t],
+    [mode, fields, entities, fieldMap, effectiveData, effectiveOnChange, errors, t, readonlyColumns],
   );
 
   const serviceValue = useMemo<ServiceContextValue>(

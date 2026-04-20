@@ -25,6 +25,7 @@ import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage, getApiErrorCode, cn } from '@/lib/utils';
 import { ActionToolbar } from '@/components/workspace/action-toolbar';
 import { DataStatusBadge } from '@/components/workspace/data-status-badge';
+import { getDistributionPolicy } from '@/lib/api/distribution';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -135,6 +136,9 @@ export function RecordPage({
   const [loading, setLoading] = useState(!isCreate);
   const [saving, setSaving] = useState(false);
 
+  /* ---------- Distribution policy (readonly columns for copies) ---------- */
+  const [readonlyColumns, setReadonlyColumns] = useState<string[]>([]);
+
   /* ---------- System info state ---------- */
   const [createdByName, setCreatedByName] = useState('-');
   const [updatedByName, setUpdatedByName] = useState('-');
@@ -232,6 +236,31 @@ export function RecordPage({
   useEffect(() => {
     fetchRecord();
   }, [fetchRecord]);
+
+  /* ---------- Distribution policy: lock readonly fields on copies ---------- */
+  useEffect(() => {
+    if (!record) {
+      setReadonlyColumns([]);
+      return;
+    }
+    // A "copy" has master_id set to a different record's id
+    const isCopy = record.master_id && record.master_id !== record.id;
+    if (!isCopy) {
+      setReadonlyColumns([]);
+      return;
+    }
+    getDistributionPolicy(modelId)
+      .then((policies) => {
+        const editableFieldIds = new Set(
+          policies.filter((p) => p.editable).map((p) => p.fieldId),
+        );
+        const readonly = fields
+          .filter((f) => !editableFieldIds.has(f.id))
+          .map((f) => f.columnName);
+        setReadonlyColumns(readonly);
+      })
+      .catch(() => setReadonlyColumns([]));
+  }, [record, modelId, fields]);
 
   /* Org switch: re-fetch (view/edit) or reset (create). Dirty state was already confirmed
    * before the switch by OrgSwitcher's pre-switch dialog. */
@@ -568,6 +597,7 @@ export function RecordPage({
           services={services}
           childrenData={childrenData}
           onChildrenChange={handleChildrenChange}
+          readonlyColumns={readonlyColumns}
         >
           <FormRenderer layout={formLayout} />
         </RenderProvider>
