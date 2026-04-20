@@ -2,52 +2,56 @@
  * P2.2 smoke seed — bootstraps the minimum data set for manually testing
  * the organization switcher + distributed-data flow.
  *
- * What it creates (idempotent — re-running is safe):
+ * Reuses the existing ROOT organization (parentId IS NULL). If multiple roots
+ * exist we pick the first by name. If no root exists, a root "华夏实业" is
+ * created. Existing non-root orgs are preserved.
  *
- *   Orgs (1 root + 3 children):
- *     华夏实业 (root)        code: huaxia
- *     ├─ 上海分公司          code: sh
- *     ├─ 广州分公司          code: gz
- *     └─ 北京分公司          code: bj
+ * Adds a 3-level tree under the root (idempotent — skips existing by code):
+ *
+ *   <ROOT>                      (existing root, untouched)
+ *   ├─ 华东大区      east       ← level 1 region
+ *   │   ├─ 上海分公司 sh         ← level 2 branch
+ *   │   └─ 杭州分公司 hz
+ *   ├─ 华南大区      south
+ *   │   └─ 广州分公司 gz
+ *   └─ 华北大区      north
+ *       └─ 北京分公司 bj
  *
  *   Users:
- *     david / david123    (designer-identity; belongs to huaxia + sh + gz)
- *     biz_sh / biz123     (user-identity; belongs to sh only)
+ *     david / david123    (designer; belongs to ROOT + 华东大区 + 上海分公司)
+ *     biz_sh / biz123     (user; belongs to 上海分公司 only — sees copies)
  *
  *   App: 演示系统           code: demo
  *   Model: 物料             code: material, dataScope=distributed, autoDistribute=true
  *   Fields:
  *     name        STRING  editable=false   (集团维护)
- *     spec        STRING  editable=false   (集团维护)
+ *     spec        STRING  editable=false
  *     local_code  STRING  editable=true    (下级本地编码)
- *     remark      STRING  editable=true    (下级备注)
+ *     remark      STRING  editable=true
  *
- *   Masters (3 records, created by admin in huaxia):
- *     钢板 Q235     / spec: 10x1500x3000  / local_code: '' / remark: ''
- *     铝合金 6061   / spec: T6-50x50      / local_code: '' / remark: ''
- *     铜管 T2       / spec: OD22x1.5      / local_code: '' / remark: ''
- *
- * With autoDistribute=true, each master auto-allocates to sh/gz/bj on create.
+ *   Masters (3, in ROOT org — auto-distribute fans out to all 7 non-root orgs):
+ *     钢板 Q235 / 铝合金 6061 / 铜管 T2
  *
  * Prerequisites:
- *   - Server must be running (default http://localhost:3000)
+ *   - Server running (OPENFORGE_API_URL env or http://localhost:3000)
  *   - Admin account exists (admin / 123123 per memory reference_dev_credentials)
- *   - Phase 1 migration SQL already applied (run_phase1_additive.sql)
+ *   - Phase 1 migration SQL applied
  *
  * Usage:
  *   pnpm --filter server seed:p2-2
- *
- * Reset:
- *   pnpm --filter server seed:p2-2:reset     # removes everything created above
+ *   pnpm --filter server seed:p2-2:reset
  */
 
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
 const BASE_URL = process.env.OPENFORGE_API_URL ?? 'http://localhost:3000';
 const ADMIN_USER = process.env.OPENFORGE_ADMIN_USER ?? 'admin';
 const ADMIN_PASS = process.env.OPENFORGE_ADMIN_PASS ?? '123123';
+const DB_URL = process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5434/openforge';
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: DB_URL });
+const prisma = new PrismaClient({ adapter });
 
 /* ─── Tiny HTTP client ────────────────────────────────────────────────── */
 
@@ -94,11 +98,32 @@ async function login(): Promise<void> {
 
 /* ─── Idempotent helpers ──────────────────────────────────────────────── */
 
-async function ensureOrg(opts: { name: string; code: string; parentId: string | null }) {
+async function ensureRoot(): Promise<{ id: string; name: string; code: string }> {
+  const existing = await prisma.sysOrganization.findFirst({
+    where: { parentId: null },
+    orderBy: { name: 'asc' },
+  });
+  if (existing) {
+    console.log(`  ✓ using existing root "${existing.name}" (${existing.code})`);
+    return { id: existing.id, name: existing.name, code: existing.code };
+  }
+  const created = await http<any>('POST', '/api/orgs', {
+    name: '华夏实业',
+    code: 'huaxia',
+    parentId: null,
+  });
+  console.log(`  ✓ created root "华夏实业" (huaxia)`);
+  return created;
+}
+
+async function ensureOrg(opts: { name: string; code: string; parentId: string }) {
   const existing = await prisma.sysOrganization.findUnique({ where: { code: opts.code } });
-  if (existing) return existing;
+  if (existing) {
+    console.log(`  ~ org "${opts.name}" (${opts.code}) exists`);
+    return existing;
+  }
   const created = await http<any>('POST', '/api/orgs', opts);
-  console.log(`  ✓ org "${opts.name}" (${opts.code})`);
+  console.log(`  ✓ org "${opts.name}" (${opts.code}) under ${opts.parentId.slice(0, 8)}…`);
   return created;
 }
 
@@ -112,7 +137,6 @@ async function ensureUser(opts: {
 }) {
   const existing = await prisma.sysUser.findUnique({ where: { username: opts.username } });
   if (existing) {
-    // Ensure extra org bindings
     if (opts.extraOrgIds?.length) {
       for (const orgId of opts.extraOrgIds) {
         await prisma.sysUserOrg.upsert({
@@ -122,6 +146,7 @@ async function ensureUser(opts: {
         });
       }
     }
+    console.log(`  ~ user "${opts.username}" exists`);
     return existing;
   }
   const created = await http<any>('POST', '/api/users', {
@@ -208,7 +233,6 @@ async function setAutoDistribute(modelId: string, value: boolean) {
 }
 
 async function ensureMaster(appCode: string, modelCode: string, data: Record<string, any>, uniqueBy: string) {
-  // Look up existing by a unique-ish column (we use 'name' by default)
   const existing = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
     `SELECT id FROM biz."${appCode}_${modelCode}" WHERE master_id = id AND "${uniqueBy}" = $1 LIMIT 1`,
     data[uniqueBy],
@@ -230,20 +254,29 @@ async function seed() {
   console.log('● login');
   await login();
 
-  console.log('\n● organizations');
-  const huaxia = await ensureOrg({ name: '华夏实业', code: 'huaxia', parentId: null });
-  const sh = await ensureOrg({ name: '上海分公司', code: 'sh', parentId: huaxia.id });
-  const gz = await ensureOrg({ name: '广州分公司', code: 'gz', parentId: huaxia.id });
-  const bj = await ensureOrg({ name: '北京分公司', code: 'bj', parentId: huaxia.id });
+  console.log('\n● root organization');
+  const root = await ensureRoot();
+  currentOrgId = root.id; // root-org context for subsequent distribute-sensitive calls
+
+  console.log('\n● level-1 regions (children of root)');
+  const east = await ensureOrg({ name: '华东大区', code: 'east', parentId: root.id });
+  const south = await ensureOrg({ name: '华南大区', code: 'south', parentId: root.id });
+  const north = await ensureOrg({ name: '华北大区', code: 'north', parentId: root.id });
+
+  console.log('\n● level-2 branches (children of regions)');
+  const sh = await ensureOrg({ name: '上海分公司', code: 'sh', parentId: east.id });
+  const hz = await ensureOrg({ name: '杭州分公司', code: 'hz', parentId: east.id });
+  const gz = await ensureOrg({ name: '广州分公司', code: 'gz', parentId: south.id });
+  const bj = await ensureOrg({ name: '北京分公司', code: 'bj', parentId: north.id });
 
   console.log('\n● users');
   await ensureUser({
     username: 'david',
     password: 'david123',
     displayName: 'David (Designer)',
-    orgId: huaxia.id,
+    orgId: root.id,
     identity: 'designer',
-    extraOrgIds: [sh.id, gz.id],
+    extraOrgIds: [east.id, sh.id, gz.id],
   });
   await ensureUser({
     username: 'biz_sh',
@@ -255,9 +288,6 @@ async function seed() {
 
   console.log('\n● app + model');
   const app = await ensureApp({ name: '演示系统', code: 'demo' });
-  // Set current org to root so create operations go through root-org guard
-  currentOrgId = huaxia.id;
-
   const model = await ensureModel({
     appId: app.id,
     name: '物料',
@@ -282,44 +312,43 @@ async function seed() {
   console.log('\n● auto-distribute ON');
   await setAutoDistribute(model.id, true);
 
-  console.log('\n● master records (auto-distributed to sub-orgs via autoDistribute=true)');
+  console.log('\n● master records (auto-distributed to all non-root orgs)');
   await ensureMaster('demo', 'material', { name: '钢板 Q235', spec: '10x1500x3000' }, 'name');
   await ensureMaster('demo', 'material', { name: '铝合金 6061', spec: 'T6-50x50' }, 'name');
   await ensureMaster('demo', 'material', { name: '铜管 T2', spec: 'OD22x1.5' }, 'name');
 
-  console.log('\n━━ seed complete ━━\n');
+  const nonRootCount = await prisma.sysOrganization.count({ where: { parentId: { not: null } } });
+  console.log(`\n━━ seed complete (${nonRootCount} non-root orgs) ━━\n`);
   console.log('Login options for smoke testing:');
-  console.log('  admin / 123123       — platform admin');
-  console.log('  david / david123     — designer, belongs to 华夏实业 + 上海 + 广州 (multi-org switcher visible)');
-  console.log('  biz_sh / biz123      — regular user, sub-org only (will see copies, not master)');
-  console.log('\nRecommended smoke flow:');
-  console.log('  1. Login as david → top bar shows OrgSwitcher (3 orgs)');
-  console.log('  2. In 华夏实业: open 演示系统 → 物料 list → see 3 masters');
-  console.log('  3. Switch to 上海分公司: see 3 copies, readonly fields (name/spec) locked');
-  console.log('  4. Edit remark on 钢板 copy → save → OK');
-  console.log('  5. Switch back to 华夏实业: edit 钢板 spec → save → sub-org copy spec updates too');
-  console.log('  6. Open 钢板 master detail → "同步" tab → Force Push "remark" field with phrase 强制覆盖');
-  console.log('  7. Designer: open 物料 model detail → 分配策略 tab → toggle local_code editable → warning dialog');
+  console.log('  admin / 123123    — platform admin (sees all)');
+  console.log(`  david / david123  — designer; belongs to ${root.name} + 华东大区 + 上海分公司 + 广州分公司`);
+  console.log('  biz_sh / biz123   — regular user; 上海分公司 only (sub-org view)');
+  console.log('');
+  console.log('Smoke flow:');
+  console.log('  1. Login as david → top bar shows OrgSwitcher (4 orgs, tree-indented)');
+  console.log(`  2. Stay in ${root.name}: open 演示系统 → 物料 → see 3 masters`);
+  console.log('  3. Switch to 上海分公司: see 3 copies; name/spec locked (集团维护)');
+  console.log('  4. Edit remark on 钢板 copy → save → ok');
+  console.log(`  5. Switch back to ${root.name}: edit 钢板 spec → save → sub-org copy auto-updates`);
+  console.log('  6. Open 钢板 master → 同步 tab → Force Push remark (输入 强制覆盖)');
+  console.log('  7. Designer: 模型详情 → 分配策略 tab → flip local_code editable → warning dialog');
   console.log('');
 }
 
 async function reset() {
   console.log('\n━━ P2.2 smoke reset ━━\n');
-
   console.log('● login');
   await login();
 
-  // Use Prisma to clean up in safe order. The ddl-manager will drop the biz table
-  // when we delete the model via API.
   const app = await prisma.sysApp.findUnique({ where: { code: 'demo' } });
   if (app) {
     const model = await prisma.sysModel.findFirst({ where: { code: 'material', appId: app.id } });
     if (model) {
       try {
         await http('DELETE', `/api/models/${model.id}`);
-        console.log(`  ✓ deleted model "物料" + biz table + distribution_log entries for this model`);
+        console.log(`  ✓ deleted model "物料" + biz table + distribution_log entries`);
       } catch (e: any) {
-        console.log(`  ! model delete failed (${e.message}) — will clean via Prisma`);
+        console.log(`  ! model delete via API failed (${e.message}) — cleaning via Prisma`);
         await prisma.sysDistributionLog.deleteMany({ where: { modelId: model.id } });
         await prisma.sysModel.delete({ where: { id: model.id } });
       }
@@ -332,7 +361,6 @@ async function reset() {
     }
   }
 
-  // Users
   for (const username of ['biz_sh', 'david']) {
     const u = await prisma.sysUser.findUnique({ where: { username } });
     if (u) {
@@ -343,29 +371,26 @@ async function reset() {
     }
   }
 
-  // Orgs (children first, then root — children don't block via API if empty)
-  for (const code of ['sh', 'gz', 'bj', 'huaxia']) {
+  // Delete leaves first, then regions. Never touch pre-existing root.
+  for (const code of ['sh', 'hz', 'gz', 'bj', 'east', 'south', 'north']) {
     const org = await prisma.sysOrganization.findUnique({ where: { code } });
     if (!org) continue;
     try {
       await http('DELETE', `/api/orgs/${org.id}`);
       console.log(`  ✓ deleted org ${code}`);
     } catch (e: any) {
-      console.log(`  ! org ${code} delete failed (${e.message}); may have been the root with admin still attached`);
+      console.log(`  ! org ${code} delete failed (${e.message})`);
     }
   }
 
-  console.log('\n━━ reset complete ━━\n');
+  console.log('\n━━ reset complete (root org preserved) ━━\n');
 }
 
 async function main() {
   const mode = process.argv[2];
   try {
-    if (mode === 'reset') {
-      await reset();
-    } else {
-      await seed();
-    }
+    if (mode === 'reset') await reset();
+    else await seed();
   } catch (e: any) {
     console.error('\n❌ seed failed:', e.message);
     if (e.body) console.error('   body:', JSON.stringify(e.body, null, 2));
