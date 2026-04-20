@@ -13,6 +13,12 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (typeof window !== 'undefined') {
+    const currentOrgId = (window as any).__openforgeCurrentOrgId;
+    if (currentOrgId) {
+      config.headers['X-Current-Org-Id'] = currentOrgId;
+    }
+  }
   return config;
 });
 
