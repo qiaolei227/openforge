@@ -223,6 +223,7 @@ function SortableFieldRow({
   tCommon,
   onEdit,
   onDelete,
+  indent = false,
 }: {
   field: Field;
   renderFieldTypeBadge: (ft: string, field?: Field) => React.ReactNode;
@@ -230,6 +231,7 @@ function SortableFieldRow({
   tCommon: (key: string) => string;
   onEdit: () => void;
   onDelete: () => void;
+  indent?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: field.id });
   const style = {
@@ -241,9 +243,9 @@ function SortableFieldRow({
   return (
     <tr ref={setNodeRef} style={style} onClick={onEdit} className="border-b hover:bg-muted/30 transition-colors cursor-pointer">
       <td className="p-3 w-10 text-muted-foreground" onClick={(e) => e.stopPropagation()} {...attributes} {...listeners}>
-        <GripVertical className="w-4 h-4 cursor-grab" />
+        <GripVertical className={`w-4 h-4 cursor-grab ${indent ? 'ml-4' : ''}`} />
       </td>
-      <td className="p-3 font-medium">{field.name}</td>
+      <td className={`p-3 font-medium ${indent ? 'pl-4' : ''}`}>{field.name}</td>
       <td className="p-3">
         <code className="rounded bg-muted px-1.5 py-0.5 font-mono" style={{ fontSize: '12px' }}>
           {field.columnName}
@@ -1290,6 +1292,38 @@ export default function ModelDetailPage() {
     [fields, modelId, fetchFields],
   );
 
+  const handleEntityFieldDragEnd = useCallback(
+    async (entityId: string, event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const entityFields = fieldsByEntityId.get(entityId) ?? [];
+      const oldIndex = entityFields.findIndex((f) => f.id === active.id);
+      const newIndex = entityFields.findIndex((f) => f.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const reorderedEntityFields = [...entityFields];
+      const [moved] = reorderedEntityFields.splice(oldIndex, 1);
+      reorderedEntityFields.splice(newIndex, 0, moved);
+
+      // Rebuild global fields: substitute this entity's slots with the reordered list (positions preserved)
+      setFields((prev) => {
+        const iter = [...reorderedEntityFields];
+        return prev.map((f) => (f.entityId === entityId ? (iter.shift() ?? f) : f));
+      });
+
+      try {
+        await apiClient.put(
+          `/models/${modelId}/fields/sort`,
+          reorderedEntityFields.map((f, i) => ({ id: f.id, sortOrder: i })),
+        );
+      } catch {
+        fetchFields();
+      }
+    },
+    [fieldsByEntityId, modelId, fetchFields],
+  );
+
   const handleEntityDragEnd = useCallback(
     async (event: DragEndEvent) => {
       const { active, over } = event;
@@ -1770,47 +1804,31 @@ export default function ModelDetailPage() {
                           </button>
                         </td>
                       </tr>
-                      {isExpanded && entityFields.length > 0 && entityFields.map((field) => (
-                        <tr
-                          key={field.id}
-                          onClick={() => handleEditField(field)}
-                          className="border-b hover:bg-muted/30 transition-colors cursor-pointer"
+                      {isExpanded && entityFields.length > 0 && (
+                        <DndContext
+                          sensors={dndSensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={(e) => handleEntityFieldDragEnd(entity.id, e)}
                         >
-                          <td className="p-3 w-10">
-                            <div className="ml-2 border-l-2 border-muted-foreground/20 h-full" />
-                          </td>
-                          <td className="p-3 font-medium pl-8">{field.name}</td>
-                          <td className="p-3">
-                            <code className="rounded bg-muted px-1.5 py-0.5 font-mono" style={{ fontSize: '12px' }}>
-                              {field.columnName}
-                            </code>
-                          </td>
-                          <td className="p-3">{renderFieldTypeBadge(field.fieldType, field)}</td>
-                          <td className="p-3 text-muted-foreground">
-                            {field.isRequired ? (
-                              <span className="text-foreground font-medium">{tFields('yes')}</span>
-                            ) : (
-                              <span>{tFields('no')}</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-muted-foreground">
-                            {field.isUnique ? (
-                              <span className="text-foreground font-medium">{tFields('yes')}</span>
-                            ) : (
-                              <span>{tFields('no')}</span>
-                            )}
-                          </td>
-                          <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => setConfirmAction({ field })}
-                              className={`${btnGhost} text-destructive hover:text-destructive`}
-                              title={tCommon('delete')}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                          <SortableContext
+                            items={entityFields.map((f) => f.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            {entityFields.map((field) => (
+                              <SortableFieldRow
+                                key={field.id}
+                                field={field}
+                                renderFieldTypeBadge={renderFieldTypeBadge}
+                                tFields={tFields}
+                                tCommon={tCommon}
+                                onEdit={() => handleEditField(field)}
+                                onDelete={() => setConfirmAction({ field })}
+                                indent
+                              />
+                            ))}
+                          </SortableContext>
+                        </DndContext>
+                      )}
                       {isExpanded && entityFields.length === 0 && (
                         <tr>
                           <td colSpan={7} className="px-8 py-4 text-center text-sm text-muted-foreground border-b">
