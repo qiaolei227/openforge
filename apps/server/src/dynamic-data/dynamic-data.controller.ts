@@ -14,6 +14,7 @@ import {
 import { DynamicDataService } from './dynamic-data.service';
 import { DataStatusService } from './data-status.service';
 import { DistributionService } from './distribution.service';
+import { SyncService } from './sync.service';
 import { QueryDto } from './dto/query.dto';
 import { BatchDto } from './dto/batch.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -30,6 +31,7 @@ export class DynamicDataController {
     @Inject(DynamicDataService) private dynamicDataService: DynamicDataService,
     @Inject(DataStatusService) private dataStatusService: DataStatusService,
     @Inject(DistributionService) private distributionService: DistributionService,
+    @Inject(SyncService) private syncService: SyncService,
   ) {}
 
   @Post('query')
@@ -254,6 +256,26 @@ export class DynamicDataController {
       user,
       recordIds: body.recordIds,
       changes: body.changes,
+    });
+  }
+
+  @Post(':id/sync')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'distribute',
+  )
+  sync(
+    @Param('appCode') appCode: string,
+    @Param('modelCode') modelCode: string,
+    @Param('id') id: string,
+    @Body() body: { action: 'force_push' | 'backfill'; fieldColumns: string[]; confirmationPhrase: string },
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.syncService.sync(appCode, modelCode, id, {
+      user,
+      action: body.action,
+      fieldColumns: body.fieldColumns,
+      confirmationPhrase: body.confirmationPhrase,
     });
   }
 }
