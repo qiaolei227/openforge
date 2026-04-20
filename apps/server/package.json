@@ -9,7 +9,9 @@
     "start": "node dist/main",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint:permission": "tsx scripts/check-permission-decorators.ts"
+    "lint:permission": "tsx scripts/check-permission-decorators.ts",
+    "seed:p2-2": "tsx scripts/seed-p2-2-smoke.ts",
+    "seed:p2-2:reset": "tsx scripts/seed-p2-2-smoke.ts reset"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
