@@ -735,6 +735,49 @@ export class FieldService {
   }
 
   /**
+   * Count copies whose given field value differs from the master record.
+   * Used by the distribution-policy Tab to warn when switching editable→readonly.
+   * Only meaningful for distributed models; returns { count: 0 } otherwise.
+   */
+  async getLocalEditsCount(
+    appCode: string,
+    modelCode: string,
+    fieldId: string,
+  ): Promise<{ count: number }> {
+    const model = await this.prisma.sysModel.findFirst({
+      where: { code: modelCode, app: { code: appCode } },
+      select: { id: true, tableName: true, dataScope: true },
+    });
+    if (!model) {
+      throw new BusinessException(404, ErrorCodes.MODEL_NOT_FOUND, '');
+    }
+
+    const field = await this.prisma.sysField.findFirst({
+      where: { id: fieldId, modelId: model.id },
+      select: { id: true, columnName: true },
+    });
+    if (!field) {
+      throw new BusinessException(404, ErrorCodes.FIELD_NOT_FOUND, '');
+    }
+
+    if (model.dataScope !== 'distributed') {
+      // Non-distributed models have no copies; return 0
+      return { count: 0 };
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+      `SELECT COUNT(*)::int AS count
+         FROM biz."${model.tableName}" copy
+         JOIN biz."${model.tableName}" master ON master.id = copy.master_id
+         WHERE copy.id <> copy.master_id
+           AND copy.is_archived = false
+           AND copy."${field.columnName}" IS DISTINCT FROM master."${field.columnName}"`,
+    );
+    const count = Number(rows[0]?.count ?? 0);
+    return { count };
+  }
+
+  /**
    * 批量更新排序
    */
   async updateSort(modelId: string, items: Array<{ id: string; sortOrder: number }>) {

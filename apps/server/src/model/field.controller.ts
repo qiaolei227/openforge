@@ -54,4 +54,14 @@ export class FieldController {
   ) {
     return this.fieldService.updateSort(modelId, items);
   }
+
+  @Get('apps/:appCode/models/:modelCode/fields/:fieldId/local-edits-count')
+  @RequirePermission('sys:designer', 'view')
+  localEditsCount(
+    @Param('appCode') appCode: string,
+    @Param('modelCode') modelCode: string,
+    @Param('fieldId', ParseUUIDPipe) fieldId: string,
+  ) {
+    return this.fieldService.getLocalEditsCount(appCode, modelCode, fieldId);
+  }
 }

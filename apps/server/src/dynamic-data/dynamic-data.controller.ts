@@ -15,6 +15,7 @@ import { DynamicDataService } from './dynamic-data.service';
 import { DataStatusService } from './data-status.service';
 import { DistributionService } from './distribution.service';
 import { SyncService } from './sync.service';
+import { AutoDistributeService } from './auto-distribute.service';
 import { QueryDto } from './dto/query.dto';
 import { BatchDto } from './dto/batch.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -32,6 +33,7 @@ export class DynamicDataController {
     @Inject(DataStatusService) private dataStatusService: DataStatusService,
     @Inject(DistributionService) private distributionService: DistributionService,
     @Inject(SyncService) private syncService: SyncService,
+    @Inject(AutoDistributeService) private autoDistribute: AutoDistributeService,
   ) {}
 
   @Post('query')
@@ -257,6 +259,19 @@ export class DynamicDataController {
       recordIds: body.recordIds,
       changes: body.changes,
     });
+  }
+
+  @Post('fill-missing-copies')
+  @RequirePermission(
+    (req) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+    'distribute',
+  )
+  fillMissingCopies(
+    @Param('appCode') appCode: string,
+    @Param('modelCode') modelCode: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.autoDistribute.fillMissing(appCode, modelCode, user);
   }
 
   @Post(':id/sync')
