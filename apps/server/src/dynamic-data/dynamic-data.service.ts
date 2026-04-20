@@ -7,6 +7,7 @@ import { EventBusService } from '../event-bus/event-bus.service';
 import { ChildrenService } from './children.service';
 import { FieldService } from '../model/field.service';
 import { LookupResolverService } from './lookup-resolver.service';
+import { ReadonlyPropagationService } from './readonly-propagation.service';
 import {
   RecordCreatedEvent,
   RecordUpdatedEvent,
@@ -35,6 +36,8 @@ export class DynamicDataService {
     private fieldService: FieldService,
     @Inject(LookupResolverService)
     private readonly lookupResolver: LookupResolverService,
+    @Inject(ReadonlyPropagationService)
+    private readonly readonlyPropagation: ReadonlyPropagationService,
   ) {}
 
   // ────────────────────────── Query ──────────────────────────
@@ -342,7 +345,7 @@ export class DynamicDataService {
       RETURNING *
     `;
 
-    const execute = async (client: { $queryRawUnsafe: (...args: any[]) => Promise<any> }) => {
+    const execute = async (client: { $queryRawUnsafe: (...args: any[]) => Promise<any>; $executeRawUnsafe: (...args: any[]) => Promise<any> }) => {
       const result: any[] = await client.$queryRawUnsafe(sql, ...params);
 
       if (result.length === 0) {
@@ -361,7 +364,12 @@ export class DynamicDataService {
         throw new BusinessException(409, ErrorCodes.DATA_VERSION_CONFLICT, `Version conflict: expected ${version}, current is ${existsResult[0].version}`);
       }
 
-      return result[0];
+      const record = result[0];
+      // Readonly propagation for distributed models: master update cascades readonly fields to copies.
+      if (model.dataScope === 'distributed' && record.master_id === record.id) {
+        await this.readonlyPropagation.propagate(client, model, id, cleanData);
+      }
+      return record;
     };
 
     let updated: any;
@@ -380,7 +388,9 @@ export class DynamicDataService {
         return record;
       });
     } else {
-      updated = await execute(this.prisma);
+      updated = await this.prisma.$transaction(async (tx) => {
+        return execute(tx);
+      });
     }
 
     this.eventBus.emit('record.updated', new RecordUpdatedEvent(
