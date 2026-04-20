@@ -7,12 +7,15 @@ import { DynamicSidebarNav } from './layout/dynamic-sidebar-nav';
 import { AiSidebar } from './ai-sidebar';
 import { GlobalToast } from './global-toast';
 import { useAiStore } from '@/stores/ai-store';
+import { useAuthStore } from '@/stores/auth-store';
+import { useOrgStore } from '@/stores/org-store';
 import { TabBar } from '@/components/workspace/tab-bar';
 
 const AI_OPEN_KEY = 'openforge_ai_open';
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
   const { area } = useAreaContext();
+  const userId = useAuthStore((s) => s.user?.id);
 
   /* Restore AI panel open state from localStorage */
   useEffect(() => {
@@ -21,6 +24,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       useAiStore.getState().open();
     }
   }, []);
+
+  /* Load accessible orgs when user is known */
+  useEffect(() => {
+    if (userId) {
+      useOrgStore.getState().refresh(userId);
+    }
+  }, [userId]);
 
   return (
     <>

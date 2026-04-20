@@ -995,6 +995,16 @@
     "none": "暂无可访问的系统",
     "allSystems": "全部系统"
   },
+  "orgSwitcher": {
+    "title": "切换组织",
+    "group": "集团",
+    "select": "选择组织",
+    "cancel": "取消",
+    "confirmSwitch": "仍要切换",
+    "confirmDirtyTitle": "确认切换组织？",
+    "confirmDirtyDesc": "当前有 {count} 个标签页存在未保存的修改，切换组织将丢失这些修改。",
+    "moreDirty": "... 还有 {count} 个"
+  },
   "topBar": {
     "designer": "系统设计",
     "settings": "平台设置",

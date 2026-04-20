@@ -995,6 +995,16 @@
     "none": "No accessible systems",
     "allSystems": "All systems"
   },
+  "orgSwitcher": {
+    "title": "Switch Organization",
+    "group": "Group",
+    "select": "Select organization",
+    "cancel": "Cancel",
+    "confirmSwitch": "Switch anyway",
+    "confirmDirtyTitle": "Switch organization?",
+    "confirmDirtyDesc": "{count} tabs have unsaved changes that will be discarded on switch.",
+    "moreDirty": "... and {count} more"
+  },
   "topBar": {
     "designer": "System Design",
     "settings": "Platform Settings",

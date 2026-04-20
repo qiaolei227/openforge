@@ -6,6 +6,7 @@ import { Settings, Paintbrush, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useArea } from '@/hooks/use-area';
 import { SystemSwitcher } from './system-switcher';
+import { OrgSwitcher } from './org-switcher';
 import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAiStore } from '@/stores/ai-store';
@@ -78,6 +79,7 @@ export function TopBar() {
         {area === 'workspace' && (
           <div className="flex items-center gap-2">
             <SystemSwitcher />
+            <OrgSwitcher />
             <MenuDrawerTrigger onClick={() => setDrawerOpen(true)} />
           </div>
         )}
