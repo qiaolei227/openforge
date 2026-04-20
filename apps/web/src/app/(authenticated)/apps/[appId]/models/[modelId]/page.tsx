@@ -1264,34 +1264,6 @@ export default function ModelDetailPage() {
       });
   }, [currentEntityId, editingField, fields, entities, availableModels]);
 
-  const handleFieldDragEnd = useCallback(
-    async (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-
-      const oldIndex = fields.findIndex((f) => f.id === active.id);
-      const newIndex = fields.findIndex((f) => f.id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return;
-
-      // Optimistic reorder
-      const reordered = [...fields];
-      const [moved] = reordered.splice(oldIndex, 1);
-      reordered.splice(newIndex, 0, moved);
-      setFields(reordered);
-
-      // Persist to backend
-      try {
-        await apiClient.put(`/models/${modelId}/fields/sort`,
-          reordered.map((f, i) => ({ id: f.id, sortOrder: i })),
-        );
-      } catch {
-        // Revert on failure
-        fetchFields();
-      }
-    },
-    [fields, modelId, fetchFields],
-  );
-
   const handleEntityFieldDragEnd = useCallback(
     async (entityId: string, event: DragEndEvent) => {
       const { active, over } = event;
@@ -1322,6 +1294,40 @@ export default function ModelDetailPage() {
       }
     },
     [fieldsByEntityId, modelId, fetchFields],
+  );
+
+  const handleFieldDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      // Dispatch by scope: entity field drag routes to per-entity handler
+      const activeField = fields.find((f) => f.id === active.id);
+      if (activeField?.entityId) {
+        return handleEntityFieldDragEnd(activeField.entityId, event);
+      }
+
+      const oldIndex = fields.findIndex((f) => f.id === active.id);
+      const newIndex = fields.findIndex((f) => f.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      // Optimistic reorder
+      const reordered = [...fields];
+      const [moved] = reordered.splice(oldIndex, 1);
+      reordered.splice(newIndex, 0, moved);
+      setFields(reordered);
+
+      // Persist to backend
+      try {
+        await apiClient.put(`/models/${modelId}/fields/sort`,
+          reordered.map((f, i) => ({ id: f.id, sortOrder: i })),
+        );
+      } catch {
+        // Revert on failure
+        fetchFields();
+      }
+    },
+    [fields, modelId, fetchFields, handleEntityFieldDragEnd],
   );
 
   const handleEntityDragEnd = useCallback(
@@ -1805,29 +1811,23 @@ export default function ModelDetailPage() {
                         </td>
                       </tr>
                       {isExpanded && entityFields.length > 0 && (
-                        <DndContext
-                          sensors={dndSensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={(e) => handleEntityFieldDragEnd(entity.id, e)}
+                        <SortableContext
+                          items={entityFields.map((f) => f.id)}
+                          strategy={verticalListSortingStrategy}
                         >
-                          <SortableContext
-                            items={entityFields.map((f) => f.id)}
-                            strategy={verticalListSortingStrategy}
-                          >
-                            {entityFields.map((field) => (
-                              <SortableFieldRow
-                                key={field.id}
-                                field={field}
-                                renderFieldTypeBadge={renderFieldTypeBadge}
-                                tFields={tFields}
-                                tCommon={tCommon}
-                                onEdit={() => handleEditField(field)}
-                                onDelete={() => setConfirmAction({ field })}
-                                indent
-                              />
-                            ))}
-                          </SortableContext>
-                        </DndContext>
+                          {entityFields.map((field) => (
+                            <SortableFieldRow
+                              key={field.id}
+                              field={field}
+                              renderFieldTypeBadge={renderFieldTypeBadge}
+                              tFields={tFields}
+                              tCommon={tCommon}
+                              onEdit={() => handleEditField(field)}
+                              onDelete={() => setConfirmAction({ field })}
+                              indent
+                            />
+                          ))}
+                        </SortableContext>
                       )}
                       {isExpanded && entityFields.length === 0 && (
                         <tr>
