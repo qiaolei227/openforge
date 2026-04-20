@@ -677,8 +677,22 @@ export class DynamicDataService {
       }),
     ]);
 
-    const nonSystem = allFields.filter((f) => !f.isSystem);
-    if (user.isAdmin) return { ...model, fields: nonSystem, entities, views };
+    // Replace raw entity.fields with the enriched versions from findByModelId so that
+    // entity LOOKUP fields carry _resolvedTargetFieldType used by column filter UI.
+    const entityFieldsByEntity = new Map<string, any[]>();
+    for (const f of allFields) {
+      if (!f.entityId) continue;
+      const arr = entityFieldsByEntity.get(f.entityId) ?? [];
+      arr.push(f);
+      entityFieldsByEntity.set(f.entityId, arr);
+    }
+    const enrichedEntities = entities.map((e: any) => ({
+      ...e,
+      fields: entityFieldsByEntity.get(e.id) ?? e.fields ?? [],
+    }));
+
+    const nonSystem = allFields.filter((f) => !f.isSystem && !f.entityId);
+    if (user.isAdmin) return { ...model, fields: nonSystem, entities: enrichedEntities, views };
 
     const perms = await this.prisma.sysFieldPermission.findMany({
       where: {
@@ -704,7 +718,7 @@ export class DynamicDataService {
         const access = accessByField.get(f.id);
         return access === 'readonly' ? { ...f, access } : f;
       });
-    return { ...model, fields: filtered, entities, views };
+    return { ...model, fields: filtered, entities: enrichedEntities, views };
   }
 
   /**
@@ -736,12 +750,25 @@ export class DynamicDataService {
       );
     }
 
-    // Use fieldService.findByModelId to get fields with dict choices resolved at runtime
-    // Exclude system fields and entity fields (entity validation happens in ChildrenService)
+    // Use fieldService.findByModelId to get fields with dict choices + LOOKUP target meta resolved at runtime.
+    // Splits by entityId: main fields go on the root; entity-scoped fields replace the raw entity.fields so
+    // that entity LOOKUPs also carry _resolvedTargetFieldType used by column filter/cell rendering.
     const fields = await this.fieldService.findByModelId(model.id);
     const modelFields = fields.filter((f: any) => !f.isSystem && !f.entityId);
 
-    return { ...model, fields: modelFields };
+    const entityFieldsByEntity = new Map<string, any[]>();
+    for (const f of fields) {
+      if (!f.entityId) continue;
+      const arr = entityFieldsByEntity.get(f.entityId) ?? [];
+      arr.push(f);
+      entityFieldsByEntity.set(f.entityId, arr);
+    }
+    const entitiesWithEnrichedFields = (model.entities ?? []).map((e: any) => ({
+      ...e,
+      fields: entityFieldsByEntity.get(e.id) ?? e.fields ?? [],
+    }));
+
+    return { ...model, entities: entitiesWithEnrichedFields, fields: modelFields };
   }
 
   /**
@@ -1389,7 +1416,7 @@ export class DynamicDataService {
     model: {
       id: string;
       code: string;
-      fields: Array<{ columnName: string; fieldType: string; options: any }>;
+      fields: Array<{ id: string; columnName: string; fieldType: string; options: any }>;
     },
   ) {
     const [, entities] = await Promise.all([
