@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api-client';
 import { getApiErrorMessage } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import { Loader2, Pencil, Ban, CheckCircle, Trash2 } from 'lucide-react';
+import { OrgTreeSelect } from '@/components/layout/org-tree-select';
 
 interface UserOrg {
   id: string;
@@ -29,6 +30,7 @@ interface User {
   phone: string | null;
   status: 'active' | 'disabled';
   identity: Identity;
+  lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
   userOrgs: UserOrg[];
@@ -64,6 +66,8 @@ interface Org {
   id: string;
   name: string;
   code: string;
+  parentId: string | null;
+  isGroup: boolean;
   status: string;
 }
 
@@ -115,7 +119,8 @@ export default function UsersPage() {
   const [formDisplayName, setFormDisplayName] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
-  const [formOrgId, setFormOrgId] = useState('');
+  const [formOrgIds, setFormOrgIds] = useState<string[]>([]);
+  const [formDefaultOrgId, setFormDefaultOrgId] = useState<string | null>(null);
   const [formRoleIds, setFormRoleIds] = useState<string[]>([]);
   const [formIdentity, setFormIdentity] = useState<Identity>('user');
   const [formError, setFormError] = useState('');
@@ -205,7 +210,8 @@ export default function UsersPage() {
     setFormDisplayName('');
     setFormEmail('');
     setFormPhone('');
-    setFormOrgId(allOrgs.length > 0 ? allOrgs[0].id : '');
+    setFormOrgIds([]);
+    setFormDefaultOrgId(null);
     setFormRoleIds([]);
     setFormIdentity('user');
     setFormError('');
@@ -219,7 +225,11 @@ export default function UsersPage() {
     setFormDisplayName(user.displayName);
     setFormEmail(user.email || '');
     setFormPhone(user.phone || '');
-    setFormOrgId('');
+    const userOrgIds = (user.userOrgs ?? []).map((uo) => uo.orgId);
+    setFormOrgIds(userOrgIds);
+    setFormDefaultOrgId(
+      (user.userOrgs ?? []).find((uo) => uo.isDefault)?.orgId ?? userOrgIds[0] ?? null,
+    );
     setFormRoleIds((user.userRoles ?? []).map((ur) => ur.roleId));
     setFormIdentity(user.identity ?? 'user');
     setFormError('');
@@ -235,6 +245,16 @@ export default function UsersPage() {
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+
+    if (formOrgIds.length === 0) {
+      setFormError(tUser('noOrgSelected'));
+      return;
+    }
+    if (!formDefaultOrgId || !formOrgIds.includes(formDefaultOrgId)) {
+      setFormError(tUser('defaultOrgInvalid'));
+      return;
+    }
+
     setFormSubmitting(true);
     try {
       let userId: string;
@@ -245,7 +265,8 @@ export default function UsersPage() {
           displayName: formDisplayName,
           email: formEmail || undefined,
           phone: formPhone || undefined,
-          orgId: formOrgId,
+          organizationIds: formOrgIds,
+          defaultOrgId: formDefaultOrgId,
           identity: formIdentity,
         });
         userId = data.id;
@@ -255,6 +276,8 @@ export default function UsersPage() {
           email: formEmail || undefined,
           phone: formPhone || undefined,
           identity: formIdentity,
+          organizationIds: formOrgIds,
+          defaultOrgId: formDefaultOrgId,
         });
         userId = editingUser.id;
       } else {
@@ -380,9 +403,9 @@ export default function UsersPage() {
               <th className="p-3 text-left font-medium">{tUser('displayName')}</th>
               <th className="p-3 text-left font-medium">{tUser('email')}</th>
               <th className="p-3 text-left font-medium">{tUser('org')}</th>
-              <th className="p-3 text-left font-medium">{tUser('roles')}</th>
+              <th className="p-3 text-left font-medium">{tUser('identityAndRoles')}</th>
               <th className="p-3 text-left font-medium">{tCommon('status')}</th>
-              <th className="p-3 text-left font-medium">{tCommon('createdAt')}</th>
+              <th className="p-3 text-left font-medium">{tUser('lastLoginAt')}</th>
               <th className="p-3 text-left font-medium">{tCommon('actions')}</th>
             </tr>
           </thead>
@@ -411,8 +434,14 @@ export default function UsersPage() {
                         {user.userOrgs.map((uo) => (
                           <span
                             key={uo.id}
-                            className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs"
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
+                              uo.isDefault
+                                ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300'
+                                : 'bg-muted'
+                            }`}
+                            title={uo.isDefault ? tUser('defaultOrgTag') : undefined}
                           >
+                            {uo.isDefault && <span aria-hidden>★</span>}
                             {uo.org.name}
                           </span>
                         ))}
@@ -422,9 +451,13 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td className="p-3">
-                    {user.identity === 'admin' || user.identity === 'designer' ? (
-                      <span className="text-xs text-muted-foreground italic">
-                        {tUser('rolesNotNeeded')}
+                    {user.identity === 'admin' ? (
+                      <span className="inline-flex items-center rounded-full bg-amber-50 text-amber-800 ring-1 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 px-2 py-0.5 text-xs font-medium">
+                        {tUser('identityAdmin')}
+                      </span>
+                    ) : user.identity === 'designer' ? (
+                      <span className="inline-flex items-center rounded-full bg-violet-50 text-violet-800 ring-1 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-300 px-2 py-0.5 text-xs font-medium">
+                        {tUser('identityDesigner')}
                       </span>
                     ) : (user.userRoles ?? []).length > 0 ? (
                       <div className="flex flex-wrap gap-1">
@@ -438,7 +471,9 @@ export default function UsersPage() {
                         ))}
                       </div>
                     ) : (
-                      <span className="text-muted-foreground">-</span>
+                      <span className="text-xs text-muted-foreground italic">
+                        {tUser('identityUserNoRoles')}
+                      </span>
                     )}
                   </td>
                   <td className="p-3">
@@ -453,7 +488,15 @@ export default function UsersPage() {
                     </span>
                   </td>
                   <td className="p-3 text-muted-foreground">
-                    {new Date(user.createdAt).toLocaleDateString('zh-CN')}
+                    {user.lastLoginAt
+                      ? new Date(user.lastLoginAt).toLocaleString('zh-CN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : tUser('neverLoggedIn')}
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-1">
@@ -471,8 +514,9 @@ export default function UsersPage() {
                       </button>
                       <button
                         onClick={() => setConfirmAction({ type: 'delete', user })}
+                        disabled={!!user.lastLoginAt}
                         className={`${btnGhost} text-destructive hover:text-destructive`}
-                        title={tCommon('delete')}
+                        title={user.lastLoginAt ? tUser('deleteBlockedLoggedIn') : tCommon('delete')}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -597,28 +641,19 @@ export default function UsersPage() {
                 </select>
               </div>
 
-              {dialogMode === 'create' && (
-                <div className="space-y-2">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">{tUser('org')}</label>
-                  <select
-                    className={inputClass}
-                    value={formOrgId}
-                    onChange={(e) => setFormOrgId(e.target.value)}
-                    required
-                  >
-                    {allOrgs.length === 0 && (
-                      <option value="" disabled>
-                        {tUser('noOrgsAvailable')}
-                      </option>
-                    )}
-                    {allOrgs.map((org) => (
-                      <option key={org.id} value={org.id}>
-                        {org.name} ({org.code})
-                      </option>
-                    ))}
-                  </select>
+                  <span className="text-xs text-muted-foreground">{tUser('orgPickerHint')}</span>
                 </div>
-              )}
+                <OrgTreeSelect
+                  orgs={allOrgs}
+                  selectedIds={formOrgIds}
+                  onSelectedIdsChange={setFormOrgIds}
+                  defaultOrgId={formDefaultOrgId}
+                  onDefaultOrgIdChange={setFormDefaultOrgId}
+                />
+              </div>
 
               {formIdentity === 'user' ? (
                 <div className="space-y-2">

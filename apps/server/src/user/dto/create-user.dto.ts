@@ -1,4 +1,15 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID, MinLength, IsEmail, ValidateIf, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  MinLength,
+  IsEmail,
+  ValidateIf,
+  IsIn,
+  IsArray,
+  ArrayMinSize,
+} from 'class-validator';
 
 export class CreateUserDto {
   @IsString()
@@ -23,8 +34,13 @@ export class CreateUserDto {
   @IsString()
   phone?: string;
 
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  organizationIds!: string[];
+
   @IsUUID()
-  orgId!: string;
+  defaultOrgId!: string;
 
   @IsOptional()
   @IsIn(['user', 'designer', 'admin'])

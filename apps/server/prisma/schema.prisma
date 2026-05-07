@@ -33,6 +33,7 @@ model SysUser {
   status       UserStatus   @default(active)
   identity     UserIdentity @default(user)
   isAdmin      Boolean      @default(false) @map("is_admin")
+  lastLoginAt  DateTime?    @map("last_login_at") @db.Timestamptz
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -49,6 +50,7 @@ model SysOrganization {
   name      String    @db.VarChar(100)
   code      String    @unique @db.VarChar(50)
   parentId  String?   @map("parent_id") @db.Uuid
+  isGroup   Boolean   @default(false) @map("is_group")
   status    OrgStatus @default(active)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz

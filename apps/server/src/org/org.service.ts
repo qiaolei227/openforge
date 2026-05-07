@@ -2,6 +2,8 @@ import { Injectable, ConflictException, NotFoundException, Inject } from '@nestj
 import { PrismaService } from '../prisma/prisma.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { OrgCreatedEvent } from '../event-bus/events';
+import { BusinessException } from '../common/exceptions/business.exception';
+import { ErrorCodes } from '../common/exceptions/error-codes';
 import { CreateOrgDto } from './dto/create-org.dto';
 import { UpdateOrgDto } from './dto/update-org.dto';
 
@@ -71,11 +73,22 @@ export class OrgService {
     });
     if (existing) throw new ConflictException('Organization code already exists');
 
+    const parentId = dto.parentId || null;
+    const isGroup = dto.isGroup ?? false;
+    if (parentId === null && isGroup) {
+      throw new BusinessException(
+        422,
+        ErrorCodes.ORG_GROUP_CANNOT_BE_ROOT,
+        '根组织必须是实体组织，不能设置为分组',
+      );
+    }
+
     const org = await this.prisma.sysOrganization.create({
       data: {
         name: dto.name,
         code: dto.code,
-        parentId: dto.parentId || null,
+        parentId,
+        isGroup,
       },
     });
 
@@ -92,8 +105,9 @@ export class OrgService {
       pendingCount: number;
     }> = [];
 
-    // Only compute pending allocation for non-root orgs (root is the source, not a target)
-    if (org.parentId !== null) {
+    // Only compute pending allocation for non-root, non-group orgs
+    // (root is the source, groups never hold data)
+    if (org.parentId !== null && !org.isGroup) {
       const candidates = await this.prisma.sysModel.findMany({
         where: { autoDistribute: true, dataScope: 'distributed' },
         select: {

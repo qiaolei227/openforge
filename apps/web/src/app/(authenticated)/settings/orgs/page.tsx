@@ -13,6 +13,7 @@ interface Org {
   code: string;
   status: 'active' | 'disabled';
   parentId: string | null;
+  isGroup: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,6 +78,7 @@ export default function OrgsPage() {
   const [formName, setFormName] = useState('');
   const [formCode, setFormCode] = useState('');
   const [formParentId, setFormParentId] = useState<string | null>(null);
+  const [formIsGroup, setFormIsGroup] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
 
@@ -193,6 +195,7 @@ export default function OrgsPage() {
     setFormName('');
     setFormCode('');
     setFormParentId(null);
+    setFormIsGroup(false);
     setFormError('');
   };
 
@@ -202,6 +205,7 @@ export default function OrgsPage() {
     setFormName(org.name);
     setFormCode(org.code);
     setFormParentId(org.parentId);
+    setFormIsGroup(org.isGroup);
     setFormError('');
   };
 
@@ -220,7 +224,12 @@ export default function OrgsPage() {
         const { data: created } = await apiClient.post<{
           org: Org;
           autoDistributeModels: Array<{ appCode: string; modelCode: string; modelName: string; pendingCount: number }>;
-        }>('/orgs', { name: formName, code: formCode, parentId: formParentId || null });
+        }>('/orgs', {
+          name: formName,
+          code: formCode,
+          parentId: formParentId || null,
+          isGroup: formParentId ? formIsGroup : false,
+        });
         showToast(tOrg('createSuccess'), 'success');
         if (created.autoDistributeModels?.length > 0) {
           const totalPending = created.autoDistributeModels.reduce((s, m) => s + m.pendingCount, 0);
@@ -381,6 +390,11 @@ export default function OrgsPage() {
                           </span>
                         )}
                         <span className="truncate">{org.name}</span>
+                        {org.isGroup && (
+                          <span className="ml-2 inline-flex items-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-300 px-1.5 py-0.5 text-[10px] font-medium tracking-wide shrink-0">
+                            {tOrg('nodeTypeGroup')}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="p-3">
@@ -456,7 +470,16 @@ export default function OrgsPage() {
                 ) : (
                   orgs.map((org) => (
                     <tr key={org.id} className="border-b hover:bg-muted/30 transition-colors">
-                      <td className="p-3 font-medium">{org.name}</td>
+                      <td className="p-3 font-medium">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate">{org.name}</span>
+                          {org.isGroup && (
+                            <span className="inline-flex items-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-300 px-1.5 py-0.5 text-[10px] font-medium tracking-wide shrink-0">
+                              {tOrg('nodeTypeGroup')}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-3">
                         <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{org.code}</code>
                       </td>
@@ -569,6 +592,68 @@ export default function OrgsPage() {
                   excludeId={editingOrg?.id}
                   placeholder={tOrg('noParent')}
                 />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{tOrg('nodeType')}</label>
+                {dialogMode === 'edit' ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span
+                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
+                        formIsGroup
+                          ? 'bg-slate-100 text-slate-700 ring-1 ring-slate-600/20 dark:bg-slate-500/10 dark:text-slate-300'
+                          : 'bg-blue-50 text-blue-700 ring-1 ring-blue-600/20 dark:bg-blue-500/10 dark:text-blue-300'
+                      }`}
+                    >
+                      {formIsGroup ? tOrg('nodeTypeGroup') : tOrg('nodeTypeEntity')}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{tOrg('nodeTypeImmutable')}</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <label
+                      className={`flex items-start gap-2 rounded-md border p-3 cursor-pointer transition-colors ${
+                        !formIsGroup
+                          ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                          : 'border-input hover:bg-accent/30'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="nodeType"
+                        checked={!formIsGroup}
+                        onChange={() => setFormIsGroup(false)}
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                      />
+                      <span className="flex flex-col gap-0.5 min-w-0">
+                        <span className="text-sm font-medium">{tOrg('nodeTypeEntity')}</span>
+                        <span className="text-xs text-muted-foreground">{tOrg('nodeTypeEntityHint')}</span>
+                      </span>
+                    </label>
+                    <label
+                      className={`flex items-start gap-2 rounded-md border p-3 transition-colors ${
+                        !formParentId
+                          ? 'border-input opacity-50 cursor-not-allowed'
+                          : formIsGroup
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary/20 cursor-pointer'
+                            : 'border-input hover:bg-accent/30 cursor-pointer'
+                      }`}
+                      title={!formParentId ? tOrg('nodeTypeGroupNeedsParent') : undefined}
+                    >
+                      <input
+                        type="radio"
+                        name="nodeType"
+                        checked={formIsGroup}
+                        disabled={!formParentId}
+                        onChange={() => setFormIsGroup(true)}
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                      />
+                      <span className="flex flex-col gap-0.5 min-w-0">
+                        <span className="text-sm font-medium">{tOrg('nodeTypeGroup')}</span>
+                        <span className="text-xs text-muted-foreground">{tOrg('nodeTypeGroupHint')}</span>
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
               {formError && (
                 <p className="text-sm text-destructive">{formError}</p>

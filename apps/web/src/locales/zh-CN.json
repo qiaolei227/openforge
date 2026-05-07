@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "OpenForge 开匠",
-    "description": "AI-Native 低代码平台"
+    "description": "AI 赋能低代码平台"
   },
   "nav": {
     "dashboard": "仪表盘",
@@ -119,6 +119,13 @@
     "statusDisabled": "禁用",
     "parentOrg": "上级组织",
     "noParent": "无（顶级组织）",
+    "nodeType": "节点类型",
+    "nodeTypeEntity": "组织",
+    "nodeTypeEntityHint": "实体单位，可以持有数据和用户",
+    "nodeTypeGroup": "分组",
+    "nodeTypeGroupHint": "仅用于架构分层（如大区、事业部），不持有数据，用户也不能直接归属",
+    "nodeTypeGroupNeedsParent": "分组必须有上级组织",
+    "nodeTypeImmutable": "节点类型创建后不可修改",
     "autoDistributePending": "该组织下有 {count} 条待分配记录（{models}），可前往对应模型补充分配"
   },
   "user": {
@@ -147,7 +154,9 @@
     "confirmDisable": "确定要禁用用户「{name}」吗？禁用后该用户将无法登录。",
     "confirmEnable": "确定要启用用户「{name}」吗？",
     "identity": "身份",
+    "identityAndRoles": "身份 / 角色",
     "identityUser": "普通用户",
+    "identityUserNoRoles": "未分配角色",
     "identityDesigner": "设计师",
     "identityAdmin": "平台管理员",
     "roles": "角色",
@@ -156,7 +165,19 @@
     "roleBindFailed": "角色绑定失败",
     "rolesNotNeeded": "该身份无需分配角色",
     "rolesNotNeededAdmin": "平台管理员拥有全部权限，无需分配角色",
-    "rolesNotNeededDesigner": "设计师自动拥有所创建系统的完整访问权限"
+    "rolesNotNeededDesigner": "设计师自动拥有所创建系统的完整访问权限",
+    "orgPickerHint": "可多选，★ 为默认组织",
+    "noOrgSelected": "请至少选择一个组织",
+    "defaultOrgInvalid": "请指定默认组织",
+    "currentDefaultOrg": "默认组织",
+    "setAsDefaultOrg": "设为默认组织",
+    "selectFirstToSetDefault": "请先勾选该组织，再设为默认",
+    "defaultOrgTag": "默认组织",
+    "lastLoginAt": "最近登录",
+    "neverLoggedIn": "从未登录",
+    "deleteBlockedLoggedIn": "用户已登录过系统，不允许删除（可改为禁用）",
+    "nodeTypeGroup": "分组",
+    "groupNotSelectable": "分组不能作为用户归属"
   },
   "dashboard": {
     "title": "仪表盘",
@@ -782,6 +803,16 @@
     "CANNOT_CREATE_COPY_DIRECTLY": "非集团组织不能直接创建分配型数据，请由集团分配",
     "CANNOT_DELETE_COPY": "副本不可直接删除，请使用归档或联系集团撤销分配",
     "CONFIRMATION_MISMATCH": "确认词输入不正确",
+    "USERNAME_EXISTS": "用户名已存在",
+    "USER_NOT_FOUND": "用户不存在",
+    "USER_CANNOT_MODIFY_ADMIN": "系统管理员账号不可修改",
+    "USER_CANNOT_DELETE_ADMIN": "系统管理员账号不可删除",
+    "USER_CANNOT_DELETE_LOGGED_IN": "用户已登录过系统，不允许删除。请改用禁用。",
+    "USER_DEFAULT_ORG_NOT_IN_LIST": "默认组织必须在所选组织列表中",
+    "USER_ORG_NOT_FOUND": "指定的组织不存在",
+    "USER_ORG_IS_GROUP": "用户不能归属于分组类型的组织（分组仅用于架构分层）",
+    "ORG_GROUP_CANNOT_BE_ROOT": "根组织必须是实体组织，不能设置为分组",
+    "CANNOT_ALLOCATE_TO_GROUP": "分组类型的组织不能作为数据分配目标",
     "validation": {
       "required": "「{name}」为必填项",
       "entity_field_required": "「{name}」为必填项",
@@ -1011,6 +1042,8 @@
   "orgSwitcher": {
     "title": "切换组织",
     "group": "集团",
+    "nodeTypeGroup": "分组",
+    "nodeTypeGroupHint": "分组仅用于架构分层，无法作为当前组织",
     "select": "选择组织",
     "cancel": "取消",
     "confirmSwitch": "仍要切换",

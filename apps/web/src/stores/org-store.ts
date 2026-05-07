@@ -8,6 +8,7 @@ export interface Org {
   name: string;
   code: string;
   parentId: string | null;
+  isGroup: boolean;
 }
 
 interface OrgState {
@@ -56,7 +57,8 @@ export const useOrgStore = create<OrgState>((set, get) => ({
 
   setCurrentOrg: (orgId: string) => {
     const { accessibleOrgs, currentOrgId } = get();
-    if (!accessibleOrgs.some((o) => o.id === orgId)) return;
+    const target = accessibleOrgs.find((o) => o.id === orgId);
+    if (!target || target.isGroup) return;
     if (orgId === currentOrgId) return;
     set({ currentOrgId: orgId });
     currentOrgIdRef = orgId;
@@ -72,12 +74,14 @@ export const useOrgStore = create<OrgState>((set, get) => ({
       let nextId: string | null = null;
       if (typeof window !== 'undefined') {
         const persisted = localStorage.getItem(storageKey(userId));
-        if (persisted && orgs.some((o) => o.id === persisted)) {
+        const persistedOrg = persisted ? orgs.find((o) => o.id === persisted) : null;
+        if (persistedOrg && !persistedOrg.isGroup) {
           nextId = persisted;
         }
       }
       if (!nextId && orgs.length > 0) {
-        nextId = orgs[0].id;
+        const firstUsable = orgs.find((o) => !o.isGroup) ?? orgs[0];
+        nextId = firstUsable.id;
       }
 
       set({ accessibleOrgs: orgs, currentOrgId: nextId });

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID, IsBoolean } from 'class-validator';
 
 export class CreateOrgDto {
   @IsString()
@@ -12,4 +12,8 @@ export class CreateOrgDto {
   @IsOptional()
   @IsUUID()
   parentId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isGroup?: boolean;
 }

@@ -43,6 +43,11 @@ export class AuthService {
       throw new BusinessException(401, ErrorCodes.AUTH_INVALID_CREDENTIALS, 'Invalid credentials');
     }
 
+    await this.prisma.sysUser.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
     const defaultOrg = user.userOrgs[0];
     if (!defaultOrg) {
       throw new BusinessException(401, ErrorCodes.AUTH_NO_ORGANIZATION, 'User has no organization');

@@ -18,7 +18,7 @@
  *       └─ 北京分公司 bj
  *
  *   Users:
- *     david / david123    (designer; belongs to ROOT + 华东大区 + 上海分公司)
+ *     david / david123    (designer; belongs to ROOT + 上海分公司 + 广州分公司)
  *     biz_sh / biz123     (user; belongs to 上海分公司 only — sees copies)
  *
  *   App: 演示系统           code: demo
@@ -91,6 +91,7 @@ async function login(): Promise<void> {
   const res = await http<{ accessToken: string }>('POST', '/api/auth/login', {
     username: ADMIN_USER,
     password: ADMIN_PASS,
+    platform: 'web',
   });
   accessToken = res.accessToken;
   console.log(`  ✓ logged in as ${ADMIN_USER}`);
@@ -113,18 +114,19 @@ async function ensureRoot(): Promise<{ id: string; name: string; code: string }>
     parentId: null,
   });
   console.log(`  ✓ created root "华夏实业" (huaxia)`);
-  return created;
+  return created.org ?? created;
 }
 
-async function ensureOrg(opts: { name: string; code: string; parentId: string }) {
+async function ensureOrg(opts: { name: string; code: string; parentId: string; isGroup?: boolean }) {
   const existing = await prisma.sysOrganization.findUnique({ where: { code: opts.code } });
   if (existing) {
     console.log(`  ~ org "${opts.name}" (${opts.code}) exists`);
     return existing;
   }
   const created = await http<any>('POST', '/api/orgs', opts);
+  const org = created.org ?? created;
   console.log(`  ✓ org "${opts.name}" (${opts.code}) under ${opts.parentId.slice(0, 8)}…`);
-  return created;
+  return org;
 }
 
 async function ensureUser(opts: {
@@ -149,22 +151,15 @@ async function ensureUser(opts: {
     console.log(`  ~ user "${opts.username}" exists`);
     return existing;
   }
+  const organizationIds = [opts.orgId, ...(opts.extraOrgIds ?? [])];
   const created = await http<any>('POST', '/api/users', {
     username: opts.username,
     password: opts.password,
     displayName: opts.displayName,
-    orgId: opts.orgId,
+    organizationIds,
+    defaultOrgId: opts.orgId,
     identity: opts.identity ?? 'user',
   });
-  if (opts.extraOrgIds?.length) {
-    for (const orgId of opts.extraOrgIds) {
-      await prisma.sysUserOrg.upsert({
-        where: { userId_orgId: { userId: created.id, orgId } },
-        create: { userId: created.id, orgId, isDefault: false },
-        update: {},
-      });
-    }
-  }
   console.log(`  ✓ user "${opts.username}" / ${opts.password}`);
   return created;
 }
@@ -258,10 +253,10 @@ async function seed() {
   const root = await ensureRoot();
   currentOrgId = root.id; // root-org context for subsequent distribute-sensitive calls
 
-  console.log('\n● level-1 regions (children of root)');
-  const east = await ensureOrg({ name: '华东大区', code: 'east', parentId: root.id });
-  const south = await ensureOrg({ name: '华南大区', code: 'south', parentId: root.id });
-  const north = await ensureOrg({ name: '华北大区', code: 'north', parentId: root.id });
+  console.log('\n● level-1 regions (children of root, as groups)');
+  const east = await ensureOrg({ name: '华东大区', code: 'east', parentId: root.id, isGroup: true });
+  const south = await ensureOrg({ name: '华南大区', code: 'south', parentId: root.id, isGroup: true });
+  const north = await ensureOrg({ name: '华北大区', code: 'north', parentId: root.id, isGroup: true });
 
   console.log('\n● level-2 branches (children of regions)');
   const sh = await ensureOrg({ name: '上海分公司', code: 'sh', parentId: east.id });
@@ -276,7 +271,7 @@ async function seed() {
     displayName: 'David (Designer)',
     orgId: root.id,
     identity: 'designer',
-    extraOrgIds: [east.id, sh.id, gz.id],
+    extraOrgIds: [sh.id, gz.id],
   });
   await ensureUser({
     username: 'biz_sh',
@@ -321,7 +316,7 @@ async function seed() {
   console.log(`\n━━ seed complete (${nonRootCount} non-root orgs) ━━\n`);
   console.log('Login options for smoke testing:');
   console.log('  admin / 123123    — platform admin (sees all)');
-  console.log(`  david / david123  — designer; belongs to ${root.name} + 华东大区 + 上海分公司 + 广州分公司`);
+  console.log(`  david / david123  — designer; belongs to ${root.name} + 上海分公司 + 广州分公司`);
   console.log('  biz_sh / biz123   — regular user; 上海分公司 only (sub-org view)');
   console.log('');
   console.log('Smoke flow:');

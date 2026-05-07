@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "OpenForge",
-    "description": "AI-Native Low-Code Platform"
+    "description": "AI-Powered Low-Code Platform"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -119,6 +119,13 @@
     "statusDisabled": "Disabled",
     "parentOrg": "Parent Organization",
     "noParent": "None (top level)",
+    "nodeType": "Node Type",
+    "nodeTypeEntity": "Organization",
+    "nodeTypeEntityHint": "Legal/operating unit; owns data and users",
+    "nodeTypeGroup": "Group",
+    "nodeTypeGroupHint": "Structural grouping only (e.g. region, division); owns no data and users cannot belong to it",
+    "nodeTypeGroupNeedsParent": "Groups must have a parent organization",
+    "nodeTypeImmutable": "Node type cannot be changed after creation",
     "autoDistributePending": "{count} record(s) pending distribution ({models}) — go to the model to fill in missing allocations"
   },
   "user": {
@@ -147,7 +154,9 @@
     "confirmDisable": "Are you sure you want to disable user \"{name}\"? The user will not be able to log in.",
     "confirmEnable": "Are you sure you want to enable user \"{name}\"?",
     "identity": "Identity",
+    "identityAndRoles": "Identity / Roles",
     "identityUser": "User",
+    "identityUserNoRoles": "No roles assigned",
     "identityDesigner": "Designer",
     "identityAdmin": "Admin",
     "roles": "Roles",
@@ -156,7 +165,19 @@
     "roleBindFailed": "Failed to bind roles",
     "rolesNotNeeded": "Roles are not required for this identity",
     "rolesNotNeededAdmin": "Admin has full access to everything, no roles needed",
-    "rolesNotNeededDesigner": "Designer automatically has full access to systems they created"
+    "rolesNotNeededDesigner": "Designer automatically has full access to systems they created",
+    "orgPickerHint": "Pick one or more; ★ marks the default",
+    "noOrgSelected": "Select at least one organization",
+    "defaultOrgInvalid": "Please set a default organization",
+    "currentDefaultOrg": "Default organization",
+    "setAsDefaultOrg": "Set as default",
+    "selectFirstToSetDefault": "Check this org first, then set as default",
+    "defaultOrgTag": "Default",
+    "lastLoginAt": "Last Login",
+    "neverLoggedIn": "Never",
+    "deleteBlockedLoggedIn": "User has logged in; cannot delete (disable instead)",
+    "nodeTypeGroup": "Group",
+    "groupNotSelectable": "Groups cannot be assigned to users"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -782,6 +803,16 @@
     "CANNOT_CREATE_COPY_DIRECTLY": "Non-group organizations cannot create distributed data directly; please request allocation from the group",
     "CANNOT_DELETE_COPY": "Copies cannot be deleted directly; use archive or request unallocation from the group",
     "CONFIRMATION_MISMATCH": "Confirmation phrase does not match",
+    "USERNAME_EXISTS": "Username already exists",
+    "USER_NOT_FOUND": "User not found",
+    "USER_CANNOT_MODIFY_ADMIN": "The built-in admin account cannot be modified",
+    "USER_CANNOT_DELETE_ADMIN": "The built-in admin account cannot be deleted",
+    "USER_CANNOT_DELETE_LOGGED_IN": "User has logged in; deletion is not allowed. Disable the user instead.",
+    "USER_DEFAULT_ORG_NOT_IN_LIST": "Default organization must be among the selected organizations",
+    "USER_ORG_NOT_FOUND": "One or more organizations not found",
+    "USER_ORG_IS_GROUP": "Users cannot belong to a group-type organization (groups are structural only)",
+    "ORG_GROUP_CANNOT_BE_ROOT": "The root organization must be a real entity and cannot be a group",
+    "CANNOT_ALLOCATE_TO_GROUP": "Group-type organizations cannot receive distributed data",
     "validation": {
       "required": "\"{name}\" is required",
       "entity_field_required": "\"{name}\" is required",
@@ -1010,7 +1041,9 @@
   },
   "orgSwitcher": {
     "title": "Switch Organization",
-    "group": "Group",
+    "group": "HQ",
+    "nodeTypeGroup": "Group",
+    "nodeTypeGroupHint": "Groups are structural only and cannot be made current",
     "select": "Select organization",
     "cancel": "Cancel",
     "confirmSwitch": "Switch anyway",

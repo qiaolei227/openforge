@@ -35,7 +35,7 @@ export class AutoDistributeService {
     if (!model.autoDistribute || model.dataScope !== 'distributed') return;
     try {
       const orgs = await this.prisma.sysOrganization.findMany({
-        where: { parentId: { not: null } },
+        where: { parentId: { not: null }, isGroup: false },
         select: { id: true },
       });
       if (orgs.length === 0) return;
@@ -72,7 +72,7 @@ export class AutoDistributeService {
     }
 
     const nonRootOrgs = await this.prisma.sysOrganization.findMany({
-      where: { parentId: { not: null } },
+      where: { parentId: { not: null }, isGroup: false },
       select: { id: true },
     });
     if (nonRootOrgs.length === 0) return { created: 0, skipped: 0 };

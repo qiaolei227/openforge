@@ -110,6 +110,17 @@ export class DistributionService {
           continue;
         }
 
+        if (target.isGroup) {
+          results.push({
+            recordId,
+            orgId: change.orgId,
+            action: change.action,
+            status: 'failed',
+            errorCode: ErrorCodes.CANNOT_ALLOCATE_TO_GROUP,
+          });
+          continue;
+        }
+
         try {
           const r =
             change.action === 'allocate'

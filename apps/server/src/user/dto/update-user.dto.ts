@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsIn, IsEmail } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsIn,
+  IsEmail,
+  IsArray,
+  ArrayMinSize,
+  IsUUID,
+  ValidateIf,
+} from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -6,6 +15,7 @@ export class UpdateUserDto {
   displayName?: string;
 
   @IsOptional()
+  @ValidateIf((o) => o.email !== '')
   @IsEmail()
   email?: string;
 
@@ -20,4 +30,14 @@ export class UpdateUserDto {
   @IsOptional()
   @IsIn(['user', 'designer', 'admin'])
   identity?: 'user' | 'designer' | 'admin';
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  organizationIds?: string[];
+
+  @IsOptional()
+  @IsUUID()
+  defaultOrgId?: string;
 }

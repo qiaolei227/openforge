@@ -22,56 +22,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useOrgStore, type Org } from '@/stores/org-store';
+import { useOrgStore } from '@/stores/org-store';
 import { useTabStore } from '@/stores/tab-store';
 import { cn } from '@/lib/utils';
-
-function computeDepthMap(orgs: Org[]): Map<string, number> {
-  const map = new Map<string, number>();
-  const byId = new Map(orgs.map((o) => [o.id, o]));
-  for (const o of orgs) {
-    let depth = 0;
-    let cur: Org | undefined = o;
-    const guard = new Set<string>();
-    while (cur?.parentId) {
-      if (guard.has(cur.id)) break; // cycle safety
-      guard.add(cur.id);
-      const parent = byId.get(cur.parentId);
-      if (!parent) break;
-      depth++;
-      cur = parent;
-    }
-    map.set(o.id, depth);
-  }
-  return map;
-}
-
-function sortForTreeDisplay(orgs: Org[]): Org[] {
-  const byParent = new Map<string | null, Org[]>();
-  for (const o of orgs) {
-    const key = o.parentId ?? null;
-    const list = byParent.get(key) ?? [];
-    list.push(o);
-    byParent.set(key, list);
-  }
-  for (const list of byParent.values()) {
-    list.sort((a, b) => a.name.localeCompare(b.name));
-  }
-  const result: Org[] = [];
-  function walk(parentId: string | null) {
-    const children = byParent.get(parentId) ?? [];
-    for (const c of children) {
-      result.push(c);
-      walk(c.id);
-    }
-  }
-  walk(null);
-  // Include any orphans (parentId points to something not in accessibleOrgs)
-  for (const o of orgs) {
-    if (!result.includes(o)) result.push(o);
-  }
-  return result;
-}
+import { buildTreeRows, TreeConnector } from './org-tree';
 
 export function OrgSwitcher() {
   const t = useTranslations('orgSwitcher');
@@ -81,14 +35,13 @@ export function OrgSwitcher() {
   const tabs = useTabStore((s) => s.tabs);
   const [pendingOrgId, setPendingOrgId] = useState<string | null>(null);
 
-  const ordered = useMemo(() => sortForTreeDisplay(accessibleOrgs), [accessibleOrgs]);
-  const depthMap = useMemo(() => computeDepthMap(accessibleOrgs), [accessibleOrgs]);
+  const rows = useMemo(() => buildTreeRows(accessibleOrgs), [accessibleOrgs]);
   const current = accessibleOrgs.find((o) => o.id === currentOrgId) ?? null;
   const dirtyTabs = tabs.filter((tab) => tab.dirty);
 
   if (accessibleOrgs.length < 2) return null;
 
-  function onSelect(orgId: string) {
+  function handleSelect(orgId: string) {
     if (orgId === currentOrgId) return;
     if (dirtyTabs.length > 0) {
       setPendingOrgId(orgId);
@@ -123,23 +76,62 @@ export function OrgSwitcher() {
           )}
           <ChevronDown className="w-4 h-4 opacity-60 shrink-0" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuContent align="start" className="w-72">
           <DropdownMenuGroup>
             <DropdownMenuLabel>{t('title')}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {ordered.map((org) => {
-              const depth = depthMap.get(org.id) ?? 0;
-              const isRoot = org.parentId === null;
+            {rows.map(({ org, depth, slots }) => {
+              const isRoot = depth === 0;
+              const isGroupNode = !!org.isGroup;
               const isCurrent = org.id === currentOrgId;
+              const connectorSlots = slots.length > 0 && (
+                <span className="flex self-stretch shrink-0" aria-hidden>
+                  {slots.map((slot, i) => (
+                    <TreeConnector key={i} slot={slot} />
+                  ))}
+                </span>
+              );
+              if (isGroupNode) {
+                return (
+                  <div
+                    key={org.id}
+                    className="flex items-stretch gap-2 pl-1.5 py-1.5 text-sm cursor-default select-none"
+                    title={t('nodeTypeGroupHint')}
+                  >
+                    {connectorSlots}
+                    <span className="flex-1 flex items-center gap-2 min-w-0">
+                      <span className="truncate text-muted-foreground/80 italic">{org.name}</span>
+                      <Badge
+                        variant="secondary"
+                        className="h-[18px] px-1.5 text-[10px] font-medium tracking-wide shrink-0"
+                      >
+                        {t('nodeTypeGroup')}
+                      </Badge>
+                    </span>
+                  </div>
+                );
+              }
               return (
                 <DropdownMenuItem
                   key={org.id}
-                  onSelect={(e) => { e.preventDefault(); onSelect(org.id); }}
-                  style={{ paddingLeft: `calc(0.5rem + ${depth * 1}rem)` }}
-                  className={cn('flex items-center gap-2')}
+                  onClick={() => handleSelect(org.id)}
+                  className={cn(
+                    'flex items-stretch gap-2 pl-1.5 py-1.5',
+                    isRoot && 'mt-0.5 first:mt-0',
+                  )}
                 >
+                  {connectorSlots}
                   <span className="flex-1 flex items-center gap-2 min-w-0">
-                    <span className="truncate">{org.name}</span>
+                    <span
+                      className={cn(
+                        'truncate',
+                        isRoot && 'font-semibold',
+                        !isRoot && 'text-muted-foreground',
+                        isCurrent && 'text-foreground font-medium',
+                      )}
+                    >
+                      {org.name}
+                    </span>
                     {isRoot && (
                       <Badge
                         variant="secondary"
@@ -149,7 +141,7 @@ export function OrgSwitcher() {
                       </Badge>
                     )}
                   </span>
-                  {isCurrent && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                  {isCurrent && <Check className="w-3.5 h-3.5 text-primary shrink-0 self-center" />}
                 </DropdownMenuItem>
               );
             })}
