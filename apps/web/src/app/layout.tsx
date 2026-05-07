@@ -6,7 +6,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 
 export const metadata: Metadata = {
   title: 'OpenForge',
-  description: 'AI-Native Low-Code Enterprise Platform',
+  description: 'AI-Powered Low-Code Enterprise Platform',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

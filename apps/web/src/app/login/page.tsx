@@ -104,7 +104,7 @@ export default function LoginPage() {
           <CardHeader>
             <CardTitle className="text-center text-xl">{t('login')}</CardTitle>
             <CardDescription className="text-center">
-              AI-Native Low-Code Platform
+              AI-Powered Low-Code Platform
             </CardDescription>
           </CardHeader>
           <CardContent>

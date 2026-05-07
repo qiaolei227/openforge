@@ -19,6 +19,8 @@
 
 OpenForge is a low-code platform for domain experts. Design models, forms, and lists in the browser, and the platform generates the database tables and APIs for you. With the built-in AI, a one-sentence description can scaffold a working model and form. Everything runs self-hosted, with no dependency on any cloud service.
 
+> **AI-Powered.** AI is a strong enabler layered on top of solid low-code primitives — it accelerates the work that matters, but the platform stands on its own without it. We don't shoehorn an AI button into every screen for the sake of branding.
+
 ## What it can do today
 
 - **Visual modeling** — create models and add fields through the UI; the platform generates real PostgreSQL tables
@@ -26,7 +28,7 @@ OpenForge is a low-code platform for domain experts. Design models, forms, and l
 - **Self-hosted & offline-first** — fonts, icons, and assets are bundled locally; runs behind a firewall with no public internet
 - **Multi-tenant** — physical isolation per customer (independent Docker deployment); row-level organization isolation within a customer
 - **Batteries included** — authentication, RBAC, file storage, data dictionary, audit log, and i18n (zh-CN / en)
-- **Built-in AI** — field suggestions in the model designer today; natural-language schema/form/workflow generation on the way
+- **AI-Powered** — field suggestions in the model designer today; natural-language schema/form/workflow generation on the way. AI is a powerful accelerator, not a forced fixture on every page
 
 ## Roadmap
 
