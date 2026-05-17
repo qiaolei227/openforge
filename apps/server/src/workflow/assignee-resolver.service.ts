@@ -70,18 +70,47 @@ export class AssigneeResolverService {
   }
 
   private async fromOrgs(orgIds: string[], includeChildren: boolean): Promise<string[]> {
-    void orgIds;
-    void includeChildren;
-    return [];
+    if (!orgIds.length) return [];
+    let allOrgIds = orgIds;
+    if (includeChildren) {
+      const cte = `
+        WITH RECURSIVE org_tree AS (
+          SELECT id FROM public.sys_organization WHERE id = ANY($1::uuid[])
+          UNION ALL
+          SELECT o.id FROM public.sys_organization o
+          JOIN org_tree t ON o.parent_id = t.id
+        )
+        SELECT id FROM org_tree
+      `;
+      const rows = await this.prisma.$queryRawUnsafe<{ id: string }[]>(cte, orgIds);
+      allOrgIds = rows.map((r) => r.id);
+    }
+    const userOrgs = await this.prisma.sysUserOrg.findMany({
+      where: { orgId: { in: allOrgIds } },
+      select: { userId: true },
+    });
+    return userOrgs.map((r) => r.userId);
   }
 
   private async fromSubmitterUpline(
     submitter: { userId: string; orgId: string },
     upLevel: number,
   ): Promise<string[]> {
-    void submitter;
-    void upLevel;
-    return [];
+    let currentOrgId: string | null = submitter.orgId;
+    for (let i = 0; i < upLevel; i++) {
+      if (!currentOrgId) break;
+      const org = await this.prisma.sysOrganization.findUnique({
+        where: { id: currentOrgId },
+        select: { parentId: true },
+      });
+      currentOrgId = org?.parentId ?? null;
+    }
+    if (!currentOrgId) return [];
+    const rows = await this.prisma.sysUserOrg.findMany({
+      where: { orgId: currentOrgId },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
   }
 
   private fromUserField(record: Record<string, any>, fieldColumnName: string): string[] {
