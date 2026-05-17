@@ -554,4 +554,834 @@ export class WorkflowEngineService {
       data: { instanceId, action: 'node-exit', nodeId, operatorUserId: null },
     });
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Write path (Phase F-2)
+  //
+  //  All public mutators below run inside `lock.withLock(instanceId, …)` to
+  //  serialize state transitions per instance, then a Prisma `$transaction`
+  //  so that task/log/instance writes commit atomically. Authorization checks
+  //  (task ownership, instance running, action allowedActions) happen first,
+  //  outside the lock, to fail fast without blocking other operations.
+  //
+  //  Notifications go through `tx.sysNotification.create` so they're part of
+  //  the same txn. The realtime channel is fed by the explicit
+  //  `workflow.inbox.new` / `workflow.inbox.done` / `workflow.state.changed`
+  //  events emitted after the txn callback returns.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Approve or reject a pending task.
+   *
+   * approve  → mark task approved, then try to advance the node:
+   *   - mode=and: advances only when every sibling task is approved/skipped/cancelled.
+   *   - mode=or:  advances on first approval, cancels remaining pending siblings.
+   *   - mode=sequential: creates the next assignee's task, or advances if last.
+   *
+   * reject   → cancel all pending tasks on the instance and complete it as 'rejected'.
+   *            (Per spec §3.2 a single reject fails the whole instance, regardless of mode.)
+   */
+  async decide(
+    taskId: string,
+    decision: 'approve' | 'reject',
+    user: { userId: string; orgId: string },
+    comment?: string,
+  ): Promise<void> {
+    const task = await this.prisma.sysWorkflowTask.findUnique({
+      where: { id: taskId },
+      include: { instance: { include: { workflowVersion: true } } },
+    });
+    if (!task) {
+      throw new BusinessException(404, ErrorCodes.WORKFLOW_TASK_NOT_FOUND, 'Task not found');
+    }
+    if (task.status !== 'pending') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_TASK_NOT_PENDING,
+        'Task already processed',
+      );
+    }
+    if (task.assigneeUserId !== user.userId) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_TASK_NOT_ASSIGNEE,
+        'Not your task',
+      );
+    }
+    if (task.instance.status !== 'running') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_INSTANCE_NOT_RUNNING,
+        'Instance not running',
+      );
+    }
+
+    const def = task.instance.workflowVersion.definition as unknown as WorkflowDefinition;
+    const node = def.nodes.find((n) => n.id === task.nodeId);
+    const cfg = node?.config as ApproveNodeConfig | undefined;
+    if (decision === 'approve' && cfg?.allowedActions?.approve === false) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_ACTION_NOT_ALLOWED,
+        'Approve not allowed on this node',
+      );
+    }
+    if (decision === 'reject' && cfg?.allowedActions?.reject === false) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_ACTION_NOT_ALLOWED,
+        'Reject not allowed on this node',
+      );
+    }
+
+    await this.lock.withLock(task.instanceId, async () => {
+      await this.prisma.$transaction(async (tx) => {
+        // Double-check under lock: another worker might have decided already.
+        const fresh = await tx.sysWorkflowTask.findUnique({ where: { id: taskId } });
+        if (!fresh || fresh.status !== 'pending') {
+          throw new BusinessException(
+            409,
+            ErrorCodes.WORKFLOW_TASK_NOT_PENDING,
+            'Task already processed',
+          );
+        }
+
+        const snapshot = this.snapshotRecord({});
+
+        await tx.sysWorkflowTask.update({
+          where: { id: taskId },
+          data: {
+            status: decision === 'approve' ? 'approved' : 'rejected',
+            decisionAt: new Date(),
+            comment: comment ?? null,
+            snapshot,
+          },
+        });
+        await tx.sysWorkflowLog.create({
+          data: {
+            instanceId: task.instanceId,
+            taskId,
+            action: decision,
+            nodeId: task.nodeId,
+            operatorUserId: user.userId,
+            comment: comment ?? null,
+          },
+        });
+
+        this.eventBus.emit('workflow.inbox.done', { userId: user.userId, taskId });
+
+        if (decision === 'reject') {
+          await this.cancelPendingTasks(tx, task.instanceId);
+          await this.completeInstance(tx, task.instance, 'rejected', null as any);
+          return;
+        }
+
+        await this.tryAdvanceInTx(tx, task.instance, task.nodeId, def, user);
+      });
+    });
+  }
+
+  /**
+   * After an approval, decide whether the node is complete based on aggregate
+   * sibling-task state, and either spawn the next assignee (sequential),
+   * cancel-and-advance (or), wait (and), or exit + recurse to outgoing edges.
+   *
+   * Also handles the "add-before" re-creation: if the just-approved task was
+   * an addBefore (has parentTaskId), spawn a fresh task for the parent's
+   * original assignee at the parent's sortOrder. This lets the original
+   * approver still make their decision after the inserted signer agrees.
+   */
+  private async tryAdvanceInTx(
+    tx: any,
+    instance: any,
+    nodeId: string,
+    def: WorkflowDefinition,
+    user: { userId: string; orgId: string },
+  ): Promise<void> {
+    const node = def.nodes.find((n) => n.id === nodeId);
+    if (!node || node.type !== 'approve') return;
+
+    const cfg = node.config as ApproveNodeConfig;
+    const tasks: any[] = await tx.sysWorkflowTask.findMany({
+      where: { instanceId: instance.id, nodeId },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    // Add-before re-creation: if the most recently approved task was an
+    // addBefore insert, materialise a fresh task for the parent's original
+    // assignee at the parent's sortOrder. The parent task itself was
+    // cancelled at add-before time.
+    const lastApproved = [...tasks]
+      .filter((t) => t.status === 'approved')
+      .sort(
+        (a, b) => new Date(b.decisionAt ?? 0).getTime() - new Date(a.decisionAt ?? 0).getTime(),
+      )[0];
+    if (lastApproved?.addedPosition === 'before' && lastApproved.parentTaskId) {
+      const parent = await tx.sysWorkflowTask.findUnique({
+        where: { id: lastApproved.parentTaskId },
+      });
+      // Only re-create if the parent is still in a cancelled (replaced) state and
+      // we haven't already revived it (idempotency: check for any pending task
+      // for the parent's assignee at the parent's sortOrder).
+      if (parent && parent.status === 'cancelled') {
+        const existingRevival = tasks.find(
+          (t) =>
+            t.assigneeUserId === parent.assigneeUserId &&
+            t.sortOrder === parent.sortOrder &&
+            t.id !== parent.id &&
+            t.status === 'pending',
+        );
+        if (!existingRevival) {
+          const revived = await tx.sysWorkflowTask.create({
+            data: {
+              instanceId: instance.id,
+              nodeId,
+              nodeName: node.name,
+              nodeType: 'approve',
+              mode: parent.mode,
+              assigneeUserId: parent.assigneeUserId,
+              status: 'pending',
+              sortOrder: parent.sortOrder,
+              dueAt: parent.dueAt,
+            },
+          });
+          await tx.sysNotification.create({
+            data: {
+              userId: parent.assigneeUserId,
+              orgId: instance.orgId,
+              type: 'workflow_task',
+              title: `审批: ${node.name}`,
+              relatedType: 'workflow_task',
+              relatedId: revived.id,
+            },
+          });
+          this.eventBus.emit('workflow.inbox.new', {
+            userId: parent.assigneeUserId,
+            taskId: revived.id,
+            instanceId: instance.id,
+            nodeName: node.name,
+          });
+          // Don't fall through — node is now waiting for the revived task.
+          return;
+        }
+      }
+    }
+
+    let nodeDone = false;
+    let nodeRejected = false;
+
+    if (cfg.mode === 'and') {
+      nodeDone = tasks.every(
+        (t) => t.status === 'approved' || t.status === 'skipped' || t.status === 'cancelled',
+      );
+      nodeRejected = tasks.some((t) => t.status === 'rejected');
+    } else if (cfg.mode === 'or') {
+      nodeDone = tasks.some((t) => t.status === 'approved');
+      nodeRejected = tasks.every(
+        (t) => t.status === 'rejected' || t.status === 'cancelled',
+      );
+    } else if (cfg.mode === 'sequential') {
+      const decided = tasks.filter((t) => t.status !== 'pending');
+      const latest = decided[decided.length - 1];
+      if (!latest) return;
+
+      if (latest.status === 'rejected') {
+        nodeRejected = true;
+      } else if (latest.status === 'approved') {
+        // Resolve full assignee list and find the next un-decided assignee.
+        const resolved = await this.resolver.resolveWithFallback({
+          strategy: cfg.assigneeStrategy,
+          config: cfg.assigneeConfig,
+          ctx: {
+            record: {},
+            submitter: { userId: instance.startedBy, orgId: instance.orgId },
+            instance: { id: instance.id },
+          },
+          onEmpty: cfg.onEmpty,
+          fallbackUserIds: cfg.fallbackUserIds,
+          autoSkipDuplicates: cfg.autoSkipDuplicates,
+          autoSkipSubmitter: cfg.autoSkipSubmitter,
+        });
+        const allAssignees = resolved.assignees;
+        const decidedAssigneeIds = decided.map((t) => t.assigneeUserId);
+        const next = allAssignees.find((u) => !decidedAssigneeIds.includes(u));
+        if (next) {
+          const nextSortOrder = (tasks[tasks.length - 1]?.sortOrder ?? 0) + 1;
+          const newTask = await tx.sysWorkflowTask.create({
+            data: {
+              instanceId: instance.id,
+              nodeId,
+              nodeName: node.name,
+              nodeType: 'approve',
+              mode: 'sequential',
+              assigneeUserId: next,
+              status: 'pending',
+              sortOrder: nextSortOrder,
+              dueAt: cfg.timeoutHours
+                ? new Date(Date.now() + cfg.timeoutHours * 3600 * 1000)
+                : null,
+            },
+          });
+          await tx.sysNotification.create({
+            data: {
+              userId: next,
+              orgId: instance.orgId,
+              type: 'workflow_task',
+              title: `审批: ${node.name}`,
+              relatedType: 'workflow_task',
+              relatedId: newTask.id,
+            },
+          });
+          this.eventBus.emit('workflow.inbox.new', {
+            userId: next,
+            taskId: newTask.id,
+            instanceId: instance.id,
+            nodeName: node.name,
+          });
+          return;
+        }
+        nodeDone = true;
+      }
+    }
+
+    if (nodeRejected) {
+      await this.cancelPendingTasks(tx, instance.id);
+      await this.completeInstance(tx, instance, 'rejected', null as any);
+      return;
+    }
+
+    if (nodeDone) {
+      if (cfg.mode === 'or') {
+        await tx.sysWorkflowTask.updateMany({
+          where: { instanceId: instance.id, nodeId, status: 'pending' },
+          data: { status: 'cancelled' },
+        });
+      }
+
+      await tx.sysWorkflowLog.create({
+        data: {
+          instanceId: instance.id,
+          action: 'node-exit',
+          nodeId,
+          operatorUserId: null,
+        },
+      });
+      const refreshed = await tx.sysWorkflowInstance.findUnique({
+        where: { id: instance.id },
+      });
+      const newActive = (refreshed?.activeNodeIds ?? []).filter((n: string) => n !== nodeId);
+      await tx.sysWorkflowInstance.update({
+        where: { id: instance.id },
+        data: { activeNodeIds: newActive },
+      });
+
+      const outgoing = def.edges.filter((e) => e.from === nodeId).map((e) => e.to);
+      // Engine doesn't have appCode/modelCode in context here; controllers in
+      // Phase G can plumb them through if richer notifications are needed.
+      await this.enterNodesInTx(tx, instance, def, outgoing, {
+        user,
+        appCode: '',
+        modelCode: '',
+        record: {},
+      });
+    }
+  }
+
+  /**
+   * Reassign a pending task to another user. The original task is marked
+   * `transferred` (audit-visible); a new pending task with the same sortOrder
+   * and dueAt is created for the new assignee, carrying `transferredFromUserId`.
+   */
+  async transfer(
+    taskId: string,
+    newUserId: string,
+    user: { userId: string; orgId: string },
+    comment?: string,
+  ): Promise<void> {
+    if (newUserId === user.userId) {
+      throw new BusinessException(
+        400,
+        ErrorCodes.WORKFLOW_ADD_SIGNER_SELF,
+        'Cannot transfer to self',
+      );
+    }
+    const task = await this.prisma.sysWorkflowTask.findUnique({
+      where: { id: taskId },
+      include: { instance: { include: { workflowVersion: true } } },
+    });
+    if (!task) {
+      throw new BusinessException(404, ErrorCodes.WORKFLOW_TASK_NOT_FOUND, 'Task not found');
+    }
+    if (task.status !== 'pending') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_TASK_NOT_PENDING,
+        'Task already processed',
+      );
+    }
+    if (task.assigneeUserId !== user.userId) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_TASK_NOT_ASSIGNEE,
+        'Not your task',
+      );
+    }
+    if (task.instance.status !== 'running') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_INSTANCE_NOT_RUNNING,
+        'Instance not running',
+      );
+    }
+    const def = task.instance.workflowVersion.definition as unknown as WorkflowDefinition;
+    const node = def.nodes.find((n) => n.id === task.nodeId);
+    const cfg = node?.config as ApproveNodeConfig | undefined;
+    if (cfg?.allowedActions?.transfer === false) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_ACTION_NOT_ALLOWED,
+        'Transfer not allowed on this node',
+      );
+    }
+
+    await this.lock.withLock(task.instanceId, async () => {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.sysWorkflowTask.update({
+          where: { id: taskId },
+          data: {
+            status: 'transferred',
+            decisionAt: new Date(),
+            comment: comment ?? null,
+          },
+        });
+        const newTask = await tx.sysWorkflowTask.create({
+          data: {
+            instanceId: task.instanceId,
+            nodeId: task.nodeId,
+            nodeName: task.nodeName,
+            nodeType: 'approve',
+            mode: task.mode,
+            assigneeUserId: newUserId,
+            status: 'pending',
+            sortOrder: task.sortOrder,
+            transferredFromUserId: user.userId,
+            dueAt: task.dueAt,
+          },
+        });
+        await tx.sysWorkflowLog.create({
+          data: {
+            instanceId: task.instanceId,
+            taskId: newTask.id,
+            action: 'transfer',
+            nodeId: task.nodeId,
+            operatorUserId: user.userId,
+            targetUserId: newUserId,
+            comment: comment ?? null,
+          },
+        });
+        await tx.sysNotification.create({
+          data: {
+            userId: newUserId,
+            orgId: task.instance.orgId,
+            type: 'workflow_task',
+            title: `转交审批: ${task.nodeName}`,
+            relatedType: 'workflow_task',
+            relatedId: newTask.id,
+          },
+        });
+        this.eventBus.emit('workflow.inbox.new', {
+          userId: newUserId,
+          taskId: newTask.id,
+          instanceId: task.instanceId,
+          nodeName: task.nodeName,
+        });
+        this.eventBus.emit('workflow.inbox.done', { userId: user.userId, taskId });
+      });
+    });
+  }
+
+  /**
+   * Add a co-signer either before or after the current assignee.
+   *
+   * - before: cancel self task (will be revived by tryAdvanceInTx once the
+   *   added signer approves) + create a new task at sortOrder-1 with
+   *   parentTaskId pointing to self.
+   * - after:  self task stays pending, new task at sortOrder+1.
+   */
+  async addSigner(
+    taskId: string,
+    position: 'before' | 'after',
+    newUserId: string,
+    user: { userId: string; orgId: string },
+    comment?: string,
+  ): Promise<void> {
+    if (newUserId === user.userId) {
+      throw new BusinessException(
+        400,
+        ErrorCodes.WORKFLOW_ADD_SIGNER_SELF,
+        'Cannot add yourself',
+      );
+    }
+    const task = await this.prisma.sysWorkflowTask.findUnique({
+      where: { id: taskId },
+      include: { instance: { include: { workflowVersion: true } } },
+    });
+    if (!task) {
+      throw new BusinessException(404, ErrorCodes.WORKFLOW_TASK_NOT_FOUND, 'Task not found');
+    }
+    if (task.status !== 'pending') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_TASK_NOT_PENDING,
+        'Task already processed',
+      );
+    }
+    if (task.assigneeUserId !== user.userId) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_TASK_NOT_ASSIGNEE,
+        'Not your task',
+      );
+    }
+    if (task.instance.status !== 'running') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_INSTANCE_NOT_RUNNING,
+        'Instance not running',
+      );
+    }
+    const def = task.instance.workflowVersion.definition as unknown as WorkflowDefinition;
+    const node = def.nodes.find((n) => n.id === task.nodeId);
+    const cfg = node?.config as ApproveNodeConfig | undefined;
+    const allowKey = position === 'before' ? 'addBefore' : 'addAfter';
+    if (cfg?.allowedActions?.[allowKey] === false) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_ACTION_NOT_ALLOWED,
+        `Add signer (${position}) not allowed`,
+      );
+    }
+
+    await this.lock.withLock(task.instanceId, async () => {
+      await this.prisma.$transaction(async (tx) => {
+        if (position === 'before') {
+          await tx.sysWorkflowTask.update({
+            where: { id: taskId },
+            data: {
+              status: 'cancelled',
+              decisionAt: new Date(),
+              comment: 'replaced by add-before',
+            },
+          });
+        }
+        const newTask = await tx.sysWorkflowTask.create({
+          data: {
+            instanceId: task.instanceId,
+            nodeId: task.nodeId,
+            nodeName: task.nodeName,
+            nodeType: 'approve',
+            mode: task.mode,
+            assigneeUserId: newUserId,
+            status: 'pending',
+            sortOrder: position === 'before' ? task.sortOrder - 1 : task.sortOrder + 1,
+            parentTaskId: taskId,
+            addedByUserId: user.userId,
+            addedPosition: position,
+            dueAt: task.dueAt,
+          },
+        });
+        await tx.sysWorkflowLog.create({
+          data: {
+            instanceId: task.instanceId,
+            taskId: newTask.id,
+            action: position === 'before' ? 'add-before' : 'add-after',
+            nodeId: task.nodeId,
+            operatorUserId: user.userId,
+            targetUserId: newUserId,
+            comment: comment ?? null,
+          },
+        });
+        await tx.sysNotification.create({
+          data: {
+            userId: newUserId,
+            orgId: task.instance.orgId,
+            type: 'workflow_task',
+            title: `加签审批: ${task.nodeName}`,
+            relatedType: 'workflow_task',
+            relatedId: newTask.id,
+          },
+        });
+        this.eventBus.emit('workflow.inbox.new', {
+          userId: newUserId,
+          taskId: newTask.id,
+          instanceId: task.instanceId,
+          nodeName: task.nodeName,
+        });
+        if (position === 'before') {
+          this.eventBus.emit('workflow.inbox.done', { userId: user.userId, taskId });
+        }
+      });
+    });
+  }
+
+  /**
+   * Return a task to either the previous node ('prev') or the submitter ('start').
+   *
+   *  - prev:  cancel current node's pending tasks, pop it from activeNodeIds,
+   *           write `return-prev` log, and re-enter the most recently exited
+   *           prior node (lookup by the latest node-exit log whose nodeId differs).
+   *  - start: cancel all pending tasks, mark instance status='returned', notify
+   *           the submitter, emit completed + state.changed.
+   */
+  async returnTask(
+    taskId: string,
+    mode: 'prev' | 'start',
+    user: { userId: string; orgId: string },
+    comment: string,
+  ): Promise<void> {
+    const task = await this.prisma.sysWorkflowTask.findUnique({
+      where: { id: taskId },
+      include: { instance: { include: { workflowVersion: true } } },
+    });
+    if (!task) {
+      throw new BusinessException(404, ErrorCodes.WORKFLOW_TASK_NOT_FOUND, 'Task not found');
+    }
+    if (task.status !== 'pending') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_TASK_NOT_PENDING,
+        'Task already processed',
+      );
+    }
+    if (task.assigneeUserId !== user.userId) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_TASK_NOT_ASSIGNEE,
+        'Not your task',
+      );
+    }
+    if (task.instance.status !== 'running') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_INSTANCE_NOT_RUNNING,
+        'Instance not running',
+      );
+    }
+    const def = task.instance.workflowVersion.definition as unknown as WorkflowDefinition;
+    const node = def.nodes.find((n) => n.id === task.nodeId);
+    const cfg = node?.config as ApproveNodeConfig | undefined;
+    const allowKey = mode === 'prev' ? 'returnPrev' : 'returnStart';
+    if (cfg?.allowedActions?.[allowKey] === false) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_ACTION_NOT_ALLOWED,
+        `Return (${mode}) not allowed on this node`,
+      );
+    }
+
+    await this.lock.withLock(task.instanceId, async () => {
+      await this.prisma.$transaction(async (tx) => {
+        if (mode === 'start') {
+          await this.cancelPendingTasks(tx, task.instanceId);
+          await tx.sysWorkflowInstance.update({
+            where: { id: task.instanceId },
+            data: { status: 'returned', endedAt: new Date(), activeNodeIds: [] },
+          });
+          await tx.sysWorkflowLog.create({
+            data: {
+              instanceId: task.instanceId,
+              taskId,
+              action: 'return-start',
+              nodeId: task.nodeId,
+              operatorUserId: user.userId,
+              comment,
+            },
+          });
+          await tx.sysNotification.create({
+            data: {
+              userId: task.instance.startedBy,
+              orgId: task.instance.orgId,
+              type: 'workflow_state',
+              title: `审批退回: ${task.nodeName}`,
+              body: comment,
+              relatedType: 'workflow_instance',
+              relatedId: task.instanceId,
+            },
+          });
+          this.eventBus.emit('workflow.completed', {
+            instance: task.instance,
+            finalStatus: 'returned',
+          });
+          this.eventBus.emit('workflow.state.changed', {
+            userId: task.instance.startedBy,
+            instanceId: task.instanceId,
+            newStatus: 'returned',
+          });
+          this.eventBus.emit('workflow.inbox.done', { userId: user.userId, taskId });
+          return;
+        }
+
+        // mode === 'prev'
+        const prevExit = await tx.sysWorkflowLog.findFirst({
+          where: {
+            instanceId: task.instanceId,
+            action: 'node-exit',
+            nodeId: { not: null },
+            NOT: { nodeId: task.nodeId },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (!prevExit?.nodeId) {
+          throw new BusinessException(
+            400,
+            ErrorCodes.WORKFLOW_RETURN_NO_PREVIOUS,
+            'No previous node to return to',
+          );
+        }
+        await tx.sysWorkflowTask.updateMany({
+          where: { instanceId: task.instanceId, nodeId: task.nodeId, status: 'pending' },
+          data: { status: 'cancelled' },
+        });
+        const refreshed = await tx.sysWorkflowInstance.findUnique({
+          where: { id: task.instanceId },
+        });
+        const newActive = (refreshed?.activeNodeIds ?? []).filter(
+          (n: string) => n !== task.nodeId,
+        );
+        await tx.sysWorkflowInstance.update({
+          where: { id: task.instanceId },
+          data: { activeNodeIds: newActive },
+        });
+        await tx.sysWorkflowLog.create({
+          data: {
+            instanceId: task.instanceId,
+            taskId,
+            action: 'return-prev',
+            nodeId: task.nodeId,
+            operatorUserId: user.userId,
+            comment,
+          },
+        });
+        this.eventBus.emit('workflow.inbox.done', { userId: user.userId, taskId });
+
+        await this.enterNodesInTx(tx, task.instance, def, [prevExit.nodeId], {
+          user: { userId: task.instance.startedBy, orgId: task.instance.orgId },
+          appCode: '',
+          modelCode: '',
+          record: {},
+        });
+      });
+    });
+  }
+
+  /**
+   * Submitter-initiated withdrawal of a running instance.
+   *
+   * Forbidden once any task has been approved — at that point the original
+   * intent has been partially validated and the operation must go through
+   * `cancel()` (admin / system) or the unapprove flow in Phase G.
+   */
+  async withdraw(instanceId: string, user: { userId: string; orgId: string }): Promise<void> {
+    const instance = await this.prisma.sysWorkflowInstance.findUnique({
+      where: { id: instanceId },
+    });
+    if (!instance) {
+      throw new BusinessException(
+        404,
+        ErrorCodes.WORKFLOW_INSTANCE_NOT_FOUND,
+        'Instance not found',
+      );
+    }
+    if (instance.status !== 'running') {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_INSTANCE_NOT_RUNNING,
+        'Instance not running',
+      );
+    }
+    if (instance.startedBy !== user.userId) {
+      throw new BusinessException(
+        403,
+        ErrorCodes.WORKFLOW_TASK_NOT_ASSIGNEE,
+        'Only submitter can withdraw',
+      );
+    }
+    const approvedCount = await this.prisma.sysWorkflowTask.count({
+      where: { instanceId, status: 'approved' },
+    });
+    if (approvedCount > 0) {
+      throw new BusinessException(
+        409,
+        ErrorCodes.WORKFLOW_WITHDRAW_HAS_APPROVAL,
+        'Cannot withdraw — some tasks already approved',
+      );
+    }
+
+    await this.lock.withLock(instanceId, async () => {
+      await this.prisma.$transaction(async (tx) => {
+        await this.cancelPendingTasks(tx, instanceId);
+        await tx.sysWorkflowInstance.update({
+          where: { id: instanceId },
+          data: { status: 'withdrawn', endedAt: new Date(), activeNodeIds: [] },
+        });
+        await tx.sysWorkflowLog.create({
+          data: { instanceId, action: 'withdraw', operatorUserId: user.userId },
+        });
+        this.eventBus.emit('workflow.completed', { instance, finalStatus: 'withdrawn' });
+        this.eventBus.emit('workflow.state.changed', {
+          userId: instance.startedBy,
+          instanceId,
+          newStatus: 'withdrawn',
+        });
+      });
+    });
+  }
+
+  /**
+   * System-initiated cancellation. Used by the Phase G `unapprove` flow when
+   * an already-approved record is being moved back to reaudit and any
+   * still-running instance must be cleaned up.
+   *
+   * Idempotent: silently no-ops on an already-ended instance.
+   */
+  async cancel(instanceId: string, reason: string): Promise<void> {
+    const instance = await this.prisma.sysWorkflowInstance.findUnique({
+      where: { id: instanceId },
+    });
+    if (!instance) {
+      throw new BusinessException(
+        404,
+        ErrorCodes.WORKFLOW_INSTANCE_NOT_FOUND,
+        'Instance not found',
+      );
+    }
+    if (instance.status !== 'running') return;
+
+    await this.lock.withLock(instanceId, async () => {
+      await this.prisma.$transaction(async (tx) => {
+        await this.cancelPendingTasks(tx, instanceId);
+        await tx.sysWorkflowInstance.update({
+          where: { id: instanceId },
+          data: { status: 'cancelled', endedAt: new Date(), activeNodeIds: [] },
+        });
+        await tx.sysWorkflowLog.create({
+          data: {
+            instanceId,
+            action: 'cancel',
+            operatorUserId: null,
+            data: { reason },
+          },
+        });
+        this.eventBus.emit('workflow.completed', { instance, finalStatus: 'cancelled' });
+      });
+    });
+  }
+
+  /** Mass-cancel all still-pending tasks for an instance. */
+  private async cancelPendingTasks(tx: any, instanceId: string): Promise<void> {
+    await tx.sysWorkflowTask.updateMany({
+      where: { instanceId, status: 'pending' },
+      data: { status: 'cancelled' },
+    });
+  }
 }
