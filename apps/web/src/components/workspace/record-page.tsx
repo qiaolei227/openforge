@@ -28,6 +28,7 @@ import { ActionToolbar } from '@/components/workspace/action-toolbar';
 import { DataStatusBadge } from '@/components/workspace/data-status-badge';
 import { getDistributionPolicy } from '@/lib/api/distribution';
 import { SyncTab } from '@/components/distribution/sync-tab';
+import { WorkflowSection } from '@/components/workflow/workflow-section';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -147,7 +148,17 @@ export function RecordPage({
   const [activeDetailTab, setActiveDetailTab] = useState<'form' | 'sync'>('form');
 
   /* ---------- Distribution policy (readonly columns for copies) ---------- */
-  const [readonlyColumns, setReadonlyColumns] = useState<string[]>([]);
+  const [distributionReadonlyColumns, setDistributionReadonlyColumns] = useState<string[]>([]);
+
+  /* ---------- Workflow active-node readonly columns ---------- */
+  const [workflowReadonlyColumns, setWorkflowReadonlyColumns] = useState<string[]>([]);
+
+  /* Union: distribution policy ∪ workflow field-permissions */
+  const readonlyColumns = useMemo(() => {
+    if (distributionReadonlyColumns.length === 0) return workflowReadonlyColumns;
+    if (workflowReadonlyColumns.length === 0) return distributionReadonlyColumns;
+    return Array.from(new Set([...distributionReadonlyColumns, ...workflowReadonlyColumns]));
+  }, [distributionReadonlyColumns, workflowReadonlyColumns]);
 
   /* ---------- System info state ---------- */
   const [createdByName, setCreatedByName] = useState('-');
@@ -250,13 +261,13 @@ export function RecordPage({
   /* ---------- Distribution policy: lock readonly fields on copies ---------- */
   useEffect(() => {
     if (!record) {
-      setReadonlyColumns([]);
+      setDistributionReadonlyColumns([]);
       return;
     }
     // A "copy" has master_id set to a different record's id
     const isCopy = record.master_id && record.master_id !== record.id;
     if (!isCopy) {
-      setReadonlyColumns([]);
+      setDistributionReadonlyColumns([]);
       return;
     }
     getDistributionPolicy(modelId)
@@ -267,9 +278,9 @@ export function RecordPage({
         const readonly = fields
           .filter((f) => !editableFieldIds.has(f.id))
           .map((f) => f.columnName);
-        setReadonlyColumns(readonly);
+        setDistributionReadonlyColumns(readonly);
       })
-      .catch(() => setReadonlyColumns([]));
+      .catch(() => setDistributionReadonlyColumns([]));
   }, [record, modelId, fields]);
 
   /* Org switch: re-fetch (view/edit) or reset (create). Dirty state was already confirmed
@@ -653,6 +664,13 @@ export function RecordPage({
           >
             <FormRenderer layout={formLayout} />
           </RenderProvider>
+          {!isCreate && recordId && (
+            <WorkflowSection
+              recordId={recordId}
+              onRecordChange={fetchRecord}
+              onReadonlyColumnsChange={setWorkflowReadonlyColumns}
+            />
+          )}
         </div>
       ) : (
         <div className="flex-1 overflow-auto">

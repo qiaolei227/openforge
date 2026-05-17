@@ -129,11 +129,40 @@ export const workflowInstanceApi = {
     const { data } = await apiClient.get(`/workflow-instances/${id}`);
     return data;
   },
+  /** Latest instance for the given record (running first, else most recent), or null. */
+  async getByRecord(recordId: string): Promise<any | null> {
+    const { data } = await apiClient.get(
+      `/workflow-instances/by-record/${recordId}`,
+    );
+    return data ?? null;
+  },
   async withdraw(id: string): Promise<void> {
     await apiClient.post(`/workflow-instances/${id}/withdraw`);
   },
   async urge(id: string): Promise<void> {
     await apiClient.post(`/workflow-instances/${id}/urge`);
+  },
+};
+
+export interface WorkflowUserSearchItem {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
+/**
+ * Light user-search for workflow approver pickers (transfer / add-signer).
+ * Backed by `GET /workflow-tasks/users/search` (sys:self perm), unlike
+ * the heavier `/users` endpoint which requires `sys:users`.
+ */
+export const workflowUserSearchApi = {
+  async search(keyword?: string): Promise<WorkflowUserSearchItem[]> {
+    const params = new URLSearchParams();
+    if (keyword?.trim()) params.set('keyword', keyword.trim());
+    const { data } = await apiClient.get<{ data: WorkflowUserSearchItem[] }>(
+      `/workflow-tasks/users/search?${params.toString()}`,
+    );
+    return data.data ?? [];
   },
 };
 
