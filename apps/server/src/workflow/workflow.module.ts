@@ -8,10 +8,11 @@ import { WorkflowLockHelper } from './workflow-lock.helper';
 import { WorkflowEngineService } from './workflow-engine.service';
 import { WorkflowCompletedListener } from './workflow-completed.listener';
 import { WorkflowController } from './workflow.controller';
+import { WorkflowTaskController } from './workflow-task.controller';
 
 @Module({
   imports: [NotificationModule],
-  controllers: [WorkflowController],
+  controllers: [WorkflowController, WorkflowTaskController],
   providers: [
     WorkflowService,
     WorkflowVersionService,
