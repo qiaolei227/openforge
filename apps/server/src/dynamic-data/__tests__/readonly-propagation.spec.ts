@@ -91,4 +91,84 @@ describe('ReadonlyPropagationService', () => {
     await service.propagate(client, model as any, 'r1', { __system: 'x', other: 'y' });
     expect(client.$executeRawUnsafe).not.toHaveBeenCalled();
   });
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  P2.3: workflow system status fields are ALWAYS propagated regardless
+  //  of policy. They live on the biz row but aren't tracked in sys_field,
+  //  so the old `fieldByCol.get(col)` lookup dropped them silently.
+  // ──────────────────────────────────────────────────────────────────────
+
+  it('data_status is propagated even though it is not in model.fields', async () => {
+    prisma.sysDistributionPolicy.findMany.mockResolvedValue([]);
+    const model = {
+      id: 'm', tableName: 'app1_items',
+      fields: [{ id: 'f1', columnName: 'spec' }],
+    };
+    await service.propagate(client, model as any, 'r1', { data_status: 'approved' });
+    expect(client.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+    const sql = client.$executeRawUnsafe.mock.calls[0][0];
+    expect(sql).toContain('"data_status" = $1');
+    expect(client.$executeRawUnsafe.mock.calls[0][1]).toBe('approved');
+  });
+
+  it('approved_by + approved_at propagated together with data_status', async () => {
+    prisma.sysDistributionPolicy.findMany.mockResolvedValue([]);
+    const approvedAt = new Date();
+    const model = {
+      id: 'm', tableName: 'app1_items',
+      fields: [],
+    };
+    await service.propagate(client, model as any, 'r1', {
+      data_status: 'approved',
+      approved_by: 'u-approver',
+      approved_at: approvedAt,
+    });
+    expect(client.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+    const sql = client.$executeRawUnsafe.mock.calls[0][0];
+    expect(sql).toContain('"data_status" = $1');
+    expect(sql).toContain('"approved_by" = $2');
+    expect(sql).toContain('"approved_at" = $3');
+    expect(client.$executeRawUnsafe.mock.calls[0][4]).toBe('r1'); // master id
+  });
+
+  it('submitted_by/at propagated', async () => {
+    prisma.sysDistributionPolicy.findMany.mockResolvedValue([]);
+    const submittedAt = new Date();
+    const model = {
+      id: 'm', tableName: 'app1_items',
+      fields: [],
+    };
+    await service.propagate(client, model as any, 'r1', {
+      submitted_by: 'u-submitter',
+      submitted_at: submittedAt,
+    });
+    const sql = client.$executeRawUnsafe.mock.calls[0][0];
+    expect(sql).toContain('"submitted_by"');
+    expect(sql).toContain('"submitted_at"');
+  });
+
+  it('mixed payload: editable business field is dropped, system status field still propagates', async () => {
+    prisma.sysDistributionPolicy.findMany.mockResolvedValue([
+      { fieldId: 'f-remark', editable: true },
+    ]);
+    const model = {
+      id: 'm', tableName: 'app1_items',
+      fields: [{ id: 'f-remark', columnName: 'remark' }],
+    };
+    await service.propagate(client, model as any, 'r1', {
+      remark: 'editable-local',
+      data_status: 'approved',
+    });
+    expect(client.$executeRawUnsafe).toHaveBeenCalledTimes(1);
+    const sql = client.$executeRawUnsafe.mock.calls[0][0];
+    expect(sql).toContain('"data_status"');
+    expect(sql).not.toContain('"remark"');
+  });
+
+  it('payload with only system field on a model with empty fields[] still triggers UPDATE', async () => {
+    prisma.sysDistributionPolicy.findMany.mockResolvedValue([]);
+    const model = { id: 'm', tableName: 'app1_items', fields: [] };
+    await service.propagate(client, model as any, 'r1', { data_status: 'draft' });
+    expect(client.$executeRawUnsafe).toHaveBeenCalled();
+  });
 });
