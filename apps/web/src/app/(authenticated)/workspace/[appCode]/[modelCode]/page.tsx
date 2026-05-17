@@ -23,6 +23,8 @@ export default function WorkspaceModelPage() {
   const viewType = searchParams.get('type') ?? undefined;
 
   const openListTab = useTabStore((s) => s.openListTab);
+  const openDetailTab = useTabStore((s) => s.openDetailTab);
+  const openRecordId = searchParams.get('openRecord') ?? undefined;
 
   const mountedRef = useRef(false);
   const viewTypeRef = useRef(viewType);
@@ -31,6 +33,12 @@ export default function WorkspaceModelPage() {
   useEffect(() => {
     if (mountedRef.current) return;
     mountedRef.current = true;
+
+    // If `?openRecord=:id` (from workflow notifications), open the record detail tab directly.
+    if (openRecordId) {
+      openDetailTab({ appCode, modelCode, modelName: modelCode, recordId: openRecordId, title: modelCode });
+      return;
+    }
 
     // Skip if there's already an active tab for this model
     const currentActive = useTabStore.getState().getActiveTabForApp(appCode);
@@ -42,7 +50,7 @@ export default function WorkspaceModelPage() {
       modelName: modelCode, // placeholder — layout's TabRenderer updates title when schema loads
       viewType: viewTypeRef.current,
     });
-  }, [appCode, modelCode, openListTab]);
+  }, [appCode, modelCode, openListTab, openDetailTab, openRecordId]);
 
   // Content is rendered by the layout's WorkspaceTabRenderer
   return null;

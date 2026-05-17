@@ -379,7 +379,7 @@ export class WorkflowEngineService {
           title: `抄送: ${node.name}`,
           relatedType: 'workflow_instance',
           relatedId: instance.id,
-          navigateTo: `/workspace/${ctx.appCode}/${ctx.modelCode}/${instance.recordId}`,
+          navigateTo: `/workspace/${ctx.appCode}/${ctx.modelCode}?openRecord=${instance.recordId}`,
         },
       });
     }
@@ -453,7 +453,7 @@ export class WorkflowEngineService {
           title: `审批: ${node.name}`,
           relatedType: 'workflow_task',
           relatedId: task.id,
-          navigateTo: `/workspace/${ctx.appCode}/${ctx.modelCode}/${instance.recordId}`,
+          navigateTo: `/workspace/${ctx.appCode}/${ctx.modelCode}?openRecord=${instance.recordId}`,
         },
       });
 

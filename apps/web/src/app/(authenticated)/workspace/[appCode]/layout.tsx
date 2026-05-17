@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { useMenuStore } from '@/stores/menu-store';
 import { useTabStore } from '@/stores/tab-store';
@@ -22,11 +22,15 @@ export default function WorkspaceAppLayout({
   const { appCode } = useParams<{ appCode: string }>();
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const fetchAppMenu = useMenuStore((s) => s.fetch);
 
   const isModelPage = pathname !== `/workspace/${appCode}`;
   const tabCount = useTabStore((s) => s.tabs.length);
-  const needsRedirect = isModelPage && tabCount === 0;
+  // Workflow-notification deep link (`?openRecord=`) needs the model page to mount
+  // so it can call openDetailTab. Skip the F5 redirect when that query param is present.
+  const hasOpenRecord = !!searchParams.get('openRecord');
+  const needsRedirect = isModelPage && tabCount === 0 && !hasOpenRecord;
 
   // Fetch menu data for this system
   useEffect(() => {
