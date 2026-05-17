@@ -166,7 +166,7 @@ export class AssigneeResolverService {
     let currentOrgId: string | null = submitter.orgId;
     for (let i = 0; i < upLevel; i++) {
       if (!currentOrgId) break;
-      const org = await this.prisma.sysOrganization.findUnique({
+      const org: { parentId: string | null } | null = await this.prisma.sysOrganization.findUnique({
         where: { id: currentOrgId },
         select: { parentId: true },
       });
