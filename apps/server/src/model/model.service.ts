@@ -161,6 +161,7 @@ export class ModelService {
           description: dto.description || null,
           dataScope: dto.dataScope || 'private',
           isTree: dto.isTree || false,
+          enableDataStatus: dto.enableDataStatus || false,
         },
       });
 
