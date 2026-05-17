@@ -14,6 +14,7 @@
     "seed:p2-2:reset": "tsx scripts/seed-p2-2-smoke.ts reset"
   },
   "dependencies": {
+    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.0",
