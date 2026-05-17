@@ -114,9 +114,18 @@ export class AssigneeResolverService {
   }
 
   private fromUserField(record: Record<string, any>, fieldColumnName: string): string[] {
-    void record;
-    void fieldColumnName;
-    return [];
+    if (!fieldColumnName) return [];
+    const v = record[fieldColumnName];
+    if (v === null || v === undefined) return [];
+    if (Array.isArray(v)) {
+      return v
+        .map((u: any) => (typeof u === 'string' ? u : u?.id ?? u?.userId))
+        .filter(Boolean);
+    }
+    if (typeof v === 'string') return [v];
+    // object shape { id } / { userId }
+    const single = v?.id ?? v?.userId;
+    return single ? [single] : [];
   }
 
   private async fromOrgField(
@@ -124,9 +133,18 @@ export class AssigneeResolverService {
     fieldColumnName: string,
     orgRole: 'members' | 'leader',
   ): Promise<string[]> {
-    void record;
-    void fieldColumnName;
+    if (!fieldColumnName) return [];
+    const raw = record[fieldColumnName];
+    if (raw === null || raw === undefined || raw === '') return [];
+    const orgId = typeof raw === 'string' ? raw : raw?.id ?? raw;
+    if (!orgId) return [];
+    // NOTE: 'leader' is a future capability — currently fall back to org members.
+    // Once sys_organization gains a leader column, branch here.
     void orgRole;
-    return [];
+    const rows = await this.prisma.sysUserOrg.findMany({
+      where: { orgId },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
   }
 }

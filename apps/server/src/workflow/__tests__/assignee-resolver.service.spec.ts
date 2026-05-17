@@ -182,6 +182,100 @@ describe('AssigneeResolverService', () => {
     });
   });
 
+  describe('resolve - userField', () => {
+    it('single-value field returns [value]', async () => {
+      const result = await service.resolve(
+        'userField',
+        { fieldColumnName: 'assignee' },
+        makeCtx({ record: { assignee: 'u1' } }),
+      );
+      expect(result).toEqual(['u1']);
+    });
+
+    it('array-value field (MULTI USER) returns flatten string array', async () => {
+      const result = await service.resolve(
+        'userField',
+        { fieldColumnName: 'assignees' },
+        makeCtx({ record: { assignees: ['u1', 'u2'] } }),
+      );
+      expect(result.sort()).toEqual(['u1', 'u2']);
+    });
+
+    it('undefined / null field returns []', async () => {
+      const r1 = await service.resolve(
+        'userField',
+        { fieldColumnName: 'missing' },
+        makeCtx({ record: {} }),
+      );
+      const r2 = await service.resolve(
+        'userField',
+        { fieldColumnName: 'nullField' },
+        makeCtx({ record: { nullField: null } }),
+      );
+      expect(r1).toEqual([]);
+      expect(r2).toEqual([]);
+    });
+
+    it('blank fieldColumnName returns []', async () => {
+      const result = await service.resolve(
+        'userField',
+        { fieldColumnName: '' },
+        makeCtx({ record: { assignee: 'u1' } }),
+      );
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('resolve - orgField', () => {
+    it('orgRole=members queries sysUserOrg', async () => {
+      prisma.sysUserOrg.findMany.mockResolvedValue([
+        { userId: 'u1' },
+        { userId: 'u2' },
+      ]);
+      const result = await service.resolve(
+        'orgField',
+        { fieldColumnName: 'dept_id', orgRole: 'members' },
+        makeCtx({ record: { dept_id: 'o1' } }),
+      );
+      expect(prisma.sysUserOrg.findMany).toHaveBeenCalledWith({
+        where: { orgId: 'o1' },
+        select: { userId: true },
+      });
+      expect(result.sort()).toEqual(['u1', 'u2']);
+    });
+
+    it('orgRole=leader falls back to members (no leader column yet)', async () => {
+      prisma.sysUserOrg.findMany.mockResolvedValue([{ userId: 'u1' }]);
+      const result = await service.resolve(
+        'orgField',
+        { fieldColumnName: 'dept_id', orgRole: 'leader' },
+        makeCtx({ record: { dept_id: 'o1' } }),
+      );
+      expect(prisma.sysUserOrg.findMany).toHaveBeenCalled();
+      expect(result).toEqual(['u1']);
+    });
+
+    it('empty value returns []', async () => {
+      const result = await service.resolve(
+        'orgField',
+        { fieldColumnName: 'dept_id' },
+        makeCtx({ record: { dept_id: '' } }),
+      );
+      expect(prisma.sysUserOrg.findMany).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
+    });
+
+    it('blank fieldColumnName returns []', async () => {
+      const result = await service.resolve(
+        'orgField',
+        { fieldColumnName: '' },
+        makeCtx({ record: { dept_id: 'o1' } }),
+      );
+      expect(prisma.sysUserOrg.findMany).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
+    });
+  });
+
   describe('resolve - unknown strategy', () => {
     it('throws WORKFLOW_INVALID_DEFINITION', async () => {
       await expect(
