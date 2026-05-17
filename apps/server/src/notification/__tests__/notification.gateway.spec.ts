@@ -5,8 +5,8 @@ function makeSocket(overrides: Partial<any> = {}) {
   const rooms = new Set<string>(['some-socket-id']);
   return {
     id: 'socket-1',
-    handshake: { auth: {} },
-    data: {},
+    handshake: { auth: {} as any },
+    data: {} as any,
     rooms,
     join: vi.fn((room: string) => {
       rooms.add(room);
