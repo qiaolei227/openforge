@@ -67,37 +67,67 @@ export function InboxList({ type }: { type: InboxType }) {
   return (
     <div className="divide-y border rounded-md bg-card">
       {items.map((item) => {
-        const submitter =
-          item.submitter?.displayName ||
-          item.submitter?.username ||
-          '';
-        const title = item.title || item.recordId || item.id;
+        // For pending/done/cc items: item is a SysWorkflowTask with `instance.workflow` included.
+        // For myInstances: item IS the instance, with `workflow` included.
+        const isInstance = type === 'myInstances';
+        const instance = isInstance ? item : (item as any).instance;
+        const workflowName = instance?.workflow?.name || (isInstance ? '' : (item as any).nodeName) || '';
+        const nodeName = isInstance ? '' : (item as any).nodeName || '';
+        const recordId: string = (instance?.recordId || (item as any).recordId || '') as string;
+        const startedAt: string | undefined = instance?.startedAt || (item as any).createdAt;
+        const statusLabel = isInstance
+          ? instance?.status
+          : (item as any).status === 'pending'
+            ? '待处理'
+            : (item as any).status === 'approved'
+              ? '已同意'
+              : (item as any).status === 'rejected'
+                ? '已驳回'
+                : (item as any).status === 'transferred'
+                  ? '已转交'
+                  : (item as any).status;
+
+        const recId = recordId;
+        // Resolve appCode/modelCode for navigation via nested workflow.model.app
+        const appCode =
+          (instance as any)?.workflow?.model?.app?.code ||
+          (item as any).appCode;
+        const modelCode =
+          (instance as any)?.workflow?.model?.code || (item as any).modelCode;
+        const href =
+          appCode && modelCode && recId
+            ? `/workspace/${appCode}/${modelCode}?openRecord=${recId}`
+            : `/workspace/inbox`;
+
         return (
-          <div
+          <a
             key={item.id}
-            className="px-4 py-3 hover:bg-accent/50 transition-colors"
+            href={href}
+            className="block px-4 py-3 hover:bg-accent/50 transition-colors"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm truncate">{title}</div>
-                <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                  {submitter && <span>{submitter}</span>}
-                  {item.status && (
+                <div className="font-medium text-sm truncate">
+                  {workflowName || nodeName || recId || item.id}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+                  {nodeName && !isInstance && <span>节点：{nodeName}</span>}
+                  {statusLabel && (
                     <span className="text-muted-foreground/70">
-                      · {item.status}
+                      · {statusLabel}
                     </span>
                   )}
                 </div>
               </div>
               <div className="text-xs text-muted-foreground shrink-0">
-                {item.createdAt &&
-                  formatDistanceToNow(new Date(item.createdAt), {
+                {startedAt &&
+                  formatDistanceToNow(new Date(startedAt), {
                     addSuffix: true,
                     locale: dateLocale,
                   })}
               </div>
             </div>
-          </div>
+          </a>
         );
       })}
     </div>

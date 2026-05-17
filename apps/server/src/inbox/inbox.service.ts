@@ -37,7 +37,13 @@ export class InboxService {
           ...(params.orgId && { orgId: params.orgId }),
         },
       },
-      include: { instance: { include: { workflow: true } } },
+      include: {
+        instance: {
+          include: {
+            workflow: { include: { model: { include: { app: true } } } },
+          },
+        },
+      },
       orderBy: { instance: { startedAt: 'desc' } },
       take: params.limit ?? 50,
       skip: params.offset ?? 0,
@@ -56,7 +62,13 @@ export class InboxService {
         nodeType: 'approve',
         ...(Object.keys(instanceFilter).length > 0 && { instance: instanceFilter }),
       },
-      include: { instance: { include: { workflow: true } } },
+      include: {
+        instance: {
+          include: {
+            workflow: { include: { model: { include: { app: true } } } },
+          },
+        },
+      },
       orderBy: { decisionAt: 'desc' },
       take: params.limit ?? 50,
       skip: params.offset ?? 0,
@@ -74,7 +86,13 @@ export class InboxService {
         nodeType: 'cc',
         ...(Object.keys(instanceFilter).length > 0 && { instance: instanceFilter }),
       },
-      include: { instance: { include: { workflow: true } } },
+      include: {
+        instance: {
+          include: {
+            workflow: { include: { model: { include: { app: true } } } },
+          },
+        },
+      },
       orderBy: { instance: { startedAt: 'desc' } },
       take: params.limit ?? 50,
       skip: params.offset ?? 0,
@@ -88,7 +106,10 @@ export class InboxService {
         ...(params.appId && { appId: params.appId }),
         ...(params.orgId && { orgId: params.orgId }),
       },
-      include: { workflow: true, tasks: { where: { status: 'pending' }, take: 1 } },
+      include: {
+        workflow: { include: { model: { include: { app: true } } } },
+        tasks: { where: { status: 'pending' }, take: 1 },
+      },
       orderBy: { startedAt: 'desc' },
       take: params.limit ?? 50,
       skip: params.offset ?? 0,

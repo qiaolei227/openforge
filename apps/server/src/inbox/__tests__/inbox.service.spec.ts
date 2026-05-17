@@ -31,7 +31,13 @@ describe('InboxService', () => {
           nodeType: 'approve',
           instance: { status: 'running' },
         },
-        include: { instance: { include: { workflow: true } } },
+        include: {
+          instance: {
+            include: {
+              workflow: { include: { model: { include: { app: true } } } },
+            },
+          },
+        },
         orderBy: { instance: { startedAt: 'desc' } },
         take: 50,
         skip: 0,
@@ -48,7 +54,13 @@ describe('InboxService', () => {
           nodeType: 'approve',
           instance: { status: 'running', appId: 'app-1', orgId: 'org-1' },
         },
-        include: { instance: { include: { workflow: true } } },
+        include: {
+          instance: {
+            include: {
+              workflow: { include: { model: { include: { app: true } } } },
+            },
+          },
+        },
         orderBy: { instance: { startedAt: 'desc' } },
         take: 20,
         skip: 40,
@@ -66,7 +78,13 @@ describe('InboxService', () => {
           status: { in: ['approved', 'rejected', 'transferred'] },
           nodeType: 'approve',
         },
-        include: { instance: { include: { workflow: true } } },
+        include: {
+          instance: {
+            include: {
+              workflow: { include: { model: { include: { app: true } } } },
+            },
+          },
+        },
         orderBy: { decisionAt: 'desc' },
         take: 50,
         skip: 0,
@@ -83,7 +101,13 @@ describe('InboxService', () => {
           nodeType: 'approve',
           instance: { appId: 'app-1', orgId: 'org-1' },
         },
-        include: { instance: { include: { workflow: true } } },
+        include: {
+          instance: {
+            include: {
+              workflow: { include: { model: { include: { app: true } } } },
+            },
+          },
+        },
         orderBy: { decisionAt: 'desc' },
         take: 50,
         skip: 0,
@@ -107,7 +131,13 @@ describe('InboxService', () => {
           assigneeUserId: USER,
           nodeType: 'cc',
         },
-        include: { instance: { include: { workflow: true } } },
+        include: {
+          instance: {
+            include: {
+              workflow: { include: { model: { include: { app: true } } } },
+            },
+          },
+        },
         orderBy: { instance: { startedAt: 'desc' } },
         take: 50,
         skip: 0,
@@ -122,7 +152,7 @@ describe('InboxService', () => {
       expect(prisma.sysWorkflowInstance.findMany).toHaveBeenCalledWith({
         where: { startedBy: USER },
         include: {
-          workflow: true,
+          workflow: { include: { model: { include: { app: true } } } },
           tasks: { where: { status: 'pending' }, take: 1 },
         },
         orderBy: { startedAt: 'desc' },
@@ -137,7 +167,7 @@ describe('InboxService', () => {
       expect(prisma.sysWorkflowInstance.findMany).toHaveBeenCalledWith({
         where: { startedBy: USER, appId: 'app-1', orgId: 'org-1' },
         include: {
-          workflow: true,
+          workflow: { include: { model: { include: { app: true } } } },
           tasks: { where: { status: 'pending' }, take: 1 },
         },
         orderBy: { startedAt: 'desc' },
