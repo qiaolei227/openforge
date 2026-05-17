@@ -15,9 +15,10 @@ import { SyncService } from './sync.service';
 import { AutoDistributeService } from './auto-distribute.service';
 import { ModelModule } from '../model/model.module';
 import { FileModule } from '../file/file.module';
+import { WorkflowModule } from '../workflow/workflow.module';
 
 @Module({
-  imports: [ModelModule, FileModule],
+  imports: [ModelModule, FileModule, WorkflowModule],
   controllers: [DynamicDataController, UserListConfigController],
   providers: [DynamicDataService, QueryBuilderService, DeleteGuardService, ChildrenService, DataStatusService, UserListConfigService, LookupResolverService, DistributedGuard, DistributionService, ReadonlyPropagationService, SyncService, AutoDistributeService],
   exports: [ChildrenService, DynamicDataService, DataStatusService, LookupResolverService],
