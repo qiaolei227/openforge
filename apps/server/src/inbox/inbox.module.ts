@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
+import { InboxService } from './inbox.service';
+import { InboxController } from './inbox.controller';
 
 @Module({
-  imports: [],
-  controllers: [],
-  providers: [],
-  exports: [],
+  controllers: [InboxController],
+  providers: [InboxService],
+  exports: [InboxService],
 })
 export class InboxModule {}
