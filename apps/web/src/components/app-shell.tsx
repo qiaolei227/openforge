@@ -10,12 +10,16 @@ import { useAiStore } from '@/stores/ai-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useOrgStore } from '@/stores/org-store';
 import { TabBar } from '@/components/workspace/tab-bar';
+import { useWorkflowSocket } from '@/hooks/use-workflow-socket';
 
 const AI_OPEN_KEY = 'openforge_ai_open';
 
 function AppShellInner({ children }: { children: React.ReactNode }) {
   const { area } = useAreaContext();
   const userId = useAuthStore((s) => s.user?.id);
+
+  /* Workflow / notification WebSocket — opens once authenticated */
+  useWorkflowSocket();
 
   /* Restore AI panel open state from localStorage */
   useEffect(() => {

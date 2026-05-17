@@ -11,6 +11,7 @@ import { useCanAccessDesigner } from '@/hooks/use-can-access-designer';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAiStore } from '@/stores/ai-store';
 import { UserMenu } from '../user-menu';
+import { NotificationBell } from '@/components/notification/notification-bell';
 import { MenuDrawerTrigger } from '@/components/workspace/menu-drawer-trigger';
 import { MenuDrawer } from '@/components/workspace/menu-drawer';
 import { cn } from '@/lib/utils';
@@ -124,6 +125,9 @@ export function TopBar() {
         >
           <Sparkles className="w-4 h-4" />
         </button>
+
+        {/* Notification bell */}
+        <NotificationBell />
 
         {/* User avatar + name dropdown */}
         <UserMenu />
