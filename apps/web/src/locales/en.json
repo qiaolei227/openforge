@@ -1210,7 +1210,18 @@
       "edit": "Edit",
       "delete": "Delete",
       "enabled": "Enabled",
-      "disabled": "Disabled"
+      "disabled": "Disabled",
+      "requiresDataStatus": "Workflows are only available on models with Data Status enabled",
+      "unpublished": "Not published",
+      "instanceCount": "{count} instance(s)",
+      "cannotDeleteWithInstances": "Cannot delete — workflow has running or historical instances",
+      "createTitle": "New Workflow",
+      "deleteTitle": "Delete Workflow",
+      "deleteConfirm": "Delete workflow \"{name}\"? This cannot be undone."
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Description"
     },
     "editor": {
       "save": "Save",

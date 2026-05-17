@@ -44,6 +44,7 @@ import { useDesignerBreadcrumbStore } from '@/stores/designer-breadcrumb-store';
 import { fieldTypeBadgeClass } from './designer/field-type-styles';
 import DefaultSortPopover from './default-sort-popover';
 import { ModelActionsTab } from './components/model-actions-tab';
+import { WorkflowListTab } from '@/components/workflow/workflow-list-tab';
 import { CreateViewDialog } from './designer/create-view-dialog';
 import { PreviewMode } from './designer/preview-mode';
 import { Badge } from '@/components/ui/badge';
@@ -373,8 +374,8 @@ export default function ModelDetailPage() {
 
   /* ---------- UI state ---------- */
   const searchParams = useSearchParams();
-  type TabType = 'fields' | 'subtables' | 'views' | 'actions' | 'distribution-policy';
-  const validTabs: TabType[] = ['fields', 'subtables', 'views', 'actions', 'distribution-policy'];
+  type TabType = 'fields' | 'subtables' | 'views' | 'actions' | 'distribution-policy' | 'workflow';
+  const validTabs: TabType[] = ['fields', 'subtables', 'views', 'actions', 'distribution-policy', 'workflow'];
   const initialTab = validTabs.includes(searchParams.get('tab') as TabType)
     ? (searchParams.get('tab') as TabType)
     : 'fields';
@@ -1659,6 +1660,21 @@ export default function ModelDetailPage() {
                 )}
               </button>
             )}
+            {model?.enableDataStatus && (
+              <button
+                onClick={() => setActiveTab('workflow')}
+                className={`pb-2 text-sm transition-colors relative ${
+                  activeTab === 'workflow'
+                    ? 'text-foreground font-medium'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t('workflow.tab')}
+                {activeTab === 'workflow' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -2584,6 +2600,17 @@ export default function ModelDetailPage() {
         </div>
       )}
 
+
+      {/* Workflow tab content */}
+      {activeTab === 'workflow' && model && (
+        <WorkflowListTab
+          appId={appId}
+          appCode={model.app?.code ?? app?.code ?? ''}
+          modelId={modelId}
+          modelCode={model.code}
+          enableDataStatus={model.enableDataStatus}
+        />
+      )}
 
       {/* Distribution policy backfill warning dialog */}
       <Dialog open={!!distBackfillDialog} onOpenChange={(open) => !open && setDistBackfillDialog(null)}>

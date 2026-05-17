@@ -1210,7 +1210,18 @@
       "edit": "编辑",
       "delete": "删除",
       "enabled": "启用",
-      "disabled": "禁用"
+      "disabled": "禁用",
+      "requiresDataStatus": "仅启用「数据状态」的模型支持审批流",
+      "unpublished": "未发布",
+      "instanceCount": "{count} 个实例",
+      "cannotDeleteWithInstances": "存在审批实例，无法删除",
+      "createTitle": "新建审批流程",
+      "deleteTitle": "删除流程",
+      "deleteConfirm": "确认删除流程「{name}」？此操作不可撤销。"
+    },
+    "fields": {
+      "name": "名称",
+      "description": "描述"
     },
     "editor": {
       "save": "保存",
