@@ -6,6 +6,7 @@ import { WorkflowConditionMatcher } from './workflow-condition-matcher.service';
 import { AssigneeResolverService } from './assignee-resolver.service';
 import { WorkflowLockHelper } from './workflow-lock.helper';
 import { WorkflowEngineService } from './workflow-engine.service';
+import { WorkflowCompletedListener } from './workflow-completed.listener';
 import { WorkflowController } from './workflow.controller';
 
 @Module({
@@ -18,6 +19,7 @@ import { WorkflowController } from './workflow.controller';
     AssigneeResolverService,
     WorkflowLockHelper,
     WorkflowEngineService,
+    WorkflowCompletedListener,
   ],
   exports: [
     WorkflowService,
