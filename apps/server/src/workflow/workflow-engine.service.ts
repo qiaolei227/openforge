@@ -1,5 +1,7 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { BusinessException } from '../common/exceptions/business.exception';
 import { ErrorCodes } from '../common/exceptions/error-codes';
@@ -14,6 +16,14 @@ import {
   WorkflowDefinition,
   WorkflowNode,
 } from './types';
+
+/**
+ * Build the bullmq jobId for a task's timeout job. Stable so we can both
+ * dedup on add() and remove on decision/cancellation.
+ */
+function timeoutJobId(taskId: string): string {
+  return `task-timeout-${taskId}`;
+}
 
 export interface StartContext {
   user: { userId: string; orgId: string };
@@ -58,7 +68,49 @@ export class WorkflowEngineService {
     @Inject(AssigneeResolverService) private resolver: AssigneeResolverService,
     @Inject(WorkflowLockHelper) private lock: WorkflowLockHelper,
     @Inject(WorkflowConditionMatcher) private matcher: WorkflowConditionMatcher,
+    @Optional()
+    @InjectQueue('workflow-timeout')
+    private timeoutQueue: Queue | null = null,
   ) {}
+
+  /**
+   * Schedule a bullmq delayed job to fire when an approve task's dueAt elapses.
+   * No-op when the queue isn't wired (tests) or when no timeout is configured.
+   */
+  private async scheduleTimeoutJob(taskId: string, timeoutHours: number | undefined | null): Promise<void> {
+    if (!this.timeoutQueue) return;
+    if (!timeoutHours || timeoutHours <= 0) return;
+    try {
+      await this.timeoutQueue.add(
+        'task-timeout',
+        { taskId },
+        {
+          delay: timeoutHours * 3600 * 1000,
+          jobId: timeoutJobId(taskId),
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      );
+    } catch (e) {
+      this.logger.warn(`Failed to schedule timeout job for task ${taskId}: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * Remove queued timeout jobs for tasks that are no longer pending. Best-effort:
+   * the job may have already fired (which is fine — the processor double-checks
+   * task status before acting).
+   */
+  private async removeTimeoutJobs(taskIds: string[]): Promise<void> {
+    if (!this.timeoutQueue || taskIds.length === 0) return;
+    await Promise.all(
+      taskIds.map((id) =>
+        this.timeoutQueue!.remove(timeoutJobId(id)).catch(() => {
+          /* job already fired or absent */
+        }),
+      ),
+    );
+  }
 
   /**
    * Start a workflow instance for a record.
@@ -405,6 +457,8 @@ export class WorkflowEngineService {
         },
       });
 
+      await this.scheduleTimeoutJob(task.id, cfg.timeoutHours);
+
       this.eventBus.emit('workflow.inbox.new', {
         userId,
         taskId: task.id,
@@ -634,6 +688,7 @@ export class WorkflowEngineService {
       );
     }
 
+    let timeoutsToRemove: string[] = [];
     await this.lock.withLock(task.instanceId, async () => {
       await this.prisma.$transaction(async (tx) => {
         // Double-check under lock: another worker might have decided already.
@@ -671,14 +726,25 @@ export class WorkflowEngineService {
         this.eventBus.emit('workflow.inbox.done', { userId: user.userId, taskId });
 
         if (decision === 'reject') {
+          // Collect remaining pending taskIds *before* cancelling so we can
+          // pull their bullmq jobs after the txn body returns.
+          const pendingBefore = await tx.sysWorkflowTask.findMany({
+            where: { instanceId: task.instanceId, status: 'pending' },
+            select: { id: true },
+          });
           await this.cancelPendingTasks(tx, task.instanceId);
           await this.completeInstance(tx, task.instance, 'rejected', null as any);
+          timeoutsToRemove = [taskId, ...pendingBefore.map((t: any) => t.id)];
           return;
         }
 
+        timeoutsToRemove = [taskId];
         await this.tryAdvanceInTx(tx, task.instance, task.nodeId, def, user);
       });
     });
+    // Pull queued timeout jobs *after* the txn commits — bullmq lives on Redis,
+    // so doing this inside the txn would leak deletes on rollback.
+    await this.removeTimeoutJobs(timeoutsToRemove);
   }
 
   /**
@@ -755,6 +821,9 @@ export class WorkflowEngineService {
               relatedId: revived.id,
             },
           });
+          // Revived task carries the parent's original timeout; schedule a fresh
+          // job so it still escalates if the original assignee doesn't decide.
+          await this.scheduleTimeoutJob(revived.id, cfg.timeoutHours);
           this.eventBus.emit('workflow.inbox.new', {
             userId: parent.assigneeUserId,
             taskId: revived.id,
@@ -832,6 +901,7 @@ export class WorkflowEngineService {
               relatedId: newTask.id,
             },
           });
+          await this.scheduleTimeoutJob(newTask.id, cfg.timeoutHours);
           this.eventBus.emit('workflow.inbox.new', {
             userId: next,
             taskId: newTask.id,
@@ -944,6 +1014,7 @@ export class WorkflowEngineService {
       );
     }
 
+    let newTaskId: string | null = null;
     await this.lock.withLock(task.instanceId, async () => {
       await this.prisma.$transaction(async (tx) => {
         await tx.sysWorkflowTask.update({
@@ -968,6 +1039,7 @@ export class WorkflowEngineService {
             dueAt: task.dueAt,
           },
         });
+        newTaskId = newTask.id;
         await tx.sysWorkflowLog.create({
           data: {
             instanceId: task.instanceId,
@@ -998,6 +1070,28 @@ export class WorkflowEngineService {
         this.eventBus.emit('workflow.inbox.done', { userId: user.userId, taskId });
       });
     });
+    // Old task's job goes away; new task inherits the same dueAt so we
+    // re-derive a timeoutHours delta for the bullmq schedule.
+    await this.removeTimeoutJobs([taskId]);
+    if (newTaskId && task.dueAt) {
+      const ms = new Date(task.dueAt).getTime() - Date.now();
+      if (ms > 0 && this.timeoutQueue) {
+        await this.timeoutQueue
+          .add(
+            'task-timeout',
+            { taskId: newTaskId },
+            {
+              delay: ms,
+              jobId: timeoutJobId(newTaskId),
+              removeOnComplete: true,
+              removeOnFail: false,
+            },
+          )
+          .catch((e: any) =>
+            this.logger.warn(`Failed to schedule timeout for transferred task ${newTaskId}: ${e.message}`),
+          );
+      }
+    }
   }
 
   /**
@@ -1062,6 +1156,7 @@ export class WorkflowEngineService {
       );
     }
 
+    let newTaskId: string | null = null;
     await this.lock.withLock(task.instanceId, async () => {
       await this.prisma.$transaction(async (tx) => {
         if (position === 'before') {
@@ -1090,6 +1185,7 @@ export class WorkflowEngineService {
             dueAt: task.dueAt,
           },
         });
+        newTaskId = newTask.id;
         await tx.sysWorkflowLog.create({
           data: {
             instanceId: task.instanceId,
@@ -1122,6 +1218,30 @@ export class WorkflowEngineService {
         }
       });
     });
+    if (position === 'before') {
+      // The original assignee's task is cancelled; remove its queued timeout.
+      // (The revived task created later in tryAdvanceInTx will get its own.)
+      await this.removeTimeoutJobs([taskId]);
+    }
+    if (newTaskId && task.dueAt) {
+      const ms = new Date(task.dueAt).getTime() - Date.now();
+      if (ms > 0 && this.timeoutQueue) {
+        await this.timeoutQueue
+          .add(
+            'task-timeout',
+            { taskId: newTaskId },
+            {
+              delay: ms,
+              jobId: timeoutJobId(newTaskId),
+              removeOnComplete: true,
+              removeOnFail: false,
+            },
+          )
+          .catch((e: any) =>
+            this.logger.warn(`Failed to schedule timeout for added-signer task ${newTaskId}: ${e.message}`),
+          );
+      }
+    }
   }
 
   /**
@@ -1179,9 +1299,15 @@ export class WorkflowEngineService {
       );
     }
 
+    let pendingIdsForCleanup: string[] = [];
     await this.lock.withLock(task.instanceId, async () => {
       await this.prisma.$transaction(async (tx) => {
         if (mode === 'start') {
+          const pendingBefore = await tx.sysWorkflowTask.findMany({
+            where: { instanceId: task.instanceId, status: 'pending' },
+            select: { id: true },
+          });
+          pendingIdsForCleanup = pendingBefore.map((t: any) => t.id);
           await this.cancelPendingTasks(tx, task.instanceId);
           await tx.sysWorkflowInstance.update({
             where: { id: task.instanceId },
@@ -1222,6 +1348,16 @@ export class WorkflowEngineService {
         }
 
         // mode === 'prev'
+        const pendingNodeTasks = await tx.sysWorkflowTask.findMany({
+          where: {
+            instanceId: task.instanceId,
+            nodeId: task.nodeId,
+            status: 'pending',
+          },
+          select: { id: true },
+        });
+        pendingIdsForCleanup = pendingNodeTasks.map((t: any) => t.id);
+
         const prevExit = await tx.sysWorkflowLog.findFirst({
           where: {
             instanceId: task.instanceId,
@@ -1272,6 +1408,7 @@ export class WorkflowEngineService {
         });
       });
     });
+    await this.removeTimeoutJobs(pendingIdsForCleanup);
   }
 
   /**
@@ -1317,8 +1454,14 @@ export class WorkflowEngineService {
       );
     }
 
+    let pendingIds: string[] = [];
     await this.lock.withLock(instanceId, async () => {
       await this.prisma.$transaction(async (tx) => {
+        const pendingBefore = await tx.sysWorkflowTask.findMany({
+          where: { instanceId, status: 'pending' },
+          select: { id: true },
+        });
+        pendingIds = pendingBefore.map((t: any) => t.id);
         await this.cancelPendingTasks(tx, instanceId);
         await tx.sysWorkflowInstance.update({
           where: { id: instanceId },
@@ -1335,6 +1478,7 @@ export class WorkflowEngineService {
         });
       });
     });
+    await this.removeTimeoutJobs(pendingIds);
   }
 
   /**
@@ -1357,8 +1501,14 @@ export class WorkflowEngineService {
     }
     if (instance.status !== 'running') return;
 
+    let pendingIds: string[] = [];
     await this.lock.withLock(instanceId, async () => {
       await this.prisma.$transaction(async (tx) => {
+        const pendingBefore = await tx.sysWorkflowTask.findMany({
+          where: { instanceId, status: 'pending' },
+          select: { id: true },
+        });
+        pendingIds = pendingBefore.map((t: any) => t.id);
         await this.cancelPendingTasks(tx, instanceId);
         await tx.sysWorkflowInstance.update({
           where: { id: instanceId },
@@ -1375,6 +1525,7 @@ export class WorkflowEngineService {
         this.eventBus.emit('workflow.completed', { instance, finalStatus: 'cancelled' });
       });
     });
+    await this.removeTimeoutJobs(pendingIds);
   }
 
   /** Mass-cancel all still-pending tasks for an instance. */

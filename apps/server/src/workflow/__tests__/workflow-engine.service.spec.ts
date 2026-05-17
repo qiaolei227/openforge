@@ -82,9 +82,20 @@ function makeService() {
   const resolver: any = { resolveWithFallback: vi.fn() };
   const lock: any = { withLock: vi.fn() };
   const matcher: any = { match: vi.fn() };
+  const timeoutQueue: any = {
+    add: vi.fn(async () => ({})),
+    remove: vi.fn(async () => 1),
+  };
 
-  const service = new WorkflowEngineService(prisma, eventBus, resolver, lock, matcher);
-  return { service, prisma, eventBus, resolver, lock, matcher };
+  const service = new WorkflowEngineService(
+    prisma,
+    eventBus,
+    resolver,
+    lock,
+    matcher,
+    timeoutQueue,
+  );
+  return { service, prisma, eventBus, resolver, lock, matcher, timeoutQueue };
 }
 
 describe('WorkflowEngineService.start', () => {
@@ -1012,9 +1023,20 @@ function makeWriteService(opts: {
   const resolver: any = { resolveWithFallback: vi.fn() };
   const lock: any = { withLock: vi.fn(async (_id: string, fn: any) => fn()) };
   const matcher: any = { match: vi.fn() };
+  const timeoutQueue: any = {
+    add: vi.fn(async () => ({})),
+    remove: vi.fn(async () => 1),
+  };
 
-  const service = new WorkflowEngineService(prisma, eventBus, resolver, lock, matcher);
-  return { service, prisma, eventBus, resolver, lock, matcher, tx, taskStore };
+  const service = new WorkflowEngineService(
+    prisma,
+    eventBus,
+    resolver,
+    lock,
+    matcher,
+    timeoutQueue,
+  );
+  return { service, prisma, eventBus, resolver, lock, matcher, tx, taskStore, timeoutQueue };
 }
 
 const ALLOW_ALL = {
@@ -1881,5 +1903,302 @@ describe('WorkflowEngineService.tryAdvanceInTx — add-before re-creation', () =
     );
     // node did NOT advance — waiting for the revived task
     expect(enterSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Phase J: bullmq timeout job scheduling/cancellation
+//
+//  These tests don't run a real bullmq worker — they assert the engine's
+//  contract with the queue: an `add()` call when an approve task is created
+//  with `timeoutHours`, and a `remove()` call when that task transitions out
+//  of `pending` via any of the engine's mutators.
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('WorkflowEngineService — timeout job scheduling (Phase J)', () => {
+  it('approve node with timeoutHours: schedules bullmq job with correct delay + jobId', async () => {
+    const { service, resolver, timeoutQueue } = makeService();
+    resolver.resolveWithFallback.mockResolvedValue({ assignees: ['ua'], shouldSkip: false });
+
+    const cfg: ApproveNodeConfig = {
+      assigneeStrategy: 'fixed',
+      assigneeConfig: {},
+      mode: 'and',
+      onEmpty: 'error',
+      autoSkipDuplicates: false,
+      autoSkipSubmitter: false,
+      timeoutHours: 24,
+      allowedActions: ALLOW_ALL,
+    };
+    const def = makeDef([{ id: 'a1', type: 'approve', config: cfg }], []);
+    const tx = makeTx();
+    // Stable task id so we can assert on jobId
+    tx.sysWorkflowTask.create = vi.fn(async ({ data }: any) => ({ id: 'task-fixed', ...data })) as any;
+
+    await (service as any).enterNodesInTx(
+      tx,
+      { id: 'inst-1', orgId: 'o1', recordId: 'rec-1' },
+      def,
+      ['a1'],
+      { user: { userId: 'u1', orgId: 'o1' }, appCode: 'sales', modelCode: 'lead', record: {} },
+    );
+
+    expect(timeoutQueue.add).toHaveBeenCalledTimes(1);
+    const [name, payload, opts] = timeoutQueue.add.mock.calls[0];
+    expect(name).toBe('task-timeout');
+    expect(payload).toEqual({ taskId: 'task-fixed' });
+    expect(opts.jobId).toBe('task-timeout-task-fixed');
+    expect(opts.delay).toBe(24 * 3600 * 1000);
+    expect(opts.removeOnComplete).toBe(true);
+  });
+
+  it('approve node without timeoutHours: does NOT schedule', async () => {
+    const { service, resolver, timeoutQueue } = makeService();
+    resolver.resolveWithFallback.mockResolvedValue({ assignees: ['ua'], shouldSkip: false });
+
+    const cfg: ApproveNodeConfig = {
+      assigneeStrategy: 'fixed',
+      assigneeConfig: {},
+      mode: 'and',
+      onEmpty: 'error',
+      autoSkipDuplicates: false,
+      autoSkipSubmitter: false,
+      allowedActions: ALLOW_ALL,
+    };
+    const def = makeDef([{ id: 'a1', type: 'approve', config: cfg }], []);
+    const tx = makeTx();
+    await (service as any).enterNodesInTx(
+      tx,
+      { id: 'inst-1', orgId: 'o1', recordId: 'rec-1' },
+      def,
+      ['a1'],
+      { user: { userId: 'u1', orgId: 'o1' }, appCode: 'sales', modelCode: 'lead', record: {} },
+    );
+
+    expect(timeoutQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('approve node with timeoutHours=0: does NOT schedule', async () => {
+    const { service, resolver, timeoutQueue } = makeService();
+    resolver.resolveWithFallback.mockResolvedValue({ assignees: ['ua'], shouldSkip: false });
+
+    const cfg: ApproveNodeConfig = {
+      assigneeStrategy: 'fixed',
+      assigneeConfig: {},
+      mode: 'and',
+      onEmpty: 'error',
+      autoSkipDuplicates: false,
+      autoSkipSubmitter: false,
+      timeoutHours: 0,
+      allowedActions: ALLOW_ALL,
+    };
+    const def = makeDef([{ id: 'a1', type: 'approve', config: cfg }], []);
+    const tx = makeTx();
+    await (service as any).enterNodesInTx(
+      tx,
+      { id: 'inst-1', orgId: 'o1', recordId: 'rec-1' },
+      def,
+      ['a1'],
+      { user: { userId: 'u1', orgId: 'o1' }, appCode: 'sales', modelCode: 'lead', record: {} },
+    );
+
+    expect(timeoutQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('decide(approve): removes timeout job for the decided task', async () => {
+    const { instance } = buildInstanceWithApproveNode({ mode: 'and' });
+    const task = {
+      id: 't1',
+      status: 'pending',
+      assigneeUserId: 'u1',
+      instanceId: instance.id,
+      nodeId: 'a1',
+      sortOrder: 0,
+      mode: 'and',
+      instance,
+    };
+    const sibling = { id: 't2', status: 'pending', assigneeUserId: 'u2', sortOrder: 1 };
+    const { service, tx, timeoutQueue } = makeWriteService({
+      task,
+      nodeTasksByNode: { a1: [task, sibling] },
+    });
+    tx.sysWorkflowTask.findMany.mockImplementation(async () => [
+      { ...task, status: 'approved' },
+      sibling,
+    ]);
+
+    await service.decide('t1', 'approve', { userId: 'u1', orgId: 'o1' });
+
+    expect(timeoutQueue.remove).toHaveBeenCalledWith('task-timeout-t1');
+  });
+
+  it('decide(reject): removes timeout jobs for decided task + all still-pending tasks', async () => {
+    const { instance } = buildInstanceWithApproveNode({ mode: 'and' });
+    const task = {
+      id: 't1',
+      status: 'pending',
+      assigneeUserId: 'u1',
+      instanceId: instance.id,
+      nodeId: 'a1',
+      sortOrder: 0,
+      mode: 'and',
+      instance,
+    };
+    const sibling = { id: 't2', status: 'pending', assigneeUserId: 'u2' };
+    const { service, tx, timeoutQueue } = makeWriteService({ task });
+    // The reject path queries pending tasks before cancelling them
+    tx.sysWorkflowTask.findMany.mockImplementation(async ({ where }: any) => {
+      if (where?.status === 'pending') return [sibling];
+      return [];
+    });
+
+    await service.decide('t1', 'reject', { userId: 'u1', orgId: 'o1' });
+
+    const removedJobIds = timeoutQueue.remove.mock.calls.map((c: any) => c[0]);
+    expect(removedJobIds).toContain('task-timeout-t1');
+    expect(removedJobIds).toContain('task-timeout-t2');
+  });
+
+  it('transfer: removes old job + schedules a new one based on inherited dueAt', async () => {
+    const future = new Date(Date.now() + 12 * 3600 * 1000);
+    const { instance } = buildInstanceWithApproveNode();
+    const task = {
+      id: 't1',
+      status: 'pending',
+      assigneeUserId: 'u1',
+      instanceId: instance.id,
+      nodeId: 'a1',
+      nodeName: 'Approve A',
+      mode: 'and',
+      sortOrder: 0,
+      dueAt: future,
+      instance,
+    };
+    const { service, tx, timeoutQueue } = makeWriteService({ task });
+    tx.sysWorkflowTask.create = vi.fn(async ({ data }: any) => ({
+      id: 'new-task-id',
+      ...data,
+    }));
+
+    await service.transfer('t1', 'u2', { userId: 'u1', orgId: 'o1' });
+
+    expect(timeoutQueue.remove).toHaveBeenCalledWith('task-timeout-t1');
+    expect(timeoutQueue.add).toHaveBeenCalledTimes(1);
+    const opts = timeoutQueue.add.mock.calls[0][2];
+    expect(opts.jobId).toBe('task-timeout-new-task-id');
+    expect(opts.delay).toBeGreaterThan(0);
+  });
+
+  it('addSigner before: removes self job + schedules new task job when dueAt set', async () => {
+    const future = new Date(Date.now() + 6 * 3600 * 1000);
+    const { instance } = buildInstanceWithApproveNode();
+    const task = {
+      id: 't1',
+      status: 'pending',
+      assigneeUserId: 'u1',
+      instanceId: instance.id,
+      nodeId: 'a1',
+      nodeName: 'Approve A',
+      mode: 'and',
+      sortOrder: 5,
+      dueAt: future,
+      instance,
+    };
+    const { service, tx, timeoutQueue } = makeWriteService({ task });
+    tx.sysWorkflowTask.create = vi.fn(async ({ data }: any) => ({
+      id: 'added-task',
+      ...data,
+    }));
+
+    await service.addSigner('t1', 'before', 'u2', { userId: 'u1', orgId: 'o1' });
+
+    expect(timeoutQueue.remove).toHaveBeenCalledWith('task-timeout-t1');
+    expect(timeoutQueue.add).toHaveBeenCalledTimes(1);
+    expect(timeoutQueue.add.mock.calls[0][2].jobId).toBe('task-timeout-added-task');
+  });
+
+  it('addSigner after: does NOT remove self job (self still pending), schedules new', async () => {
+    const future = new Date(Date.now() + 6 * 3600 * 1000);
+    const { instance } = buildInstanceWithApproveNode();
+    const task = {
+      id: 't1',
+      status: 'pending',
+      assigneeUserId: 'u1',
+      instanceId: instance.id,
+      nodeId: 'a1',
+      nodeName: 'Approve A',
+      mode: 'and',
+      sortOrder: 5,
+      dueAt: future,
+      instance,
+    };
+    const { service, tx, timeoutQueue } = makeWriteService({ task });
+    tx.sysWorkflowTask.create = vi.fn(async ({ data }: any) => ({
+      id: 'after-task',
+      ...data,
+    }));
+
+    await service.addSigner('t1', 'after', 'u2', { userId: 'u1', orgId: 'o1' });
+
+    expect(timeoutQueue.remove).not.toHaveBeenCalled();
+    expect(timeoutQueue.add).toHaveBeenCalledTimes(1);
+  });
+
+  it('withdraw: removes timeout jobs for all pending tasks', async () => {
+    const { service, tx, timeoutQueue } = makeWriteService({
+      instance: { id: 'inst-1', status: 'running', startedBy: 'u1', orgId: 'o1' },
+      approvedTaskCount: 0,
+    });
+    tx.sysWorkflowTask.findMany.mockImplementation(async () => [
+      { id: 't1' },
+      { id: 't2' },
+    ]);
+
+    await service.withdraw('inst-1', { userId: 'u1', orgId: 'o1' });
+
+    const removed = timeoutQueue.remove.mock.calls.map((c: any) => c[0]);
+    expect(removed).toContain('task-timeout-t1');
+    expect(removed).toContain('task-timeout-t2');
+  });
+
+  it('cancel: removes timeout jobs for all pending tasks', async () => {
+    const { service, tx, timeoutQueue } = makeWriteService({
+      instance: { id: 'inst-1', status: 'running', startedBy: 'u1', orgId: 'o1' },
+    });
+    tx.sysWorkflowTask.findMany.mockImplementation(async () => [{ id: 't1' }, { id: 't3' }]);
+
+    await service.cancel('inst-1', 'admin');
+
+    const removed = timeoutQueue.remove.mock.calls.map((c: any) => c[0]);
+    expect(removed).toContain('task-timeout-t1');
+    expect(removed).toContain('task-timeout-t3');
+  });
+
+  it("returnTask 'prev': removes pending timeout jobs of the current node", async () => {
+    const { instance } = buildInstanceWithApproveNode();
+    const task = {
+      id: 't1',
+      status: 'pending',
+      assigneeUserId: 'u1',
+      instanceId: instance.id,
+      nodeId: 'a1',
+      nodeName: 'Approve A',
+      instance,
+    };
+    const { service, tx, timeoutQueue } = makeWriteService({
+      task,
+      prevExit: { nodeId: 'prev-node' },
+    });
+    tx.sysWorkflowTask.findMany.mockImplementation(async ({ where }: any) => {
+      if (where?.status === 'pending') return [{ id: 't1' }, { id: 'sibling' }];
+      return [];
+    });
+    vi.spyOn(service as any, 'enterNodesInTx').mockResolvedValue(undefined);
+
+    await service.returnTask('t1', 'prev', { userId: 'u1', orgId: 'o1' }, 'go back');
+
+    const removed = timeoutQueue.remove.mock.calls.map((c: any) => c[0]);
+    expect(removed).toContain('task-timeout-t1');
+    expect(removed).toContain('task-timeout-sibling');
   });
 });
