@@ -168,6 +168,7 @@ model SysModel {
   fieldPermissions     SysFieldPermission[]
   menuTargets          SysMenu[]               @relation("MenuTargetModel")
   actions              SysAction[]
+  workflows            SysWorkflow[]
 
   @@unique([appId, code])
   @@unique([tableName])
@@ -438,4 +439,139 @@ model SysUserListConfig {
   @@unique([userId, modelId])
   @@index([userId])
   @@map("sys_user_list_config")
+}
+
+// ── P2.3 审批流 + 通知 ──
+
+model SysWorkflow {
+  id              String   @id @default(uuid()) @db.Uuid
+  modelId         String   @map("model_id") @db.Uuid
+  name            String   @db.VarChar(128)
+  description     String?  @db.VarChar(512)
+  sortOrder       Int      @default(0) @map("sort_order")
+  enabled         Boolean  @default(true)
+  condition       Json?
+  currentVersionId String? @unique @map("current_version_id") @db.Uuid
+  createdBy       String   @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  model           SysModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  currentVersion  SysWorkflowVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions        SysWorkflowVersion[] @relation("AllVersions")
+  instances       SysWorkflowInstance[]
+
+  @@index([modelId, enabled, sortOrder])
+  @@map("sys_workflow")
+}
+
+model SysWorkflowVersion {
+  id           String   @id @default(uuid()) @db.Uuid
+  workflowId   String   @map("workflow_id") @db.Uuid
+  versionNo    Int      @map("version_no")
+  definition   Json
+  publishedBy  String   @map("published_by") @db.Uuid
+  publishedAt  DateTime @default(now()) @map("published_at") @db.Timestamptz
+
+  workflow     SysWorkflow @relation("AllVersions", fields: [workflowId], references: [id], onDelete: Cascade)
+  currentOf    SysWorkflow? @relation("CurrentVersion")
+  instances    SysWorkflowInstance[]
+
+  @@unique([workflowId, versionNo])
+  @@map("sys_workflow_version")
+}
+
+model SysWorkflowInstance {
+  id              String   @id @default(uuid()) @db.Uuid
+  workflowId      String   @map("workflow_id") @db.Uuid
+  versionId       String   @map("version_id") @db.Uuid
+  modelId         String   @map("model_id") @db.Uuid
+  appId           String   @map("app_id") @db.Uuid
+  recordId        String   @map("record_id") @db.Uuid
+  orgId           String   @map("org_id") @db.Uuid
+  status          String   @default("running") @db.VarChar(20)
+  activeNodeIds   String[] @default([]) @map("active_node_ids")
+  startedBy       String   @map("started_by") @db.Uuid
+  startedAt       DateTime @default(now()) @map("started_at") @db.Timestamptz
+  endedAt         DateTime? @map("ended_at") @db.Timestamptz
+  finalSnapshot   Json?    @map("final_snapshot")
+  aiSummary       String?  @map("ai_summary") @db.Text
+  version         Int      @default(1)
+
+  workflow        SysWorkflow @relation(fields: [workflowId], references: [id])
+  workflowVersion SysWorkflowVersion @relation(fields: [versionId], references: [id])
+  tasks           SysWorkflowTask[]
+  logs            SysWorkflowLog[]
+
+  @@index([recordId])
+  @@index([modelId, status])
+  @@index([startedBy, status, startedAt])
+  @@map("sys_workflow_instance")
+}
+
+model SysWorkflowTask {
+  id                    String   @id @default(uuid()) @db.Uuid
+  instanceId            String   @map("instance_id") @db.Uuid
+  nodeId                String   @map("node_id") @db.VarChar(64)
+  nodeName              String   @map("node_name") @db.VarChar(128)
+  nodeType              String   @map("node_type") @db.VarChar(20)
+  mode                  String   @db.VarChar(20)
+  assigneeUserId        String   @map("assignee_user_id") @db.Uuid
+  status                String   @default("pending") @db.VarChar(20)
+  sortOrder             Int      @default(0) @map("sort_order")
+  decisionAt            DateTime? @map("decision_at") @db.Timestamptz
+  comment               String?  @db.Text
+  snapshot              Json?
+  parentTaskId          String?  @map("parent_task_id") @db.Uuid
+  addedByUserId         String?  @map("added_by_user_id") @db.Uuid
+  addedPosition         String?  @map("added_position") @db.VarChar(10)
+  transferredFromUserId String?  @map("transferred_from_user_id") @db.Uuid
+  dueAt                 DateTime? @map("due_at") @db.Timestamptz
+  escalated             Boolean  @default(false)
+  urgedAt               DateTime? @map("urged_at") @db.Timestamptz
+
+  instance              SysWorkflowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([assigneeUserId, status])
+  @@index([instanceId, nodeId, status])
+  @@index([dueAt, escalated, status])
+  @@map("sys_workflow_task")
+}
+
+model SysWorkflowLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  instanceId     String   @map("instance_id") @db.Uuid
+  taskId         String?  @map("task_id") @db.Uuid
+  action         String   @db.VarChar(30)
+  nodeId         String?  @map("node_id") @db.VarChar(64)
+  operatorUserId String?  @map("operator_user_id") @db.Uuid
+  targetUserId   String?  @map("target_user_id") @db.Uuid
+  comment        String?  @db.Text
+  data           Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  instance       SysWorkflowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, createdAt])
+  @@map("sys_workflow_log")
+}
+
+model SysNotification {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  orgId        String?  @map("org_id") @db.Uuid
+  type         String   @db.VarChar(40)
+  title        String   @db.VarChar(256)
+  body         String?  @db.VarChar(1024)
+  relatedType  String?  @map("related_type") @db.VarChar(40)
+  relatedId    String?  @map("related_id") @db.Uuid
+  navigateTo   String?  @map("navigate_to") @db.VarChar(512)
+  data         Json?
+  isRead       Boolean  @default(false) @map("is_read")
+  readAt       DateTime? @map("read_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@index([userId, type, createdAt(sort: Desc)])
+  @@map("sys_notification")
 }
