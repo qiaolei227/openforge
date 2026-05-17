@@ -24,6 +24,9 @@ import { FieldPermissionModule } from './field-permission/field-permission.modul
 import { DesignerDataModule } from './designer-data/designer-data.module';
 import { RolePermissionModule } from './role-permission/role-permission.module';
 import { ActionModule } from './action/action.module';
+import { WorkflowModule } from './workflow/workflow.module';
+import { NotificationModule } from './notification/notification.module';
+import { InboxModule } from './inbox/inbox.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { CurrentOrgInterceptor } from './common/interceptors/current-org.interceptor';
@@ -58,6 +61,9 @@ import configuration from './config/configuration';
     DesignerDataModule,
     RolePermissionModule,
     ActionModule,
+    WorkflowModule,
+    NotificationModule,
+    InboxModule,
   ],
   providers: [
     PrismaService,
