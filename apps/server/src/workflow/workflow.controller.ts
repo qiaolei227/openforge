@@ -31,6 +31,12 @@ export class WorkflowController {
     return this.workflowService.list(a, m);
   }
 
+  @Get('workflows/:id')
+  @RequirePermission('designer:workflow', 'view')
+  getOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.workflowService.findById(id);
+  }
+
   @Post('apps/:appCode/models/:modelCode/workflows')
   @RequirePermission('designer:workflow', 'create')
   create(

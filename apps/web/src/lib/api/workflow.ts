@@ -82,6 +82,10 @@ export const workflowApi = {
     );
     return data;
   },
+  async get(id: string): Promise<Workflow> {
+    const { data } = await apiClient.get<Workflow>(`/workflows/${id}`);
+    return data;
+  },
   async create(
     appCode: string,
     modelCode: string,

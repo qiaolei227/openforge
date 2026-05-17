@@ -23,6 +23,16 @@ export class WorkflowService {
     });
   }
 
+  async findById(id: string) {
+    const wf = await this.prisma.sysWorkflow.findUnique({
+      where: { id },
+      include: { currentVersion: true, _count: { select: { instances: true } } },
+    });
+    if (!wf)
+      throw new BusinessException(404, ErrorCodes.WORKFLOW_NOT_FOUND, 'Workflow not found');
+    return wf;
+  }
+
   async create(
     appCode: string,
     modelCode: string,
