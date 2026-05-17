@@ -1,13 +1,16 @@
 import {
   Body,
   Controller,
+  Get,
   Inject,
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { WorkflowEngineService } from './workflow-engine.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 import { DecideTaskDto } from './dto/decide-task.dto';
 import { TransferTaskDto } from './dto/transfer-task.dto';
@@ -16,7 +19,42 @@ import { ReturnTaskDto } from './dto/return-task.dto';
 
 @Controller('workflow-tasks')
 export class WorkflowTaskController {
-  constructor(@Inject(WorkflowEngineService) private engine: WorkflowEngineService) {}
+  constructor(
+    @Inject(WorkflowEngineService) private engine: WorkflowEngineService,
+    @Inject(PrismaService) private prisma: PrismaService,
+  ) {}
+
+  /**
+   * Light user-search for workflow approver pickers (transfer / add-signer).
+   * Returns minimal fields and is gated only by `sys:self` so any authenticated
+   * user can use it (unlike `GET /users` which requires `sys:users`).
+   */
+  @Get('users/search')
+  @RequirePermission('sys:self', 'view')
+  async searchUsers(
+    @Query('keyword') keyword?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const take = Math.min(Math.max(parseInt(pageSize ?? '20', 10) || 20, 1), 50);
+    const kw = (keyword ?? '').trim();
+    const where: Record<string, unknown> = {
+      username: { not: 'admin' },
+      status: 'active',
+    };
+    if (kw) {
+      where.OR = [
+        { username: { contains: kw, mode: 'insensitive' } },
+        { displayName: { contains: kw, mode: 'insensitive' } },
+      ];
+    }
+    const data = await this.prisma.sysUser.findMany({
+      where,
+      select: { id: true, username: true, displayName: true },
+      orderBy: { displayName: 'asc' },
+      take,
+    });
+    return { data, total: data.length };
+  }
 
   @Post(':taskId/approve')
   @RequirePermission('sys:self', 'edit')

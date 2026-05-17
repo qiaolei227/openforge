@@ -36,6 +36,38 @@ export class WorkflowInstanceController {
     return instance;
   }
 
+  /**
+   * Return the latest workflow instance for a given record (prefer running),
+   * or `null` if the record has never been submitted.
+   *
+   * Used by the form page's WorkflowSection — every record-detail view
+   * unconditionally probes this endpoint and gracefully hides if null.
+   */
+  @Get('by-record/:recordId')
+  @RequirePermission('sys:self', 'view')
+  async getByRecord(@Param('recordId', ParseUUIDPipe) recordId: string) {
+    const running = await this.prisma.sysWorkflowInstance.findFirst({
+      where: { recordId, status: 'running' },
+      include: {
+        tasks: { orderBy: { sortOrder: 'asc' } },
+        logs: { orderBy: { createdAt: 'asc' } },
+        workflowVersion: true,
+        workflow: true,
+      },
+    });
+    if (running) return running;
+    return this.prisma.sysWorkflowInstance.findFirst({
+      where: { recordId },
+      include: {
+        tasks: { orderBy: { sortOrder: 'asc' } },
+        logs: { orderBy: { createdAt: 'asc' } },
+        workflowVersion: true,
+        workflow: true,
+      },
+      orderBy: { startedAt: 'desc' },
+    });
+  }
+
   @Post(':id/withdraw')
   @RequirePermission('sys:self', 'edit')
   withdraw(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
