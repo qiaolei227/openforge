@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { NotificationModule } from '../notification/notification.module';
+import { ReadonlyPropagationService } from '../dynamic-data/readonly-propagation.service';
 import { WorkflowService } from './workflow.service';
 import { WorkflowVersionService } from './workflow-version.service';
 import { WorkflowConditionMatcher } from './workflow-condition-matcher.service';
@@ -33,6 +34,11 @@ import { WorkflowInstanceController } from './workflow-instance.controller';
     WorkflowUrgeService,
     WorkflowCompletedListener,
     WorkflowTimeoutProcessor,
+    // P2.3 K2: propagate workflow-driven state changes (data_status, approved_*)
+    // to distributed-model copies. Stateless service depending only on the
+    // @Global() PrismaService, so registering a second instance here (in
+    // addition to the one in DynamicDataModule) avoids a forwardRef cycle.
+    ReadonlyPropagationService,
   ],
   exports: [
     WorkflowService,

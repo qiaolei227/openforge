@@ -4,6 +4,7 @@ import { WorkflowCompletedListener } from '../workflow-completed.listener';
 describe('WorkflowCompletedListener', () => {
   let listener: WorkflowCompletedListener;
   let prisma: any;
+  let readonlyPropagation: any;
 
   const baseInstance = {
     id: 'inst-1',
@@ -11,21 +12,32 @@ describe('WorkflowCompletedListener', () => {
     recordId: '550e8400-e29b-41d4-a716-446655440000',
   };
 
+  // Default model: NOT distributed (P2.2 private scope)
+  function setupModel(opts: { distributed?: boolean } = {}) {
+    prisma.sysModel.findUnique.mockResolvedValue({
+      id: 'model-1',
+      code: 'lead',
+      app: { code: 'crm' },
+      dataScope: opts.distributed ? 'distributed' : 'private',
+      fields: [],
+    });
+  }
+
   beforeEach(() => {
     prisma = {
       sysModel: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: 'model-1',
-          code: 'lead',
-          app: { code: 'crm' },
-        }),
+        findUnique: vi.fn(),
       },
       sysWorkflowTask: {
         findFirst: vi.fn().mockResolvedValue(null),
       },
       $executeRawUnsafe: vi.fn().mockResolvedValue(1),
     };
-    listener = new WorkflowCompletedListener(prisma);
+    readonlyPropagation = {
+      propagate: vi.fn().mockResolvedValue(undefined),
+    };
+    listener = new WorkflowCompletedListener(prisma, readonlyPropagation);
+    setupModel();
   });
 
   it('approved: updates data_status="approved" and sets approved_by/at from last approver', async () => {
@@ -118,5 +130,80 @@ describe('WorkflowCompletedListener', () => {
     await expect(
       listener.onCompleted({ instance: baseInstance, finalStatus: 'rejected' }),
     ).resolves.toBeUndefined();
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  //  P2.3 K2: propagation to distributed copies
+  // ──────────────────────────────────────────────────────────────────────
+
+  it('non-distributed model: does NOT call readonlyPropagation.propagate', async () => {
+    setupModel({ distributed: false });
+    await listener.onCompleted({ instance: baseInstance, finalStatus: 'approved' });
+    expect(readonlyPropagation.propagate).not.toHaveBeenCalled();
+  });
+
+  it("distributed model + finalStatus='approved': propagates data_status + approved_by + approved_at", async () => {
+    setupModel({ distributed: true });
+    prisma.sysWorkflowTask.findFirst.mockResolvedValue({
+      assigneeUserId: 'u-approver',
+    });
+
+    await listener.onCompleted({ instance: baseInstance, finalStatus: 'approved' });
+
+    expect(readonlyPropagation.propagate).toHaveBeenCalledTimes(1);
+    const [, model, masterId, changes] = readonlyPropagation.propagate.mock.calls[0];
+    expect(model).toMatchObject({ id: 'model-1', tableName: 'crm_lead' });
+    expect(masterId).toBe(baseInstance.recordId);
+    expect(changes.data_status).toBe('approved');
+    expect(changes.approved_by).toBe('u-approver');
+    expect(changes.approved_at).toBeInstanceOf(Date);
+  });
+
+  it("distributed model + finalStatus='approved' but no approver found: propagates data_status + approved_at only", async () => {
+    setupModel({ distributed: true });
+    prisma.sysWorkflowTask.findFirst.mockResolvedValue(null);
+
+    await listener.onCompleted({ instance: baseInstance, finalStatus: 'approved' });
+
+    expect(readonlyPropagation.propagate).toHaveBeenCalledTimes(1);
+    const [, , , changes] = readonlyPropagation.propagate.mock.calls[0];
+    expect(changes.data_status).toBe('approved');
+    expect(changes.approved_by).toBeUndefined();
+    expect(changes.approved_at).toBeInstanceOf(Date);
+  });
+
+  it("distributed model + finalStatus='rejected': propagates data_status='draft' only", async () => {
+    setupModel({ distributed: true });
+    await listener.onCompleted({ instance: baseInstance, finalStatus: 'rejected' });
+
+    expect(readonlyPropagation.propagate).toHaveBeenCalledTimes(1);
+    const [, , , changes] = readonlyPropagation.propagate.mock.calls[0];
+    expect(changes.data_status).toBe('draft');
+    expect(changes.approved_by).toBeUndefined();
+    expect(changes.approved_at).toBeUndefined();
+  });
+
+  it("distributed model + finalStatus='withdrawn': propagates data_status='draft'", async () => {
+    setupModel({ distributed: true });
+    await listener.onCompleted({ instance: baseInstance, finalStatus: 'withdrawn' });
+
+    expect(readonlyPropagation.propagate).toHaveBeenCalledTimes(1);
+    const [, , , changes] = readonlyPropagation.propagate.mock.calls[0];
+    expect(changes.data_status).toBe('draft');
+  });
+
+  it('propagation failure: caught and logged, does not throw', async () => {
+    setupModel({ distributed: true });
+    readonlyPropagation.propagate.mockRejectedValueOnce(new Error('replica db down'));
+    await expect(
+      listener.onCompleted({ instance: baseInstance, finalStatus: 'approved' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('master UPDATE failure: skips propagation', async () => {
+    setupModel({ distributed: true });
+    prisma.$executeRawUnsafe.mockRejectedValueOnce(new Error('master db down'));
+    await listener.onCompleted({ instance: baseInstance, finalStatus: 'approved' });
+    expect(readonlyPropagation.propagate).not.toHaveBeenCalled();
   });
 });

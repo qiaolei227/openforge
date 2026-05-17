@@ -181,6 +181,8 @@ describe('Phase G integration: submit → approve → listener writes data_statu
           id: 'm1',
           code: 'lead',
           app: { code: 'crm' },
+          dataScope: 'private',
+          fields: [],
         }),
       },
       sysWorkflowTask: {
@@ -188,7 +190,8 @@ describe('Phase G integration: submit → approve → listener writes data_statu
       },
       $executeRawUnsafe: vi.fn().mockResolvedValue(1),
     };
-    listener = new WorkflowCompletedListener(listenerPrisma);
+    const readonlyPropagation = { propagate: vi.fn().mockResolvedValue(undefined) };
+    listener = new WorkflowCompletedListener(listenerPrisma, readonlyPropagation as any);
 
     // Wire @OnEvent manually since we're not booting Nest's container.
     bus.on('workflow.completed', (payload) => listener.onCompleted(payload as any));
@@ -219,10 +222,12 @@ describe('Phase G integration: submit → approve → listener writes data_statu
     await new Promise((resolve) => setImmediate(resolve));
 
     // 3) Listener should have fired and written data_status='approved'
-    expect(listenerPrisma.sysModel.findUnique).toHaveBeenCalledWith({
-      where: { id: 'm1' },
-      include: { app: true },
-    });
+    expect(listenerPrisma.sysModel.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'm1' },
+        include: expect.objectContaining({ app: true }),
+      }),
+    );
     const calls = listenerPrisma.$executeRawUnsafe.mock.calls;
     expect(calls.length).toBeGreaterThanOrEqual(1);
     // First call: data_status='approved'
