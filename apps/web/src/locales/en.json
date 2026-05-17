@@ -813,6 +813,28 @@
     "USER_ORG_IS_GROUP": "Users cannot belong to a group-type organization (groups are structural only)",
     "ORG_GROUP_CANNOT_BE_ROOT": "The root organization must be a real entity and cannot be a group",
     "CANNOT_ALLOCATE_TO_GROUP": "Group-type organizations cannot receive distributed data",
+    "workflow": {
+      "WORKFLOW_NOT_FOUND": "Workflow not found",
+      "WORKFLOW_VERSION_NOT_FOUND": "Workflow version not found",
+      "WORKFLOW_INVALID_DEFINITION": "Workflow node graph validation failed",
+      "WORKFLOW_DELETE_HAS_INSTANCES": "Cannot delete workflow with existing instances — disable it instead",
+      "WORKFLOW_INSTANCE_NOT_FOUND": "Workflow instance not found",
+      "WORKFLOW_INSTANCE_NOT_RUNNING": "Workflow instance has ended",
+      "WORKFLOW_TASK_NOT_FOUND": "Approval task not found",
+      "WORKFLOW_TASK_NOT_PENDING": "Approval task already processed",
+      "WORKFLOW_TASK_NOT_ASSIGNEE": "You are not the assignee of this task",
+      "WORKFLOW_CONCURRENT_UPDATE": "Workflow is being modified by another user, please retry",
+      "WORKFLOW_NO_MATCHING_WORKFLOW": "No matching approval workflow found",
+      "WORKFLOW_WITHDRAW_HAS_APPROVAL": "Cannot withdraw — an approver has already taken action; ask the approver to return it",
+      "WORKFLOW_UNDO_DECISION_TOO_LATE": "Cannot undo decision — the next node has already started",
+      "WORKFLOW_URGE_TOO_FREQUENT": "Urging too frequently, please wait 24 hours",
+      "WORKFLOW_ADD_SIGNER_SELF": "Cannot add yourself as a signer",
+      "WORKFLOW_RETURN_NO_PREVIOUS": "Already at the first node — cannot return to previous",
+      "WORKFLOW_CONDITION_NO_MATCH": "Condition node matched no branch",
+      "WORKFLOW_ASSIGNEE_RESOLVE_FAILED": "Assignee resolution failed (no available approvers)",
+      "WORKFLOW_ACTION_NOT_ALLOWED": "Action not allowed on current node",
+      "NOTIFICATION_NOT_FOUND": "Notification not found"
+    },
     "validation": {
       "required": "\"{name}\" is required",
       "entity_field_required": "\"{name}\" is required",
@@ -1178,5 +1200,46 @@
       "backfill": "Backfill",
       "auto_fill": "Auto Allocate"
     }
+  },
+  "workflow": {
+    "tab": "Workflow",
+    "list": {
+      "title": "Workflows",
+      "empty": "No workflows yet — click the button above to create one",
+      "new": "New Workflow",
+      "edit": "Edit",
+      "delete": "Delete",
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "editor": {
+      "save": "Save",
+      "publish": "Publish New Version",
+      "versionHistory": "Version History"
+    },
+    "status": {
+      "running": "In Approval",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "returned": "Returned",
+      "cancelled": "Cancelled",
+      "withdrawn": "Withdrawn"
+    }
+  },
+  "inbox": {
+    "title": "Inbox",
+    "tabs": {
+      "pending": "Pending",
+      "done": "Done",
+      "cc": "CC",
+      "myInstances": "My Submissions"
+    },
+    "empty": "Nothing here"
+  },
+  "notifications": {
+    "bell": "Notifications",
+    "markAllRead": "Mark All Read",
+    "viewAll": "View All",
+    "empty": "No notifications"
   }
 }

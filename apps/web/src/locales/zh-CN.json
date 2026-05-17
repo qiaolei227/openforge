@@ -813,6 +813,28 @@
     "USER_ORG_IS_GROUP": "用户不能归属于分组类型的组织（分组仅用于架构分层）",
     "ORG_GROUP_CANNOT_BE_ROOT": "根组织必须是实体组织，不能设置为分组",
     "CANNOT_ALLOCATE_TO_GROUP": "分组类型的组织不能作为数据分配目标",
+    "workflow": {
+      "WORKFLOW_NOT_FOUND": "流程不存在",
+      "WORKFLOW_VERSION_NOT_FOUND": "流程版本不存在",
+      "WORKFLOW_INVALID_DEFINITION": "流程节点图校验失败",
+      "WORKFLOW_DELETE_HAS_INSTANCES": "已有实例的流程不能删除，请改为禁用",
+      "WORKFLOW_INSTANCE_NOT_FOUND": "流程实例不存在",
+      "WORKFLOW_INSTANCE_NOT_RUNNING": "流程实例已结束，不能操作",
+      "WORKFLOW_TASK_NOT_FOUND": "审批任务不存在",
+      "WORKFLOW_TASK_NOT_PENDING": "审批任务已处理",
+      "WORKFLOW_TASK_NOT_ASSIGNEE": "您不是该任务的审批人",
+      "WORKFLOW_CONCURRENT_UPDATE": "流程被他人同时操作，请稍后重试",
+      "WORKFLOW_NO_MATCHING_WORKFLOW": "未找到匹配的审批流程",
+      "WORKFLOW_WITHDRAW_HAS_APPROVAL": "已有审批人通过，无法撤销，请联系审批人退回",
+      "WORKFLOW_UNDO_DECISION_TOO_LATE": "下一节点已启动，无法撤回审批决定",
+      "WORKFLOW_URGE_TOO_FREQUENT": "催办过于频繁，请 24 小时后再试",
+      "WORKFLOW_ADD_SIGNER_SELF": "加签人不能是自己",
+      "WORKFLOW_RETURN_NO_PREVIOUS": "当前是第一个节点，无法退回上一节点",
+      "WORKFLOW_CONDITION_NO_MATCH": "条件节点未匹配任何分支",
+      "WORKFLOW_ASSIGNEE_RESOLVE_FAILED": "审批人解析失败（无可用审批人）",
+      "WORKFLOW_ACTION_NOT_ALLOWED": "当前节点不允许此操作",
+      "NOTIFICATION_NOT_FOUND": "通知不存在"
+    },
     "validation": {
       "required": "「{name}」为必填项",
       "entity_field_required": "「{name}」为必填项",
@@ -1178,5 +1200,46 @@
       "backfill": "策略回填",
       "auto_fill": "自动分配"
     }
+  },
+  "workflow": {
+    "tab": "审批流",
+    "list": {
+      "title": "流程列表",
+      "empty": "暂无流程，点击右上角新建",
+      "new": "新建流程",
+      "edit": "编辑",
+      "delete": "删除",
+      "enabled": "启用",
+      "disabled": "禁用"
+    },
+    "editor": {
+      "save": "保存",
+      "publish": "发布新版本",
+      "versionHistory": "版本历史"
+    },
+    "status": {
+      "running": "审批中",
+      "approved": "已通过",
+      "rejected": "已驳回",
+      "returned": "已退回",
+      "cancelled": "已取消",
+      "withdrawn": "已撤销"
+    }
+  },
+  "inbox": {
+    "title": "待办中心",
+    "tabs": {
+      "pending": "待办",
+      "done": "已办",
+      "cc": "抄送",
+      "myInstances": "我发起的"
+    },
+    "empty": "暂无内容"
+  },
+  "notifications": {
+    "bell": "通知",
+    "markAllRead": "全部已读",
+    "viewAll": "查看全部",
+    "empty": "暂无通知"
   }
 }
