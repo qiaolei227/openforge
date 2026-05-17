@@ -342,6 +342,86 @@ describe('AssigneeResolverService', () => {
     });
   });
 
+  describe('resolveWithFallback', () => {
+    it('returns assignees + shouldSkip=false in the normal case', async () => {
+      const result = await service.resolveWithFallback({
+        strategy: 'fixed',
+        config: { userIds: ['u1', 'u2'] },
+        ctx: makeCtx(),
+        onEmpty: 'error',
+        autoSkipDuplicates: false,
+        autoSkipSubmitter: false,
+      });
+      expect(result.shouldSkip).toBe(false);
+      expect(result.assignees.sort()).toEqual(['u1', 'u2']);
+    });
+
+    it('empty + onEmpty=pass → shouldSkip=true, no error', async () => {
+      const result = await service.resolveWithFallback({
+        strategy: 'fixed',
+        config: { userIds: [] },
+        ctx: makeCtx(),
+        onEmpty: 'pass',
+        autoSkipDuplicates: false,
+        autoSkipSubmitter: false,
+      });
+      expect(result).toEqual({ assignees: [], shouldSkip: true });
+    });
+
+    it('empty + onEmpty=fallback (with users) → uses fallback', async () => {
+      const result = await service.resolveWithFallback({
+        strategy: 'fixed',
+        config: { userIds: [] },
+        ctx: makeCtx(),
+        onEmpty: 'fallback',
+        fallbackUserIds: ['u-fallback'],
+        autoSkipDuplicates: false,
+        autoSkipSubmitter: false,
+      });
+      expect(result).toEqual({ assignees: ['u-fallback'], shouldSkip: false });
+    });
+
+    it('empty + onEmpty=fallback (no users) → shouldSkip=true', async () => {
+      const result = await service.resolveWithFallback({
+        strategy: 'fixed',
+        config: { userIds: [] },
+        ctx: makeCtx(),
+        onEmpty: 'fallback',
+        fallbackUserIds: [],
+        autoSkipDuplicates: false,
+        autoSkipSubmitter: false,
+      });
+      expect(result).toEqual({ assignees: [], shouldSkip: true });
+    });
+
+    it('empty + onEmpty=error → throws WORKFLOW_ASSIGNEE_RESOLVE_FAILED', async () => {
+      await expect(
+        service.resolveWithFallback({
+          strategy: 'fixed',
+          config: { userIds: [] },
+          ctx: makeCtx(),
+          onEmpty: 'error',
+          autoSkipDuplicates: false,
+          autoSkipSubmitter: false,
+        }),
+      ).rejects.toMatchObject({
+        errorCode: ErrorCodes.WORKFLOW_ASSIGNEE_RESOLVE_FAILED,
+      });
+    });
+
+    it('non-empty trimmed to empty by autoSkipSubmitter still respects onEmpty=pass', async () => {
+      const result = await service.resolveWithFallback({
+        strategy: 'fixed',
+        config: { userIds: ['submitter-1'] },
+        ctx: makeCtx(),
+        onEmpty: 'pass',
+        autoSkipDuplicates: false,
+        autoSkipSubmitter: true,
+      });
+      expect(result).toEqual({ assignees: [], shouldSkip: true });
+    });
+  });
+
   describe('resolve - unknown strategy', () => {
     it('throws WORKFLOW_INVALID_DEFINITION', async () => {
       await expect(

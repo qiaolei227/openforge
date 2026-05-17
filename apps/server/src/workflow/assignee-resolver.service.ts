@@ -61,6 +61,50 @@ export class AssigneeResolverService {
   }
 
   /**
+   * 解析 + 后处理 + 空集兜底。返回 { assignees, shouldSkip }。
+   *
+   * - shouldSkip=true 表示节点应被引擎跳过（onEmpty=pass 或 fallback 但 fallback 也为空）。
+   * - onEmpty=error 且最终为空 → 抛 WORKFLOW_ASSIGNEE_RESOLVE_FAILED。
+   */
+  async resolveWithFallback(args: {
+    strategy: AssigneeStrategy;
+    config: AssigneeConfig;
+    ctx: ResolveContext;
+    onEmpty: 'pass' | 'fallback' | 'error';
+    fallbackUserIds?: string[];
+    autoSkipDuplicates: boolean;
+    autoSkipSubmitter: boolean;
+  }): Promise<{ assignees: string[]; shouldSkip: boolean }> {
+    const raw = await this.resolve(args.strategy, args.config, args.ctx);
+    const processed = await this.postProcess(
+      raw,
+      {
+        autoSkipDuplicates: args.autoSkipDuplicates,
+        autoSkipSubmitter: args.autoSkipSubmitter,
+      },
+      args.ctx,
+    );
+
+    if (processed.length === 0) {
+      if (args.onEmpty === 'pass') {
+        return { assignees: [], shouldSkip: true };
+      }
+      if (args.onEmpty === 'fallback') {
+        const fb = args.fallbackUserIds ?? [];
+        return fb.length > 0
+          ? { assignees: fb, shouldSkip: false }
+          : { assignees: [], shouldSkip: true };
+      }
+      throw new BusinessException(
+        422,
+        ErrorCodes.WORKFLOW_ASSIGNEE_RESOLVE_FAILED,
+        'No assignees resolved',
+      );
+    }
+    return { assignees: processed, shouldSkip: false };
+  }
+
+  /**
    * 后处理已解析出的 userIds：dedup + 可选剔除上游已审/提交人。
    */
   async postProcess(
