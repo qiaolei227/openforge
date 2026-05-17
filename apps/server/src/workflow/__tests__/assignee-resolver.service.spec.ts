@@ -276,6 +276,72 @@ describe('AssigneeResolverService', () => {
     });
   });
 
+  describe('postProcess', () => {
+    it('plain dedup', async () => {
+      const result = await service.postProcess(
+        ['u1', 'u2', 'u1'],
+        { autoSkipDuplicates: false, autoSkipSubmitter: false },
+        makeCtx(),
+      );
+      expect(result.sort()).toEqual(['u1', 'u2']);
+    });
+
+    it('autoSkipDuplicates=true removes upstream approved assignees on same instance', async () => {
+      prisma.sysWorkflowTask.findMany.mockResolvedValue([
+        { assigneeUserId: 'u1' },
+        { assigneeUserId: 'u3' },
+      ]);
+      const result = await service.postProcess(
+        ['u1', 'u2', 'u3', 'u4'],
+        { autoSkipDuplicates: true, autoSkipSubmitter: false },
+        makeCtx({ instance: { id: 'inst-x' } }),
+      );
+      expect(prisma.sysWorkflowTask.findMany).toHaveBeenCalledWith({
+        where: { instanceId: 'inst-x', status: 'approved' },
+        select: { assigneeUserId: true },
+      });
+      expect(result.sort()).toEqual(['u2', 'u4']);
+    });
+
+    it('autoSkipDuplicates=false keeps everyone (no upstream query)', async () => {
+      const result = await service.postProcess(
+        ['u1', 'u2'],
+        { autoSkipDuplicates: false, autoSkipSubmitter: false },
+        makeCtx(),
+      );
+      expect(prisma.sysWorkflowTask.findMany).not.toHaveBeenCalled();
+      expect(result.sort()).toEqual(['u1', 'u2']);
+    });
+
+    it('autoSkipSubmitter=true removes ctx.submitter.userId', async () => {
+      const result = await service.postProcess(
+        ['u1', 'submitter-1', 'u2'],
+        { autoSkipDuplicates: false, autoSkipSubmitter: true },
+        makeCtx(),
+      );
+      expect(result.sort()).toEqual(['u1', 'u2']);
+    });
+
+    it('autoSkipSubmitter=false keeps submitter', async () => {
+      const result = await service.postProcess(
+        ['u1', 'submitter-1'],
+        { autoSkipDuplicates: false, autoSkipSubmitter: false },
+        makeCtx(),
+      );
+      expect(result.sort()).toEqual(['submitter-1', 'u1']);
+    });
+
+    it('combined: both filters apply', async () => {
+      prisma.sysWorkflowTask.findMany.mockResolvedValue([{ assigneeUserId: 'u1' }]);
+      const result = await service.postProcess(
+        ['u1', 'u2', 'submitter-1', 'u2'],
+        { autoSkipDuplicates: true, autoSkipSubmitter: true },
+        makeCtx(),
+      );
+      expect(result).toEqual(['u2']);
+    });
+  });
+
   describe('resolve - unknown strategy', () => {
     it('throws WORKFLOW_INVALID_DEFINITION', async () => {
       await expect(

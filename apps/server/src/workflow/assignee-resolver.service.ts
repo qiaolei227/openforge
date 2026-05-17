@@ -60,6 +60,29 @@ export class AssigneeResolverService {
     return Array.from(new Set(userIds.filter((u) => !!u)));
   }
 
+  /**
+   * 后处理已解析出的 userIds：dedup + 可选剔除上游已审/提交人。
+   */
+  async postProcess(
+    rawUserIds: string[],
+    config: { autoSkipDuplicates: boolean; autoSkipSubmitter: boolean },
+    ctx: ResolveContext,
+  ): Promise<string[]> {
+    let result = Array.from(new Set(rawUserIds));
+    if (config.autoSkipDuplicates) {
+      const upstream = await this.prisma.sysWorkflowTask.findMany({
+        where: { instanceId: ctx.instance.id, status: 'approved' },
+        select: { assigneeUserId: true },
+      });
+      const upstreamSet = new Set(upstream.map((t) => t.assigneeUserId));
+      result = result.filter((u) => !upstreamSet.has(u));
+    }
+    if (config.autoSkipSubmitter) {
+      result = result.filter((u) => u !== ctx.submitter.userId);
+    }
+    return result;
+  }
+
   private async fromRoles(roleIds: string[]): Promise<string[]> {
     if (!roleIds.length) return [];
     const rows = await this.prisma.sysUserRole.findMany({
