@@ -87,9 +87,12 @@ export class WorkflowService {
   }
 
   async findMatching(modelId: string, record: any) {
+    // Two-level ordering keeps matching deterministic when multiple workflows
+    // share a sortOrder. sortOrder is the user-controlled priority; createdAt
+    // is just a stable tie-breaker (older workflow evaluated first).
     const candidates = await this.prisma.sysWorkflow.findMany({
       where: { modelId, enabled: true, currentVersionId: { not: null } },
-      orderBy: { sortOrder: 'asc' },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
     for (const wf of candidates) {
       if (this.matcher.match(wf.condition as ConditionExpression | null, record)) return wf;

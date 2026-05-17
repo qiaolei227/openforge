@@ -198,7 +198,7 @@ describe('WorkflowService', () => {
       expect(result).toBe(wf2);
       expect(prisma.sysWorkflow.findMany).toHaveBeenCalledWith({
         where: { modelId: 'm1', enabled: true, currentVersionId: { not: null } },
-        orderBy: { sortOrder: 'asc' },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       });
     });
 
