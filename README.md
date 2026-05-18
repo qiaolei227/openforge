@@ -27,6 +27,7 @@ OpenForge is a low-code platform for domain experts. Design models, forms, and l
 - **Unified render engine** — forms and lists share one layout pipeline with four modes: `preview` / `create` / `edit` / `view`
 - **Self-hosted & offline-first** — fonts, icons, and assets are bundled locally; runs behind a firewall with no public internet
 - **Multi-tenant** — physical isolation per customer (independent Docker deployment); row-level organization isolation within a customer
+- **Approval workflow** — visual node-graph editor, multi-stage approvals, transfer/return/withdraw, real-time inbox over WebSocket
 - **Batteries included** — authentication, RBAC, file storage, data dictionary, audit log, and i18n (zh-CN / en)
 - **AI-Powered** — field suggestions in the model designer today; natural-language schema/form/workflow generation on the way. AI is a powerful accelerator, not a forced fixture on every page
 
@@ -34,7 +35,7 @@ OpenForge is a low-code platform for domain experts. Design models, forms, and l
 
 - [x] **P0 Foundation** — authentication, tenants, platform metadata, Docker deployment
 - [x] **P1 Modeling & Forms** — dynamic schemas, unified render engine, visual designer
-- [ ] **P2 Permissions & Workflow** — three-layer RBAC, approval flows (in progress)
+- [x] **P2 Permissions & Workflow** — three-layer RBAC, org switcher, distributed data scope, approval workflow engine with WebSocket notifications
 - [ ] **P3 AI Capabilities** — design assistant, natural-language to schema/form/workflow, smart form fill
 - [ ] **P4 Advanced** — scripting engine, reports, integrations, print templates, standalone pages
 - [ ] **P5 Mobile & Ecosystem** — Flutter client, plugin system
