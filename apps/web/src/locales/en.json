@@ -1223,6 +1223,9 @@
       "name": "Name",
       "description": "Description"
     },
+    "templates": {
+      "label": "Select Template"
+    },
     "editor": {
       "save": "Save",
       "publish": "Publish New Version",

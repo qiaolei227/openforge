@@ -14,15 +14,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { workflowApi } from '@/lib/api/workflow';
-import { getApiErrorMessage } from '@/lib/utils';
+import { cn, getApiErrorMessage } from '@/lib/utils';
 import { useToastStore } from '@/stores/toast-store';
+import { WORKFLOW_TEMPLATES, type WorkflowTemplate } from './workflow-templates';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   appCode: string;
   modelCode: string;
-  onCreated: () => void;
+  onCreated: (workflowId: string) => void;
 }
 
 export function CreateWorkflowDialog({
@@ -37,17 +38,30 @@ export function CreateWorkflowDialog({
   const tErrors = useTranslations('errorCodes');
   const showToast = useToastStore((s) => s.show);
 
-  const [name, setName] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<WorkflowTemplate>(
+    WORKFLOW_TEMPLATES[0],
+  );
+  const [name, setName] = useState(WORKFLOW_TEMPLATES[0].name);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) {
-      setName('');
+      setSelectedTemplate(WORKFLOW_TEMPLATES[0]);
+      setName(WORKFLOW_TEMPLATES[0].name);
       setDescription('');
       setSubmitting(false);
     }
   }, [open]);
+
+  const handleSelectTemplate = (tpl: WorkflowTemplate) => {
+    setSelectedTemplate(tpl);
+    // Auto-fill name only when user hasn't typed anything custom yet
+    // (the current name still matches one of the template names).
+    if (!name.trim() || WORKFLOW_TEMPLATES.some((t) => t.name === name.trim())) {
+      setName(tpl.name);
+    }
+  };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -55,12 +69,24 @@ export function CreateWorkflowDialog({
     if (!trimmed || submitting) return;
     setSubmitting(true);
     try {
-      await workflowApi.create(appCode, modelCode, {
+      const wf = await workflowApi.create(appCode, modelCode, {
         name: trimmed,
         description: description.trim() || undefined,
       });
+      if (selectedTemplate.id !== 'empty') {
+        try {
+          await workflowApi.publishVersion(wf.id, selectedTemplate.build());
+        } catch (publishErr) {
+          // Workflow exists but template publish failed — surface error and
+          // still report success so user can fix it in the editor.
+          showToast(
+            getApiErrorMessage(publishErr, tErrors, tCommon('operationFailed')),
+            'error',
+          );
+        }
+      }
       showToast(tCommon('operationSuccess'), 'success');
-      onCreated();
+      onCreated(wf.id);
     } catch (err) {
       showToast(getApiErrorMessage(err, tErrors, tCommon('operationFailed')), 'error');
     } finally {
@@ -70,11 +96,39 @@ export function CreateWorkflowDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t('list.createTitle')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>{t('templates.label')}</Label>
+            <div className="grid gap-2">
+              {WORKFLOW_TEMPLATES.map((tpl) => {
+                const active = selectedTemplate.id === tpl.id;
+                return (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => handleSelectTemplate(tpl)}
+                    disabled={submitting}
+                    className={cn(
+                      'text-left rounded-md border p-3 transition-colors hover:border-primary/50 disabled:opacity-50',
+                      active
+                        ? 'border-primary bg-primary/5'
+                        : 'border-input bg-background',
+                    )}
+                  >
+                    <div className="font-medium text-sm">{tpl.name}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {tpl.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="wf-name">
               {t('fields.name')} <span className="text-destructive">*</span>
@@ -83,7 +137,6 @@ export function CreateWorkflowDialog({
               id="wf-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              autoFocus
               maxLength={100}
               disabled={submitting}
             />
@@ -94,7 +147,7 @@ export function CreateWorkflowDialog({
               id="wf-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
+              rows={2}
               maxLength={500}
               disabled={submitting}
             />

@@ -1223,6 +1223,9 @@
       "name": "名称",
       "description": "描述"
     },
+    "templates": {
+      "label": "选择模板"
+    },
     "editor": {
       "save": "保存",
       "publish": "发布新版本",

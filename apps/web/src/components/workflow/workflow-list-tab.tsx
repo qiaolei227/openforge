@@ -209,9 +209,12 @@ export function WorkflowListTab({
         onOpenChange={setCreateOpen}
         appCode={appCode}
         modelCode={modelCode}
-        onCreated={() => {
+        onCreated={(workflowId) => {
           setCreateOpen(false);
           load();
+          // Newly-created workflows always need configuration (assignees /
+          // condition thresholds), so jump straight into the editor.
+          goEditor(workflowId);
         }}
       />
 
