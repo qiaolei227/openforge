@@ -23,6 +23,7 @@ interface WorkflowListTabProps {
   modelId: string;
   modelCode: string;
   enableDataStatus: boolean;
+  onCountChange?: (count: number) => void;
 }
 
 export function WorkflowListTab({
@@ -31,6 +32,7 @@ export function WorkflowListTab({
   modelId,
   modelCode,
   enableDataStatus,
+  onCountChange,
 }: WorkflowListTabProps) {
   const t = useTranslations('workflow');
   const tCommon = useTranslations('common');
@@ -50,12 +52,13 @@ export function WorkflowListTab({
     try {
       const list = await workflowApi.list(appCode, modelCode);
       setWorkflows(list);
+      onCountChange?.(list.length);
     } catch (err) {
       showToast(getApiErrorMessage(err, tErrors, tCommon('fetchFailed')), 'error');
     } finally {
       setLoading(false);
     }
-  }, [appCode, modelCode, showToast, tCommon]);
+  }, [appCode, modelCode, showToast, tCommon, onCountChange]);
 
   useEffect(() => {
     if (enableDataStatus) load();

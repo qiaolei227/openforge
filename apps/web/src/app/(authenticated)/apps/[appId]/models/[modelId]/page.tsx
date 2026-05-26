@@ -45,6 +45,7 @@ import { fieldTypeBadgeClass } from './designer/field-type-styles';
 import DefaultSortPopover from './default-sort-popover';
 import { ModelActionsTab } from './components/model-actions-tab';
 import { WorkflowListTab } from '@/components/workflow/workflow-list-tab';
+import { workflowApi } from '@/lib/api/workflow';
 import { CreateViewDialog } from './designer/create-view-dialog';
 import { PreviewMode } from './designer/preview-mode';
 import { Badge } from '@/components/ui/badge';
@@ -371,6 +372,7 @@ export default function ModelDetailPage() {
   const [views, setViews] = useState<import('@openforge/shared').SysView[]>([]);
   const [entities, setEntities] = useState<SysEntity[]>([]);
   const [actionsCount, setActionsCount] = useState(0);
+  const [workflowCount, setWorkflowCount] = useState(0);
 
   /* ---------- UI state ---------- */
   const searchParams = useSearchParams();
@@ -582,6 +584,19 @@ export default function ModelDetailPage() {
   const refreshFields = useCallback(async () => {
     await Promise.all([fetchFields(), fetchEntities()]);
   }, [fetchFields, fetchEntities]);
+
+  useEffect(() => {
+    if (!model?.enableDataStatus) {
+      setWorkflowCount(0);
+      return;
+    }
+    const appCode = model.app?.code;
+    if (!appCode || !model.code) return;
+    workflowApi
+      .list(appCode, model.code)
+      .then((list) => setWorkflowCount(list.length))
+      .catch(() => { /* silent */ });
+  }, [model?.enableDataStatus, model?.app?.code, model?.code]);
 
   /* ---------- Distribution Policy ---------- */
   const fetchDistPolicies = useCallback(async () => {
@@ -1669,7 +1684,7 @@ export default function ModelDetailPage() {
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {t('workflow.tab')}
+                {t('workflow.tab')} ({workflowCount})
                 {activeTab === 'workflow' && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
                 )}
@@ -2609,6 +2624,7 @@ export default function ModelDetailPage() {
           modelId={modelId}
           modelCode={model.code}
           enableDataStatus={model.enableDataStatus}
+          onCountChange={setWorkflowCount}
         />
       )}
 
