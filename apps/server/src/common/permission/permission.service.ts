@@ -92,6 +92,35 @@ export class PermissionService {
   }
 
   /**
+   * Does the user have any pending workflow task on a record of this model?
+   * Used by PermissionGuard as a view-only bypass so inbox assignees can open
+   * records that their roles wouldn't otherwise grant access to.
+   */
+  async hasPendingTaskOnModel(
+    userId: string,
+    appCode: string,
+    modelCode: string,
+  ): Promise<boolean> {
+    const task = await this.prisma.sysWorkflowTask.findFirst({
+      where: {
+        assigneeUserId: userId,
+        status: 'pending',
+        instance: {
+          status: 'running',
+          workflow: {
+            model: {
+              code: modelCode,
+              app: { code: appCode },
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+    return task !== null;
+  }
+
+  /**
    * Form A: 检查用户是否拥有静态资源权限。
    * 查询 sys_role_permission 表（resource + actions 列）。
    */

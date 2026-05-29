@@ -86,22 +86,9 @@ function formatDateTime(val: string | null | undefined): string {
   }
 }
 
-/** Cache for resolved user display names */
-const userNameCache = new Map<string, string>();
-
-async function resolveUserName(userId: string | null | undefined): Promise<string> {
-  if (!userId) return '-';
-  const cached = userNameCache.get(userId);
-  if (cached) return cached;
-  try {
-    const { data } = await apiClient.get(`/users/${userId}`);
-    const name = data.displayName || data.username || userId;
-    userNameCache.set(userId, name);
-    return name;
-  } catch {
-    return userId.slice(0, 8) + '...';
-  }
-}
+// User-name resolution: shared batching cache (sys:self-gated, works for any
+// logged-in viewer including inbox assignees without sys:users perm).
+import { resolveUserName } from '@/lib/api/user-resolve';
 
 /* ------------------------------------------------------------------ */
 /*  RecordPage Component                                               */

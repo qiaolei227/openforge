@@ -24,11 +24,18 @@ describe('PermissionGuard', () => {
   let permService: {
     check: ReturnType<typeof vi.fn>;
     checkResource: ReturnType<typeof vi.fn>;
+    findAppByCode: ReturnType<typeof vi.fn>;
+    hasPendingTaskOnModel: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
     reflector = new Reflector();
-    permService = { check: vi.fn(), checkResource: vi.fn() };
+    permService = {
+      check: vi.fn(),
+      checkResource: vi.fn(),
+      findAppByCode: vi.fn(),
+      hasPendingTaskOnModel: vi.fn().mockResolvedValue(false),
+    };
     guard = new PermissionGuard(reflector, permService as unknown as PermissionService);
   });
 
@@ -158,6 +165,65 @@ describe('PermissionGuard', () => {
         guard.canActivate(mockContext({
           user: { userId: 'u1', isAdmin: false },
           request: { params: { appCode: 'purchase', modelCode: 'order' } },
+        })),
+      ).rejects.toThrow(BusinessException);
+    });
+  });
+
+  describe('Inbox-task bypass for menu:model:* view', () => {
+    const viewMenuModel = (action: string) => ({
+      target: (req: any) => `menu:model:${req.params.appCode}:${req.params.modelCode}`,
+      action,
+    });
+
+    it('allows view when role check fails but user has a pending workflow task on the model', async () => {
+      vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
+        if (key === 'require_permission') return viewMenuModel('view');
+        return undefined;
+      });
+      permService.check.mockResolvedValue(false);
+      permService.hasPendingTaskOnModel.mockResolvedValue(true);
+
+      const ok = await guard.canActivate(mockContext({
+        user: { userId: 'u1', isAdmin: false },
+        request: { params: { appCode: 'supply', modelCode: 'purchase_order' } },
+      }));
+      expect(ok).toBe(true);
+      expect(permService.hasPendingTaskOnModel).toHaveBeenCalledWith(
+        'u1', 'supply', 'purchase_order',
+      );
+    });
+
+    it('does NOT bypass for non-view actions even with a pending task', async () => {
+      vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
+        if (key === 'require_permission') return viewMenuModel('edit');
+        return undefined;
+      });
+      permService.check.mockResolvedValue(false);
+      permService.hasPendingTaskOnModel.mockResolvedValue(true);
+
+      await expect(
+        guard.canActivate(mockContext({
+          user: { userId: 'u1', isAdmin: false },
+          request: { params: { appCode: 'supply', modelCode: 'purchase_order' } },
+        })),
+      ).rejects.toThrow(BusinessException);
+      // bypass is gated on action='view', so the task lookup should be skipped
+      expect(permService.hasPendingTaskOnModel).not.toHaveBeenCalled();
+    });
+
+    it('still throws FORBIDDEN when role check fails AND no pending task exists', async () => {
+      vi.spyOn(reflector, 'getAllAndOverride').mockImplementation((key: any) => {
+        if (key === 'require_permission') return viewMenuModel('view');
+        return undefined;
+      });
+      permService.check.mockResolvedValue(false);
+      permService.hasPendingTaskOnModel.mockResolvedValue(false);
+
+      await expect(
+        guard.canActivate(mockContext({
+          user: { userId: 'u1', isAdmin: false },
+          request: { params: { appCode: 'supply', modelCode: 'purchase_order' } },
         })),
       ).rejects.toThrow(BusinessException);
     });

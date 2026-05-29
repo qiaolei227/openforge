@@ -15,6 +15,139 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
+/**
+ * Text input bound to a comma-separated list of trimmed non-empty strings.
+ * Keeps a local draft so the cursor doesn't jump while typing whitespace, and
+ * always commits on blur from the DOM value — this is the safety net for any
+ * automation / IME path that updates the DOM without firing React's onChange.
+ */
+function CommaListInput({
+  value,
+  onCommit,
+  placeholder,
+  className,
+}: {
+  value: string[];
+  onCommit: (arr: string[]) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const external = (value ?? []).join(', ');
+  const [draft, setDraft] = useState(external);
+
+  // Re-sync when external value changes (e.g. node selection switched).
+  useEffect(() => {
+    setDraft(external);
+  }, [external]);
+
+  const parse = (text: string) =>
+    text
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+  return (
+    <Input
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        onCommit(parse(e.target.value));
+      }}
+      onBlur={(e) => onCommit(parse(e.target.value))}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
+
+/**
+ * Text input bound to a single trimmed string. Same draft + onBlur-from-DOM
+ * pattern as CommaListInput.
+ */
+function DraftTextInput({
+  value,
+  onCommit,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onCommit: (s: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState(value ?? '');
+  useEffect(() => {
+    setDraft(value ?? '');
+  }, [value]);
+
+  return (
+    <Input
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        onCommit(e.target.value);
+      }}
+      onBlur={(e) => onCommit(e.target.value)}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
+
+/**
+ * Numeric input. Empty string commits as undefined; otherwise commits parsed
+ * number (or fallback when NaN).
+ */
+function DraftNumberInput({
+  value,
+  onCommit,
+  emptyValue,
+  fallback,
+  min,
+  step,
+  placeholder,
+}: {
+  value: number | undefined;
+  onCommit: (n: number | undefined) => void;
+  /** What to commit when input is empty. */
+  emptyValue?: number | undefined;
+  /** What to commit when input parses to NaN. */
+  fallback?: number;
+  min?: number;
+  step?: number;
+  placeholder?: string;
+}) {
+  const external = value === undefined || value === null ? '' : String(value);
+  const [draft, setDraft] = useState(external);
+  useEffect(() => {
+    setDraft(external);
+  }, [external]);
+
+  const commit = (text: string) => {
+    if (text === '') {
+      onCommit(emptyValue);
+      return;
+    }
+    const n = Number(text);
+    onCommit(Number.isNaN(n) ? fallback : n);
+  };
+
+  return (
+    <Input
+      type="number"
+      min={min}
+      step={step}
+      value={draft}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        commit(e.target.value);
+      }}
+      onBlur={(e) => commit(e.target.value)}
+      placeholder={placeholder}
+    />
+  );
+}
+
 interface Props {
   node: Node;
   onUpdate: (config: any, name?: string) => void;
@@ -187,16 +320,9 @@ function ApproveConfig({ config, updateField }: ConfigFieldProps) {
       {strategy === 'fixed' && (
         <div className="space-y-1.5">
           <Label>用户 IDs (逗号分隔)</Label>
-          <Input
-            value={(assigneeConfig.userIds ?? []).join(',')}
-            onChange={(e) =>
-              setAssignee({
-                userIds: e.target.value
-                  .split(',')
-                  .map((s: string) => s.trim())
-                  .filter(Boolean),
-              })
-            }
+          <CommaListInput
+            value={assigneeConfig.userIds ?? []}
+            onCommit={(arr) => setAssignee({ userIds: arr })}
             placeholder="user-id-1, user-id-2"
           />
         </div>
@@ -204,16 +330,9 @@ function ApproveConfig({ config, updateField }: ConfigFieldProps) {
       {strategy === 'role' && (
         <div className="space-y-1.5">
           <Label>角色 IDs (逗号分隔)</Label>
-          <Input
-            value={(assigneeConfig.roleIds ?? []).join(',')}
-            onChange={(e) =>
-              setAssignee({
-                roleIds: e.target.value
-                  .split(',')
-                  .map((s: string) => s.trim())
-                  .filter(Boolean),
-              })
-            }
+          <CommaListInput
+            value={assigneeConfig.roleIds ?? []}
+            onCommit={(arr) => setAssignee({ roleIds: arr })}
             placeholder="role-id-1, role-id-2"
           />
         </div>
@@ -221,16 +340,9 @@ function ApproveConfig({ config, updateField }: ConfigFieldProps) {
       {strategy === 'org' && (
         <div className="space-y-1.5">
           <Label>组织 IDs (逗号分隔)</Label>
-          <Input
-            value={(assigneeConfig.orgIds ?? []).join(',')}
-            onChange={(e) =>
-              setAssignee({
-                orgIds: e.target.value
-                  .split(',')
-                  .map((s: string) => s.trim())
-                  .filter(Boolean),
-              })
-            }
+          <CommaListInput
+            value={assigneeConfig.orgIds ?? []}
+            onCommit={(arr) => setAssignee({ orgIds: arr })}
             placeholder="org-id-1, org-id-2"
           />
         </div>
@@ -238,24 +350,21 @@ function ApproveConfig({ config, updateField }: ConfigFieldProps) {
       {strategy === 'submitterUpline' && (
         <div className="space-y-1.5">
           <Label>向上 N 级</Label>
-          <Input
-            type="number"
-            min={1}
+          <DraftNumberInput
             value={assigneeConfig.upLevel ?? 1}
-            onChange={(e) =>
-              setAssignee({ upLevel: Number(e.target.value) || 1 })
-            }
+            onCommit={(n) => setAssignee({ upLevel: n ?? 1 })}
+            min={1}
+            emptyValue={1}
+            fallback={1}
           />
         </div>
       )}
       {(strategy === 'userField' || strategy === 'orgField') && (
         <div className="space-y-1.5">
           <Label>字段列名 (columnName)</Label>
-          <Input
+          <DraftTextInput
             value={assigneeConfig.fieldColumnName ?? ''}
-            onChange={(e) =>
-              setAssignee({ fieldColumnName: e.target.value })
-            }
+            onCommit={(v) => setAssignee({ fieldColumnName: v })}
             placeholder="assignee_user / department_id"
           />
         </div>
@@ -307,17 +416,11 @@ function ApproveConfig({ config, updateField }: ConfigFieldProps) {
 
       <div className="space-y-1.5">
         <Label>超时小时数（可选）</Label>
-        <Input
-          type="number"
+        <DraftNumberInput
+          value={timeoutHours}
+          onCommit={(n) => updateField('timeoutHours', n)}
           min={0}
           step={0.5}
-          value={timeoutHours ?? ''}
-          onChange={(e) =>
-            updateField(
-              'timeoutHours',
-              e.target.value === '' ? undefined : Number(e.target.value),
-            )
-          }
           placeholder="留空表示不超时"
         />
       </div>
@@ -389,16 +492,9 @@ function ApproveAssigneeOnly({ config, updateField }: ConfigFieldProps) {
       {strategy === 'fixed' && (
         <div className="space-y-1.5">
           <Label>用户 IDs (逗号分隔)</Label>
-          <Input
-            value={(assigneeConfig.userIds ?? []).join(',')}
-            onChange={(e) =>
-              setAssignee({
-                userIds: e.target.value
-                  .split(',')
-                  .map((s: string) => s.trim())
-                  .filter(Boolean),
-              })
-            }
+          <CommaListInput
+            value={assigneeConfig.userIds ?? []}
+            onCommit={(arr) => setAssignee({ userIds: arr })}
             placeholder="user-id-1, user-id-2"
           />
         </div>
@@ -406,43 +502,27 @@ function ApproveAssigneeOnly({ config, updateField }: ConfigFieldProps) {
       {strategy === 'role' && (
         <div className="space-y-1.5">
           <Label>角色 IDs (逗号分隔)</Label>
-          <Input
-            value={(assigneeConfig.roleIds ?? []).join(',')}
-            onChange={(e) =>
-              setAssignee({
-                roleIds: e.target.value
-                  .split(',')
-                  .map((s: string) => s.trim())
-                  .filter(Boolean),
-              })
-            }
+          <CommaListInput
+            value={assigneeConfig.roleIds ?? []}
+            onCommit={(arr) => setAssignee({ roleIds: arr })}
           />
         </div>
       )}
       {strategy === 'org' && (
         <div className="space-y-1.5">
           <Label>组织 IDs (逗号分隔)</Label>
-          <Input
-            value={(assigneeConfig.orgIds ?? []).join(',')}
-            onChange={(e) =>
-              setAssignee({
-                orgIds: e.target.value
-                  .split(',')
-                  .map((s: string) => s.trim())
-                  .filter(Boolean),
-              })
-            }
+          <CommaListInput
+            value={assigneeConfig.orgIds ?? []}
+            onCommit={(arr) => setAssignee({ orgIds: arr })}
           />
         </div>
       )}
       {(strategy === 'userField' || strategy === 'orgField') && (
         <div className="space-y-1.5">
           <Label>字段列名 (columnName)</Label>
-          <Input
+          <DraftTextInput
             value={assigneeConfig.fieldColumnName ?? ''}
-            onChange={(e) =>
-              setAssignee({ fieldColumnName: e.target.value })
-            }
+            onCommit={(v) => setAssignee({ fieldColumnName: v })}
             placeholder="cc_user / cc_department_id"
           />
         </div>

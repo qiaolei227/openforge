@@ -4,47 +4,36 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
-import { workflowUserSearchApi } from '@/lib/api/workflow';
+import { resolveUserNames } from '@/lib/api/user-resolve';
 
 interface Props {
   instance: any;
 }
 
 /**
- * Resolve UUIDs → display names via the `sys:self`-gated workflow user search
- * (the `/users/:id` endpoint requires `sys:users`, so we cannot use it for
- * non-admin viewers of an approval log).
- *
- * Strategy: pull a single bounded batch (≤50) from `workflow-tasks/users/search`
- * once per session and lazily fall back to the UUID prefix for IDs the batch
- * doesn't cover. Good enough for typical org sizes; a follow-up can add a true
- * batch endpoint if larger tenants hit the cap.
+ * Resolve UUIDs → display names via the sys:self-gated batch endpoint
+ * (`POST /users/resolve`). Unlike the older fallback through
+ * `workflow-tasks/users/search`, this one returns names for arbitrary ids
+ * (including admin and disabled users), so the log shows real names instead
+ * of UUID prefixes when the operator isn't in the active user picker.
  */
 function useUserNames(userIds: string[]): Record<string, string> {
   const [names, setNames] = useState<Record<string, string>>({});
 
-  // userIds is a stable membership signal — join it so effect rerun only on diff
+  // Stable membership signal — re-run only when the set of ids actually changes.
   const key = userIds.join(',');
 
   useEffect(() => {
-    const missing = userIds.filter((id) => id && !(id in names));
-    if (missing.length === 0) return;
-
+    if (userIds.length === 0) return;
     let cancelled = false;
-    workflowUserSearchApi
-      .search()
-      .then((users) => {
+    resolveUserNames(userIds)
+      .then((next) => {
         if (cancelled) return;
-        const next: Record<string, string> = {};
-        for (const u of users) {
-          next[u.id] = u.displayName || u.username;
-        }
         setNames((prev) => ({ ...prev, ...next }));
       })
       .catch(() => {
-        // swallow — render falls back to UUID prefix below
+        // resolveUserNames already falls back internally; swallow.
       });
-
     return () => {
       cancelled = true;
     };
@@ -86,6 +75,18 @@ export function WorkflowLogs({ instance }: Props) {
     return Array.from(set);
   }, [logs]);
   const userNames = useUserNames(userIds);
+
+  // nodeId → node display name, resolved from the locked version definition.
+  // Logs carry only nodeId; without this lookup the user just sees "进入节点"
+  // with no idea which one.
+  const nodeNames = useMemo(() => {
+    const nodes: any[] = instance?.workflowVersion?.definition?.nodes ?? [];
+    const map: Record<string, string> = {};
+    for (const n of nodes) {
+      if (n?.id) map[n.id] = n.name || n.id;
+    }
+    return map;
+  }, [instance?.workflowVersion?.definition?.nodes]);
 
   if (logs.length === 0) return null;
 
@@ -135,6 +136,9 @@ export function WorkflowLogs({ instance }: Props) {
             const target = nameFor(log.targetUserId);
             const isPair = PAIR_ACTIONS.has(log.action);
             const isSolo = OPERATOR_ACTIONS.has(log.action);
+            const nodeLabel = log.nodeId
+              ? nodeNames[log.nodeId] ?? log.nodeId
+              : null;
 
             return (
               <div key={log.id} className="flex items-start gap-3 text-xs">
@@ -144,6 +148,11 @@ export function WorkflowLogs({ instance }: Props) {
                 <span className="font-medium text-foreground/90 whitespace-nowrap">
                   {labelFor(log.action)}
                 </span>
+                {nodeLabel && (
+                  <span className="text-foreground/80 whitespace-nowrap">
+                    {nodeLabel}
+                  </span>
+                )}
                 {isPair && operator && target && (
                   <span className="text-muted-foreground whitespace-nowrap">
                     {operator}

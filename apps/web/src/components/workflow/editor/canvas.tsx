@@ -198,6 +198,14 @@ export function WorkflowEditorCanvas({ workflowId, initialDefinition }: Props) {
   });
 
   const onSave = async () => {
+    // Force any in-flight input (still focused, not yet blurred) to commit
+    // before we snapshot the definition. Each Draft* input commits onBlur.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.tagName !== 'BODY') {
+      active.blur();
+      // Wait a tick so the resulting setState flushes into nodes/edges.
+      await new Promise((r) => setTimeout(r, 0));
+    }
     const def = buildDefinition();
     const err = validateDefinition(def);
     if (err) {
