@@ -103,11 +103,11 @@ export function WorkflowTimeline({ instance }: TimelineProps) {
           <div key={n.id} className="flex items-center gap-2 shrink-0">
             <div className="flex flex-col items-center gap-0.5">
               <div className={cls}>{n.name || n.type}</div>
-              {durationLabel && (
-                <div className="text-[10px] text-muted-foreground">
-                  {durationLabel}
-                </div>
-              )}
+              {/* Always reserve the duration row so chip baselines match across
+                  nodes whether or not they have a duration. */}
+              <div className="text-[10px] leading-3 text-muted-foreground min-h-[12px]">
+                {durationLabel ?? ' '}
+              </div>
             </div>
             {idx < nodesToShow.length - 1 && (
               <span className="text-muted-foreground text-xs">›</span>
