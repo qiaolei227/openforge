@@ -24,6 +24,21 @@ export class UserService {
     private eventBus: EventBusService,
   ) {}
 
+  /**
+   * Batch resolve UUIDs → `{ id, username, displayName }`. Used by record-page
+   * system info and workflow operation log so non-admin viewers can see "who"
+   * without needing `sys:users` access. Includes admin (he routinely shows up
+   * as creator/operator in audit logs), unlike the listing endpoints.
+   */
+  async resolveLite(ids: string[]) {
+    if (!ids?.length) return [];
+    const unique = Array.from(new Set(ids));
+    return this.prisma.sysUser.findMany({
+      where: { id: { in: unique } },
+      select: { id: true, username: true, displayName: true },
+    });
+  }
+
   async findAll(params: UserQueryParams = {}) {
     const { keyword, status, orgId, page = 1, pageSize = 20 } = params;
     const baseWhere: Record<string, unknown> = {

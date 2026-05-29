@@ -21,6 +21,9 @@ describe('PermissionService', () => {
       sysFieldPermission: {
         findMany: vi.fn(),
       },
+      sysWorkflowTask: {
+        findFirst: vi.fn(),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -187,6 +190,38 @@ describe('PermissionService', () => {
       expect(result.get('f1')).toBe('editable');  // widest wins
       expect(result.get('f2')).toBe('readonly');
       expect(result.get('f3')).toBe('hidden');
+    });
+  });
+
+  describe('hasPendingTaskOnModel', () => {
+    it('returns true when a pending task on a running instance exists for this model', async () => {
+      prisma.sysWorkflowTask.findFirst.mockResolvedValue({ id: 'task-1' });
+      expect(
+        await service.hasPendingTaskOnModel('user-1', 'supply', 'purchase_order'),
+      ).toBe(true);
+      expect(prisma.sysWorkflowTask.findFirst).toHaveBeenCalledWith({
+        where: {
+          assigneeUserId: 'user-1',
+          status: 'pending',
+          instance: {
+            status: 'running',
+            workflow: {
+              model: {
+                code: 'purchase_order',
+                app: { code: 'supply' },
+              },
+            },
+          },
+        },
+        select: { id: true },
+      });
+    });
+
+    it('returns false when no pending task matches', async () => {
+      prisma.sysWorkflowTask.findFirst.mockResolvedValue(null);
+      expect(
+        await service.hasPendingTaskOnModel('user-1', 'supply', 'purchase_order'),
+      ).toBe(false);
     });
   });
 });

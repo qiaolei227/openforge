@@ -3,12 +3,24 @@ import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SetUserRolesDto } from './dto/set-user-roles.dto';
+import { ResolveUsersDto } from './dto/resolve-users.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermission } from '../common/decorators/require-permission.decorator';
 
 @Controller('users')
 export class UserController {
   constructor(private userService: UserService) {}
+
+  /**
+   * Batch resolve UUIDs → minimal display info (id / username / displayName).
+   * Gated by `sys:self` so any logged-in user can show "who created / submitted
+   * / acted" on records & workflow logs without needing `sys:users`.
+   */
+  @Post('resolve')
+  @RequirePermission('sys:self', 'view')
+  resolve(@Body() dto: ResolveUsersDto) {
+    return this.userService.resolveLite(dto.ids);
+  }
 
   @Get()
   @RequirePermission('sys:users', 'view')
